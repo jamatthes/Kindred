@@ -1,0 +1,480 @@
+<!-- @dsCard group="Foundations" name="Family colors" subtitle="8 slots as pins, avatars and labels, on bg + surface" -->
+<meta charset="utf-8">
+<title>Kindred — Family colors</title>
+<style>
+/* ============================================================================
+   Kindred design tokens
+   ----------------------------------------------------------------------------
+   Three layers (see plan/design-system.md):
+     1. Primitives  — raw scales. Never referenced by components.
+     2. Semantic    — meaning. The ONLY layer components may reference.
+     3. Component   — per-component knobs, defined next to their component.
+   Themes swap the semantic layer via [data-theme]. Light is the default.
+   Non-color values (spacing, type, radii, motion) are theme-invariant.
+   ========================================================================== */
+
+/* ============================== 1. PRIMITIVES ============================= */
+:root {
+  /* --- Warm neutral scale (stone) --- */
+  --stone-0: #FFFFFF;
+  --stone-25: #FCFAF7;
+  --stone-50: #FAF7F2;
+  --stone-100: #F1ECE4;
+  --stone-200: #E7E0D6;
+  --stone-300: #D6CCBE;
+  --stone-400: #A69C8F;
+  --stone-500: #85796B;
+  --stone-600: #6E675E;
+  --stone-700: #4A443D;
+  --stone-800: #332E29;
+  --stone-850: #2A2622;
+  --stone-900: #201D1A;
+  --stone-950: #171412;
+
+  /* --- Brand + status hues --- */
+  --coral-300: #F2A08B;
+  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  --coral-600: #C24A33;
+  --coral-700: #A03C2A;
+  --green-500: #2E8540;
+  --green-400: #5FAE72;
+  --amber-500: #B45309;
+  --amber-400: #D9A441;
+  --red-500: #B91C1C;
+  --red-400: #E5766B;
+  --blue-500: #2563EB;
+  --blue-400: #7CA7F5;
+
+  /* --- Family colors (8 slots, used by name: family-1..8) --- */
+  --family-rose: #C0426B;
+  --family-orange: #D96C2F;
+  --family-gold: #C9A227;
+  --family-moss: #6F8F3B;
+  --family-teal: #2E8C7F;
+  --family-sky: #4C8FD1;
+  --family-indigo: #5B5FC7;
+  --family-plum: #9A4F9E;
+
+  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
+         Data never lives in hue alone: always pair with the numeric value. --- */
+  --scale-pref-0: #B3362B;
+  --scale-pref-1: #BC4A2A;
+  --scale-pref-2: #C55E29;
+  --scale-pref-3: #CD7228;
+  --scale-pref-4: #D48627;
+  --scale-pref-5: #D99A2B;
+  --scale-pref-6: #B79A33;
+  --scale-pref-7: #93973E;
+  --scale-pref-8: #5E9468;
+  --scale-pref-9: #3A8E74;
+  --scale-pref-10: #128778;
+
+  /* --- Spacing (golden-ratio-derived, px) --- */
+  --space-1: 5px;
+  --space-2: 8px;
+  --space-3: 13px;
+  --space-4: 21px;
+  --space-5: 34px;
+  --space-6: 55px;
+
+  /* --- Type scale --- */
+  --text-sm: 13px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-sub: 26px;
+  --text-heading: 42px;
+  --text-display: 68px;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+
+  /* --- Radii (soft, not bubbly) --- */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (single-layer, subtle) --- */
+  --shadow-1: 0 1px 3px rgba(32, 29, 26, 0.08);
+  --shadow-2: 0 4px 16px rgba(32, 29, 26, 0.10);
+  --shadow-3: 0 8px 32px rgba(32, 29, 26, 0.14);
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+
+  /* --- Touch --- */
+  --hit-target: 44px;
+}
+
+/* ============================ 2. SEMANTIC — LIGHT ========================= */
+:root,
+[data-theme="light"] {
+  --color-bg: var(--stone-50);
+  --color-surface: var(--stone-0);
+  --color-surface-raised: var(--stone-25);
+  --color-surface-sunken: var(--stone-100);
+  --color-border: var(--stone-200);
+  --color-border-strong: var(--stone-300);
+
+  --color-text: #2D2A26;
+  --color-text-muted: var(--stone-600);
+  --color-text-faint: var(--stone-400);
+  --color-text-on-accent: #FFFFFF;
+  --color-text-on-status: #FFFFFF;
+
+  --color-accent: var(--coral-500);
+  --color-accent-hover: var(--coral-600);
+  --color-accent-active: var(--coral-700);
+  --color-accent-soft: #FBEAE5;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--amber-500);
+  --color-danger: var(--red-500);
+  --color-info: var(--blue-500);
+  --color-success-soft: #E4F2E7;
+  --color-warning-soft: #F8EEDD;
+  --color-danger-soft: #F9E5E5;
+  --color-info-soft: #E4EDFC;
+
+  --color-focus-ring: var(--blue-500);
+  --color-overlay: rgba(32, 29, 26, 0.4);
+  --color-skeleton: var(--stone-100);
+  --color-skeleton-sheen: var(--stone-200);
+
+  --family-1: var(--family-rose);
+  --family-2: var(--family-orange);
+  --family-3: var(--family-gold);
+  --family-4: var(--family-moss);
+  --family-5: var(--family-teal);
+  --family-6: var(--family-sky);
+  --family-7: var(--family-indigo);
+  --family-8: var(--family-plum);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-popover: var(--shadow-2);
+  --shadow-sheet: var(--shadow-3);
+}
+
+/* ============================ 2. SEMANTIC — DARK ==========================
+   Tuned set, not an inversion: raised surfaces get lighter, accents
+   desaturate, shadows give way to borders. */
+[data-theme="dark"] {
+  --color-bg: var(--stone-900);
+  --color-surface: var(--stone-850);
+  --color-surface-raised: var(--stone-800);
+  --color-surface-sunken: var(--stone-950);
+  --color-border: #453E37;
+  --color-border-strong: #5A5148;
+
+  --color-text: #F0EAE2;
+  --color-text-muted: var(--stone-400);
+  --color-text-faint: var(--stone-500);
+  /* Dark ink on the lifted dark-theme accents — white fails AA on them */
+  --color-text-on-accent: #201D1A;
+  --color-text-on-status: #201D1A;
+
+  --color-accent: #E06A50;
+  --color-accent-hover: #E87F68;
+  --color-accent-active: #C85A42;
+  --color-accent-soft: #43302B;
+
+  --color-success: var(--green-400);
+  --color-warning: var(--amber-400);
+  --color-danger: var(--red-400);
+  --color-info: var(--blue-400);
+  --color-success-soft: #263A2B;
+  --color-warning-soft: #3D3323;
+  --color-danger-soft: #422A28;
+  --color-info-soft: #263349;
+
+  --color-focus-ring: var(--blue-400);
+  --color-overlay: rgba(23, 20, 18, 0.6);
+  --color-skeleton: #332E29;
+  --color-skeleton-sheen: #453E37;
+
+  /* Family colors: lifted for dark surfaces */
+  --family-1: #D66A8C;
+  --family-2: #E68A55;
+  --family-3: #D9B84E;
+  --family-4: #93AD5F;
+  --family-5: #55A79A;
+  --family-6: #74A9DE;
+  --family-7: #8286D9;
+  --family-8: #B573B8;
+
+  --shadow-card: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================= 3. COMPONENT (shared knobs) ====================
+   Only cross-cutting component tokens live here; single-use knobs are
+   defined next to their component. */
+:root {
+  --button-radius: var(--radius-2);
+  --button-height: 40px;
+  --button-height-mobile: var(--hit-target);
+  --card-radius: var(--radius-3);
+  --card-padding: var(--space-4);
+  --chip-radius: var(--radius-full);
+  --field-radius: var(--radius-2);
+  --field-height: 44px;
+  --table-row-height: 40px;
+  --pin-size: 32px;
+  --timeline-track-h: 56px;
+
+  /* Tint recipe — the ONLY sanctioned way to derive a wash from a token:
+     color-mix(in srgb, <semantic token> var(--mix-tint-weak|strong), var(--color-surface))
+     Components must use these percentages, never invent their own. */
+  --mix-tint-weak: 12%;
+  --mix-tint-strong: 24%;
+}
+
+/* ================================ BASE ==================================== */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- specimen page chrome (preview only) ---- */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  padding: var(--space-4);
+  -webkit-font-smoothing: antialiased;
+}
+.spec-head { margin: 0 0 var(--space-4); }
+.spec-head h1 {
+  font-size: var(--text-sub);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.spec-head p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 70ch;
+}
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (max-width: 980px) { .panels { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  overflow: hidden;
+}
+.panel-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-label::before {
+  content: "";
+  width: 10px; height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  flex: none;
+}
+.group-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.group-title:first-of-type { margin-top: 0; }
+.note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 0;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+[data-theme="light"] .only-dark { display: none; }
+[data-theme="dark"] .only-light { display: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+</style>
+<style>
+  .pins {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: var(--space-3);
+  }
+  .pin-cell { text-align: center; }
+  .pin {
+    width: var(--pin-size);
+    height: var(--pin-size);
+    margin: 0 auto var(--space-1);
+    display: block;
+  }
+  .pin svg { display: block; width: 100%; height: 100%; }
+  .pin-name { font-size: var(--text-sm); font-weight: 600; display: block; }
+  .pin-tok {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-muted);
+    display: block;
+  }
+  .on-surface {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-3);
+    padding: var(--space-3);
+  }
+  .labels { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .fam-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    padding: 3px var(--space-2) 3px var(--space-1);
+    border-radius: var(--chip-radius);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+  .fam-dot {
+    width: 12px; height: 12px;
+    border-radius: var(--radius-full);
+    flex: none;
+  }
+  .avatars { display: flex; align-items: center; }
+  .avatar {
+    width: 34px; height: 34px;
+    border-radius: var(--radius-full);
+    display: grid;
+    place-items: center;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text-on-accent);
+    border: 2px solid var(--color-surface);
+    margin-right: -8px;
+  }
+  .avatars .more {
+    margin-left: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+</style>
+
+<div class="spec-head">
+  <h1>Family colors</h1>
+  <p>Eight per-family slots (<code class="mono">--family-1…8</code>), lifted in dark so pins stay legible on the map. A family’s colour always travels with its name — never colour alone.</p>
+</div>
+
+<div class="panels">
+<div class="panel" data-theme="light">
+<p class="panel-label">Light theme</p>
+
+<p class="group-title">Map pins — on page background</p>
+<div class="pins">
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-1)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Parkers</span><span class="pin-tok">--family-1</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-2)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Jiangs</span><span class="pin-tok">--family-2</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-3)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Riveras</span><span class="pin-tok">--family-3</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-4)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Okonjos</span><span class="pin-tok">--family-4</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-5)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Lindqvists</span><span class="pin-tok">--family-5</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-6)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Haddads</span><span class="pin-tok">--family-6</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-7)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Novaks</span><span class="pin-tok">--family-7</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-8)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Duartes</span><span class="pin-tok">--family-8</span></div>
+</div>
+
+<p class="group-title">Avatars &amp; labels — on surface</p>
+<div class="on-surface">
+  <div class="avatars" style="margin-bottom: var(--space-3)">
+    <span class="avatar" style="background: var(--family-1)" title="Parkers">P</span>
+    <span class="avatar" style="background: var(--family-2)" title="Jiangs">J</span>
+    <span class="avatar" style="background: var(--family-3)" title="Riveras">R</span>
+    <span class="avatar" style="background: var(--family-4)" title="Okonjos">O</span>
+    <span class="avatar" style="background: var(--family-5)" title="Lindqvists">L</span>
+    <span class="more">5 families checked in near Padstow</span>
+  </div>
+  <div class="labels">
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-1)"></span>Parkers</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-2)"></span>Jiangs</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-3)"></span>Riveras</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-4)"></span>Okonjos</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-5)"></span>Lindqvists</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-6)"></span>Haddads</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-7)"></span>Novaks</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-8)"></span>Duartes</span>
+  </div>
+</div>
+<p class="note">Slots are assigned in order as families join a trip; the same slot drives pins, avatars, comment borders and check-in dots.</p>
+
+</div>
+<div class="panel" data-theme="dark">
+<p class="panel-label">Dark theme</p>
+
+<p class="group-title">Map pins — on page background</p>
+<div class="pins">
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-1)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Parkers</span><span class="pin-tok">--family-1</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-2)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Jiangs</span><span class="pin-tok">--family-2</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-3)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Riveras</span><span class="pin-tok">--family-3</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-4)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Okonjos</span><span class="pin-tok">--family-4</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-5)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Lindqvists</span><span class="pin-tok">--family-5</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-6)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Haddads</span><span class="pin-tok">--family-6</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-7)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Novaks</span><span class="pin-tok">--family-7</span></div>
+  <div class="pin-cell"><span class="pin"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-8)"/><circle cx="12" cy="11" r="4.2" fill="var(--color-surface)"/></svg></span><span class="pin-name">Duartes</span><span class="pin-tok">--family-8</span></div>
+</div>
+
+<p class="group-title">Avatars &amp; labels — on surface</p>
+<div class="on-surface">
+  <div class="avatars" style="margin-bottom: var(--space-3)">
+    <span class="avatar" style="background: var(--family-1)" title="Parkers">P</span>
+    <span class="avatar" style="background: var(--family-2)" title="Jiangs">J</span>
+    <span class="avatar" style="background: var(--family-3)" title="Riveras">R</span>
+    <span class="avatar" style="background: var(--family-4)" title="Okonjos">O</span>
+    <span class="avatar" style="background: var(--family-5)" title="Lindqvists">L</span>
+    <span class="more">5 families checked in near Padstow</span>
+  </div>
+  <div class="labels">
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-1)"></span>Parkers</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-2)"></span>Jiangs</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-3)"></span>Riveras</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-4)"></span>Okonjos</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-5)"></span>Lindqvists</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-6)"></span>Haddads</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-7)"></span>Novaks</span>
+    <span class="fam-label"><span class="fam-dot" style="background: var(--family-8)"></span>Duartes</span>
+  </div>
+</div>
+<p class="note">Slots are assigned in order as families join a trip; the same slot drives pins, avatars, comment borders and check-in dots.</p>
+
+</div>
+</div>

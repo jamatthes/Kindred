@@ -1,0 +1,515 @@
+<!-- @dsCard group="Components" name="Toast · skeleton · empty" subtitle="transient confirm, structural loading, first-run empty state" -->
+<meta charset="utf-8">
+<title>Kindred — Toast, skeleton, empty state</title>
+<style>
+/* ============================================================================
+   Kindred design tokens
+   ----------------------------------------------------------------------------
+   Three layers (see plan/design-system.md):
+     1. Primitives  — raw scales. Never referenced by components.
+     2. Semantic    — meaning. The ONLY layer components may reference.
+     3. Component   — per-component knobs, defined next to their component.
+   Themes swap the semantic layer via [data-theme]. Light is the default.
+   Non-color values (spacing, type, radii, motion) are theme-invariant.
+   ========================================================================== */
+
+/* ============================== 1. PRIMITIVES ============================= */
+:root {
+  /* --- Warm neutral scale (stone) --- */
+  --stone-0: #FFFFFF;
+  --stone-25: #FCFAF7;
+  --stone-50: #FAF7F2;
+  --stone-100: #F1ECE4;
+  --stone-200: #E7E0D6;
+  --stone-300: #D6CCBE;
+  --stone-400: #A69C8F;
+  --stone-500: #85796B;
+  --stone-600: #6E675E;
+  --stone-700: #4A443D;
+  --stone-800: #332E29;
+  --stone-850: #2A2622;
+  --stone-900: #201D1A;
+  --stone-950: #171412;
+
+  /* --- Brand + status hues --- */
+  --coral-300: #F2A08B;
+  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  --coral-600: #C24A33;
+  --coral-700: #A03C2A;
+  --green-500: #2E8540;
+  --green-400: #5FAE72;
+  --amber-500: #B45309;
+  --amber-400: #D9A441;
+  --red-500: #B91C1C;
+  --red-400: #E5766B;
+  --blue-500: #2563EB;
+  --blue-400: #7CA7F5;
+
+  /* --- Family colors (8 slots, used by name: family-1..8) --- */
+  --family-rose: #C0426B;
+  --family-orange: #D96C2F;
+  --family-gold: #C9A227;
+  --family-moss: #6F8F3B;
+  --family-teal: #2E8C7F;
+  --family-sky: #4C8FD1;
+  --family-indigo: #5B5FC7;
+  --family-plum: #9A4F9E;
+
+  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
+         Data never lives in hue alone: always pair with the numeric value. --- */
+  --scale-pref-0: #B3362B;
+  --scale-pref-1: #BC4A2A;
+  --scale-pref-2: #C55E29;
+  --scale-pref-3: #CD7228;
+  --scale-pref-4: #D48627;
+  --scale-pref-5: #D99A2B;
+  --scale-pref-6: #B79A33;
+  --scale-pref-7: #93973E;
+  --scale-pref-8: #5E9468;
+  --scale-pref-9: #3A8E74;
+  --scale-pref-10: #128778;
+
+  /* --- Spacing (golden-ratio-derived, px) --- */
+  --space-1: 5px;
+  --space-2: 8px;
+  --space-3: 13px;
+  --space-4: 21px;
+  --space-5: 34px;
+  --space-6: 55px;
+
+  /* --- Type scale --- */
+  --text-sm: 13px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-sub: 26px;
+  --text-heading: 42px;
+  --text-display: 68px;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+
+  /* --- Radii (soft, not bubbly) --- */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (single-layer, subtle) --- */
+  --shadow-1: 0 1px 3px rgba(32, 29, 26, 0.08);
+  --shadow-2: 0 4px 16px rgba(32, 29, 26, 0.10);
+  --shadow-3: 0 8px 32px rgba(32, 29, 26, 0.14);
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+
+  /* --- Touch --- */
+  --hit-target: 44px;
+}
+
+/* ============================ 2. SEMANTIC — LIGHT ========================= */
+:root,
+[data-theme="light"] {
+  --color-bg: var(--stone-50);
+  --color-surface: var(--stone-0);
+  --color-surface-raised: var(--stone-25);
+  --color-surface-sunken: var(--stone-100);
+  --color-border: var(--stone-200);
+  --color-border-strong: var(--stone-300);
+
+  --color-text: #2D2A26;
+  --color-text-muted: var(--stone-600);
+  --color-text-faint: var(--stone-400);
+  --color-text-on-accent: #FFFFFF;
+  --color-text-on-status: #FFFFFF;
+
+  --color-accent: var(--coral-500);
+  --color-accent-hover: var(--coral-600);
+  --color-accent-active: var(--coral-700);
+  --color-accent-soft: #FBEAE5;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--amber-500);
+  --color-danger: var(--red-500);
+  --color-info: var(--blue-500);
+  --color-success-soft: #E4F2E7;
+  --color-warning-soft: #F8EEDD;
+  --color-danger-soft: #F9E5E5;
+  --color-info-soft: #E4EDFC;
+
+  --color-focus-ring: var(--blue-500);
+  --color-overlay: rgba(32, 29, 26, 0.4);
+  --color-skeleton: var(--stone-100);
+  --color-skeleton-sheen: var(--stone-200);
+
+  --family-1: var(--family-rose);
+  --family-2: var(--family-orange);
+  --family-3: var(--family-gold);
+  --family-4: var(--family-moss);
+  --family-5: var(--family-teal);
+  --family-6: var(--family-sky);
+  --family-7: var(--family-indigo);
+  --family-8: var(--family-plum);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-popover: var(--shadow-2);
+  --shadow-sheet: var(--shadow-3);
+}
+
+/* ============================ 2. SEMANTIC — DARK ==========================
+   Tuned set, not an inversion: raised surfaces get lighter, accents
+   desaturate, shadows give way to borders. */
+[data-theme="dark"] {
+  --color-bg: var(--stone-900);
+  --color-surface: var(--stone-850);
+  --color-surface-raised: var(--stone-800);
+  --color-surface-sunken: var(--stone-950);
+  --color-border: #453E37;
+  --color-border-strong: #5A5148;
+
+  --color-text: #F0EAE2;
+  --color-text-muted: var(--stone-400);
+  --color-text-faint: var(--stone-500);
+  /* Dark ink on the lifted dark-theme accents — white fails AA on them */
+  --color-text-on-accent: #201D1A;
+  --color-text-on-status: #201D1A;
+
+  --color-accent: #E06A50;
+  --color-accent-hover: #E87F68;
+  --color-accent-active: #C85A42;
+  --color-accent-soft: #43302B;
+
+  --color-success: var(--green-400);
+  --color-warning: var(--amber-400);
+  --color-danger: var(--red-400);
+  --color-info: var(--blue-400);
+  --color-success-soft: #263A2B;
+  --color-warning-soft: #3D3323;
+  --color-danger-soft: #422A28;
+  --color-info-soft: #263349;
+
+  --color-focus-ring: var(--blue-400);
+  --color-overlay: rgba(23, 20, 18, 0.6);
+  --color-skeleton: #332E29;
+  --color-skeleton-sheen: #453E37;
+
+  /* Family colors: lifted for dark surfaces */
+  --family-1: #D66A8C;
+  --family-2: #E68A55;
+  --family-3: #D9B84E;
+  --family-4: #93AD5F;
+  --family-5: #55A79A;
+  --family-6: #74A9DE;
+  --family-7: #8286D9;
+  --family-8: #B573B8;
+
+  --shadow-card: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================= 3. COMPONENT (shared knobs) ====================
+   Only cross-cutting component tokens live here; single-use knobs are
+   defined next to their component. */
+:root {
+  --button-radius: var(--radius-2);
+  --button-height: 40px;
+  --button-height-mobile: var(--hit-target);
+  --card-radius: var(--radius-3);
+  --card-padding: var(--space-4);
+  --chip-radius: var(--radius-full);
+  --field-radius: var(--radius-2);
+  --field-height: 44px;
+  --table-row-height: 40px;
+  --pin-size: 32px;
+  --timeline-track-h: 56px;
+
+  /* Tint recipe — the ONLY sanctioned way to derive a wash from a token:
+     color-mix(in srgb, <semantic token> var(--mix-tint-weak|strong), var(--color-surface))
+     Components must use these percentages, never invent their own. */
+  --mix-tint-weak: 12%;
+  --mix-tint-strong: 24%;
+}
+
+/* ================================ BASE ==================================== */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- specimen page chrome (preview only) ---- */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  padding: var(--space-4);
+  -webkit-font-smoothing: antialiased;
+}
+.spec-head { margin: 0 0 var(--space-4); }
+.spec-head h1 {
+  font-size: var(--text-sub);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.spec-head p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 70ch;
+}
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (max-width: 980px) { .panels { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  overflow: hidden;
+}
+.panel-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-label::before {
+  content: "";
+  width: 10px; height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  flex: none;
+}
+.group-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.group-title:first-of-type { margin-top: 0; }
+.note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 0;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+[data-theme="light"] .only-dark { display: none; }
+[data-theme="dark"] .only-light { display: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+</style>
+<style>
+  .stack { display: grid; gap: var(--space-4); }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-success);
+    border-radius: var(--radius-2);
+    box-shadow: var(--shadow-popover);
+    padding: var(--space-3);
+    max-width: 400px;
+  }
+  .toast .icon {
+    width: 24px; height: 24px;
+    border-radius: var(--radius-full);
+    background: var(--color-success-soft);
+    color: var(--color-success);
+    display: grid; place-items: center;
+    flex: none;
+  }
+  .toast .icon svg { width: 14px; height: 14px; }
+  .toast .msg { font-size: var(--text-sm); }
+  .toast .msg strong { font-weight: 600; }
+  .toast .undo {
+    margin-left: auto;
+    background: none; border: 0;
+    color: var(--color-accent);
+    font-size: var(--text-sm); font-weight: 600;
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-1);
+  }
+  .toast .undo:hover { background: var(--color-accent-soft); }
+
+  .skel-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-3);
+    padding: var(--card-padding);
+    max-width: 400px;
+  }
+  .skel {
+    background: color-mix(in srgb, var(--color-text-faint) 24%, var(--color-surface-sunken));
+    border-radius: var(--radius-1);
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+  .skel::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-surface) 70%, transparent), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 1.4s var(--ease-standard) infinite;
+  }
+  @keyframes shimmer { to { transform: translateX(100%); } }
+  .skel-photo { height: 84px; border-radius: var(--radius-2); margin-bottom: var(--space-3); }
+  .skel-line { height: 13px; margin-bottom: var(--space-2); }
+  .skel-chips { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+  .skel-chip { height: 20px; width: 74px; border-radius: var(--chip-radius); }
+
+  .empty {
+    background: var(--color-surface);
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-3);
+    padding: var(--space-5) var(--space-4);
+    text-align: center;
+    max-width: 400px;
+  }
+  .empty .art { color: var(--color-accent); margin-bottom: var(--space-3); }
+  .empty .art svg { width: 52px; height: 52px; }
+  .empty h4 { margin: 0 0 var(--space-2); font-size: var(--text-lg); font-weight: 600; }
+  .empty p { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+    height: var(--button-height-mobile); padding: 0 var(--space-4);
+    border-radius: var(--button-radius); border: 1px solid transparent;
+    font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+    background: var(--color-accent); color: var(--color-text-on-accent);
+  }
+  .btn:hover { background: var(--color-accent-hover); }
+  .btn svg { width: 16px; height: 16px; }
+  .cap { font-size: 11px; font-family: var(--font-mono); color: var(--color-text-muted); margin: 0 0 var(--space-2); }
+</style>
+
+<div class="spec-head">
+  <h1>Toast · skeleton · empty</h1>
+  <p>Toasts confirm your own action and offer undo instead of a confirm dialog. Skeletons cover structural loads (map panel, lists); spinners only for sub-second inline waits. Every empty state names the next action.</p>
+</div>
+
+<div class="panels">
+<div class="panel" data-theme="light">
+<p class="panel-label">Light theme</p>
+
+<div class="stack">
+  <div>
+    <p class="cap">toast · success · auto-dismiss 5s</p>
+    <div class="toast" role="status">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12.5 5 5L20 6.5"/></svg></span>
+      <span class="msg"><strong>Two Guys Pizza</strong> shortlisted for Thursday.</span>
+      <button class="undo">Undo</button>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">skeleton · suggestion card loading</p>
+    <div class="skel-card" aria-hidden="true">
+      <span class="skel skel-photo"></span>
+      <span class="skel skel-line" style="width: 62%"></span>
+      <span class="skel skel-line" style="width: 90%"></span>
+      <span class="skel skel-line" style="width: 76%"></span>
+      <span class="skel-chips">
+        <span class="skel skel-chip"></span>
+        <span class="skel skel-chip" style="width: 58px"></span>
+        <span class="skel skel-chip" style="width: 44px"></span>
+      </span>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">empty state · map with no suggestions</p>
+    <div class="empty">
+      <span class="art">
+        <svg viewBox="0 0 24 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1C6.5 1 2 5.5 2 11c0 7.5 10 20 10 20s10-12.5 10-20c0-5.5-4.5-10-10-10z"/><path d="M12 8v6M9 11h6"/></svg>
+      </span>
+      <h4>No suggestions yet — drop the first pin</h4>
+      <p>Search for a place or click anywhere on the map. Everyone on the trip can vote and comment as soon as it’s there.</p>
+      <button class="btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add the first suggestion
+      </button>
+    </div>
+  </div>
+</div>
+
+</div>
+<div class="panel" data-theme="dark">
+<p class="panel-label">Dark theme</p>
+
+<div class="stack">
+  <div>
+    <p class="cap">toast · success · auto-dismiss 5s</p>
+    <div class="toast" role="status">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12.5 5 5L20 6.5"/></svg></span>
+      <span class="msg"><strong>Two Guys Pizza</strong> shortlisted for Thursday.</span>
+      <button class="undo">Undo</button>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">skeleton · suggestion card loading</p>
+    <div class="skel-card" aria-hidden="true">
+      <span class="skel skel-photo"></span>
+      <span class="skel skel-line" style="width: 62%"></span>
+      <span class="skel skel-line" style="width: 90%"></span>
+      <span class="skel skel-line" style="width: 76%"></span>
+      <span class="skel-chips">
+        <span class="skel skel-chip"></span>
+        <span class="skel skel-chip" style="width: 58px"></span>
+        <span class="skel skel-chip" style="width: 44px"></span>
+      </span>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">empty state · map with no suggestions</p>
+    <div class="empty">
+      <span class="art">
+        <svg viewBox="0 0 24 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1C6.5 1 2 5.5 2 11c0 7.5 10 20 10 20s10-12.5 10-20c0-5.5-4.5-10-10-10z"/><path d="M12 8v6M9 11h6"/></svg>
+      </span>
+      <h4>No suggestions yet — drop the first pin</h4>
+      <p>Search for a place or click anywhere on the map. Everyone on the trip can vote and comment as soon as it’s there.</p>
+      <button class="btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add the first suggestion
+      </button>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>

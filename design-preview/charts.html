@@ -1,0 +1,606 @@
+<!-- @dsCard group="Components" name="Chart widgets" subtitle="AvgBar · SpreadDots · HeatMatrix · DistributionStrip" -->
+<meta charset="utf-8">
+<title>Kindred — Chart widgets</title>
+<style>
+/* ============================================================================
+   Kindred design tokens
+   ----------------------------------------------------------------------------
+   Three layers (see plan/design-system.md):
+     1. Primitives  — raw scales. Never referenced by components.
+     2. Semantic    — meaning. The ONLY layer components may reference.
+     3. Component   — per-component knobs, defined next to their component.
+   Themes swap the semantic layer via [data-theme]. Light is the default.
+   Non-color values (spacing, type, radii, motion) are theme-invariant.
+   ========================================================================== */
+
+/* ============================== 1. PRIMITIVES ============================= */
+:root {
+  /* --- Warm neutral scale (stone) --- */
+  --stone-0: #FFFFFF;
+  --stone-25: #FCFAF7;
+  --stone-50: #FAF7F2;
+  --stone-100: #F1ECE4;
+  --stone-200: #E7E0D6;
+  --stone-300: #D6CCBE;
+  --stone-400: #A69C8F;
+  --stone-500: #85796B;
+  --stone-600: #6E675E;
+  --stone-700: #4A443D;
+  --stone-800: #332E29;
+  --stone-850: #2A2622;
+  --stone-900: #201D1A;
+  --stone-950: #171412;
+
+  /* --- Brand + status hues --- */
+  --coral-300: #F2A08B;
+  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  --coral-600: #C24A33;
+  --coral-700: #A03C2A;
+  --green-500: #2E8540;
+  --green-400: #5FAE72;
+  --amber-500: #B45309;
+  --amber-400: #D9A441;
+  --red-500: #B91C1C;
+  --red-400: #E5766B;
+  --blue-500: #2563EB;
+  --blue-400: #7CA7F5;
+
+  /* --- Family colors (8 slots, used by name: family-1..8) --- */
+  --family-rose: #C0426B;
+  --family-orange: #D96C2F;
+  --family-gold: #C9A227;
+  --family-moss: #6F8F3B;
+  --family-teal: #2E8C7F;
+  --family-sky: #4C8FD1;
+  --family-indigo: #5B5FC7;
+  --family-plum: #9A4F9E;
+
+  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
+         Data never lives in hue alone: always pair with the numeric value. --- */
+  --scale-pref-0: #B3362B;
+  --scale-pref-1: #BC4A2A;
+  --scale-pref-2: #C55E29;
+  --scale-pref-3: #CD7228;
+  --scale-pref-4: #D48627;
+  --scale-pref-5: #D99A2B;
+  --scale-pref-6: #B79A33;
+  --scale-pref-7: #93973E;
+  --scale-pref-8: #5E9468;
+  --scale-pref-9: #3A8E74;
+  --scale-pref-10: #128778;
+
+  /* --- Spacing (golden-ratio-derived, px) --- */
+  --space-1: 5px;
+  --space-2: 8px;
+  --space-3: 13px;
+  --space-4: 21px;
+  --space-5: 34px;
+  --space-6: 55px;
+
+  /* --- Type scale --- */
+  --text-sm: 13px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-sub: 26px;
+  --text-heading: 42px;
+  --text-display: 68px;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+
+  /* --- Radii (soft, not bubbly) --- */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (single-layer, subtle) --- */
+  --shadow-1: 0 1px 3px rgba(32, 29, 26, 0.08);
+  --shadow-2: 0 4px 16px rgba(32, 29, 26, 0.10);
+  --shadow-3: 0 8px 32px rgba(32, 29, 26, 0.14);
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+
+  /* --- Touch --- */
+  --hit-target: 44px;
+}
+
+/* ============================ 2. SEMANTIC — LIGHT ========================= */
+:root,
+[data-theme="light"] {
+  --color-bg: var(--stone-50);
+  --color-surface: var(--stone-0);
+  --color-surface-raised: var(--stone-25);
+  --color-surface-sunken: var(--stone-100);
+  --color-border: var(--stone-200);
+  --color-border-strong: var(--stone-300);
+
+  --color-text: #2D2A26;
+  --color-text-muted: var(--stone-600);
+  --color-text-faint: var(--stone-400);
+  --color-text-on-accent: #FFFFFF;
+  --color-text-on-status: #FFFFFF;
+
+  --color-accent: var(--coral-500);
+  --color-accent-hover: var(--coral-600);
+  --color-accent-active: var(--coral-700);
+  --color-accent-soft: #FBEAE5;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--amber-500);
+  --color-danger: var(--red-500);
+  --color-info: var(--blue-500);
+  --color-success-soft: #E4F2E7;
+  --color-warning-soft: #F8EEDD;
+  --color-danger-soft: #F9E5E5;
+  --color-info-soft: #E4EDFC;
+
+  --color-focus-ring: var(--blue-500);
+  --color-overlay: rgba(32, 29, 26, 0.4);
+  --color-skeleton: var(--stone-100);
+  --color-skeleton-sheen: var(--stone-200);
+
+  --family-1: var(--family-rose);
+  --family-2: var(--family-orange);
+  --family-3: var(--family-gold);
+  --family-4: var(--family-moss);
+  --family-5: var(--family-teal);
+  --family-6: var(--family-sky);
+  --family-7: var(--family-indigo);
+  --family-8: var(--family-plum);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-popover: var(--shadow-2);
+  --shadow-sheet: var(--shadow-3);
+}
+
+/* ============================ 2. SEMANTIC — DARK ==========================
+   Tuned set, not an inversion: raised surfaces get lighter, accents
+   desaturate, shadows give way to borders. */
+[data-theme="dark"] {
+  --color-bg: var(--stone-900);
+  --color-surface: var(--stone-850);
+  --color-surface-raised: var(--stone-800);
+  --color-surface-sunken: var(--stone-950);
+  --color-border: #453E37;
+  --color-border-strong: #5A5148;
+
+  --color-text: #F0EAE2;
+  --color-text-muted: var(--stone-400);
+  --color-text-faint: var(--stone-500);
+  /* Dark ink on the lifted dark-theme accents — white fails AA on them */
+  --color-text-on-accent: #201D1A;
+  --color-text-on-status: #201D1A;
+
+  --color-accent: #E06A50;
+  --color-accent-hover: #E87F68;
+  --color-accent-active: #C85A42;
+  --color-accent-soft: #43302B;
+
+  --color-success: var(--green-400);
+  --color-warning: var(--amber-400);
+  --color-danger: var(--red-400);
+  --color-info: var(--blue-400);
+  --color-success-soft: #263A2B;
+  --color-warning-soft: #3D3323;
+  --color-danger-soft: #422A28;
+  --color-info-soft: #263349;
+
+  --color-focus-ring: var(--blue-400);
+  --color-overlay: rgba(23, 20, 18, 0.6);
+  --color-skeleton: #332E29;
+  --color-skeleton-sheen: #453E37;
+
+  /* Family colors: lifted for dark surfaces */
+  --family-1: #D66A8C;
+  --family-2: #E68A55;
+  --family-3: #D9B84E;
+  --family-4: #93AD5F;
+  --family-5: #55A79A;
+  --family-6: #74A9DE;
+  --family-7: #8286D9;
+  --family-8: #B573B8;
+
+  --shadow-card: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================= 3. COMPONENT (shared knobs) ====================
+   Only cross-cutting component tokens live here; single-use knobs are
+   defined next to their component. */
+:root {
+  --button-radius: var(--radius-2);
+  --button-height: 40px;
+  --button-height-mobile: var(--hit-target);
+  --card-radius: var(--radius-3);
+  --card-padding: var(--space-4);
+  --chip-radius: var(--radius-full);
+  --field-radius: var(--radius-2);
+  --field-height: 44px;
+  --table-row-height: 40px;
+  --pin-size: 32px;
+  --timeline-track-h: 56px;
+
+  /* Tint recipe — the ONLY sanctioned way to derive a wash from a token:
+     color-mix(in srgb, <semantic token> var(--mix-tint-weak|strong), var(--color-surface))
+     Components must use these percentages, never invent their own. */
+  --mix-tint-weak: 12%;
+  --mix-tint-strong: 24%;
+}
+
+/* ================================ BASE ==================================== */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- specimen page chrome (preview only) ---- */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  padding: var(--space-4);
+  -webkit-font-smoothing: antialiased;
+}
+.spec-head { margin: 0 0 var(--space-4); }
+.spec-head h1 {
+  font-size: var(--text-sub);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.spec-head p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 70ch;
+}
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (max-width: 980px) { .panels { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  overflow: hidden;
+}
+.panel-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-label::before {
+  content: "";
+  width: 10px; height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  flex: none;
+}
+.group-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.group-title:first-of-type { margin-top: 0; }
+.note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 0;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+[data-theme="light"] .only-dark { display: none; }
+[data-theme="dark"] .only-light { display: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+</style>
+<style>
+  .charts { display: grid; gap: var(--space-3); }
+  .chart-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-3);
+    padding: var(--space-3);
+  }
+  .chart-card h4 {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-body);
+    font-weight: 600;
+    line-height: var(--leading-tight);
+  }
+  .chart-card .sub {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  .chart-card .widget-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-faint);
+    float: right;
+  }
+  svg.viz { width: 100%; height: auto; display: block; font-family: var(--font-sans); }
+  .lbl { fill: var(--color-text); font-size: 12px; }
+  .lbl-muted { fill: var(--color-text-muted); font-size: 10px; }
+  .val { fill: var(--color-text); font-size: 12px; font-family: var(--font-mono); font-weight: 700; }
+  .cell-val { fill: var(--color-text); font-size: 11px; font-family: var(--font-mono); }
+  .axis { stroke: var(--color-border-strong); stroke-width: 1; }
+  .bar { fill: var(--color-accent); }
+  .bar-dim { fill: color-mix(in srgb, var(--color-accent) 45%, var(--color-surface)); }
+  .dot { fill: var(--color-accent); }
+  .dot-dim { fill: var(--color-text-faint); }
+  .cell-8 { fill: color-mix(in srgb, var(--scale-pref-8) 34%, var(--color-surface)); }
+  .cell-9 { fill: color-mix(in srgb, var(--scale-pref-9) 34%, var(--color-surface)); }
+  .cell-10 { fill: color-mix(in srgb, var(--scale-pref-10) 34%, var(--color-surface)); }
+  .cell-7 { fill: color-mix(in srgb, var(--scale-pref-7) 34%, var(--color-surface)); }
+  .cell-6 { fill: color-mix(in srgb, var(--scale-pref-6) 34%, var(--color-surface)); }
+  .cell-5 { fill: color-mix(in srgb, var(--scale-pref-5) 34%, var(--color-surface)); }
+  .cell-3 { fill: color-mix(in srgb, var(--scale-pref-3) 34%, var(--color-surface)); }
+  .cell-2 { fill: color-mix(in srgb, var(--scale-pref-2) 34%, var(--color-surface)); }
+  .cell-1 { fill: color-mix(in srgb, var(--scale-pref-1) 34%, var(--color-surface)); }
+  .cell-stroke { stroke: var(--color-surface); stroke-width: 2; }
+  .seg-up { fill: var(--color-success); }
+  .seg-down { fill: var(--color-danger); }
+  .seg-none { fill: var(--color-border-strong); }
+  .legend { display: flex; gap: var(--space-3); flex-wrap: wrap; font-size: var(--text-sm); margin-top: var(--space-2); }
+  .legend span { display: inline-flex; align-items: center; gap: var(--space-1); }
+  .legend .sw { width: 10px; height: 10px; border-radius: 2px; }
+  .legend .n { font-family: var(--font-mono); color: var(--color-text-muted); }
+</style>
+
+<div class="spec-head">
+  <h1>Chart widgets</h1>
+  <p>Small token-aware SVG components — no chart library. Bars always start at zero, one accent per key series, no gridline noise, and titles state the insight rather than the metric name.</p>
+</div>
+
+<div class="panels">
+<div class="panel" data-theme="light">
+<p class="panel-label">Light theme</p>
+
+<div class="charts">
+
+  <div class="chart-card">
+    <span class="widget-tag">AvgBar</span>
+    <h4>Cornwall leads by two full points</h4>
+    <p class="sub">Average score per destination, 11 members · scale 0–10</p>
+    <svg class="viz" viewBox="0 0 340 118" role="img" aria-label="Cornwall 8.0, Somerset 6.0, Lake District 5.0 out of 10">
+      <line class="axis" x1="100" y1="8" x2="100" y2="104"/>
+      <text class="lbl" x="94" y="27" text-anchor="end">Cornwall</text>
+      <rect class="bar" x="100" y="14" width="160" height="18" rx="3"/>
+      <text class="val" x="266" y="27">8.0</text>
+
+      <text class="lbl" x="94" y="61" text-anchor="end">Somerset</text>
+      <rect class="bar" x="100" y="48" width="120" height="18" rx="3"/>
+      <text class="val" x="226" y="61">6.0</text>
+
+      <text class="lbl" x="94" y="95" text-anchor="end">Lake District</text>
+      <rect class="bar" x="100" y="82" width="100" height="18" rx="3"/>
+      <text class="val" x="206" y="95">5.0</text>
+
+      <text class="lbl-muted" x="100" y="116">0</text>
+      <text class="lbl-muted" x="300" y="116" text-anchor="end">10</text>
+    </svg>
+  </div>
+
+  <div class="chart-card">
+    <span class="widget-tag">SpreadDots</span>
+    <h4>Everyone likes Cornwall; the Lake District splits the group</h4>
+    <p class="sub">One dot per member, 0–10</p>
+    <svg class="viz" viewBox="0 0 340 128" role="img" aria-label="Cornwall scores cluster between 7 and 10; Lake District scores split between 1-3 and 8-10">
+      <text class="lbl" x="94" y="30" text-anchor="end">Cornwall</text>
+      <line class="axis" x1="100" y1="26" x2="300" y2="26"/>
+      <circle class="dot" cx="240" cy="26" r="5"/><circle class="dot" cx="260" cy="26" r="5"/>
+      <circle class="dot" cx="260" cy="14" r="5"/><circle class="dot" cx="260" cy="38" r="5"/>
+      <circle class="dot" cx="280" cy="26" r="5"/><circle class="dot" cx="280" cy="14" r="5"/>
+      <circle class="dot" cx="300" cy="26" r="5"/><circle class="dot" cx="240" cy="14" r="5"/>
+      <text class="lbl-muted" x="306" y="30">tight</text>
+
+      <text class="lbl" x="94" y="86" text-anchor="end">Lake District</text>
+      <line class="axis" x1="100" y1="82" x2="300" y2="82"/>
+      <circle class="dot-dim" cx="120" cy="82" r="5"/><circle class="dot-dim" cx="140" cy="82" r="5"/>
+      <circle class="dot-dim" cx="140" cy="70" r="5"/><circle class="dot-dim" cx="160" cy="82" r="5"/>
+      <circle class="dot-dim" cx="200" cy="82" r="5"/>
+      <circle class="dot-dim" cx="260" cy="82" r="5"/><circle class="dot-dim" cx="280" cy="82" r="5"/>
+      <circle class="dot-dim" cx="280" cy="70" r="5"/><circle class="dot-dim" cx="300" cy="82" r="5"/>
+      <text class="lbl-muted" x="306" y="86">split</text>
+
+      <text class="lbl-muted" x="100" y="112">0</text>
+      <text class="lbl-muted" x="200" y="112" text-anchor="middle">5</text>
+      <text class="lbl-muted" x="300" y="112" text-anchor="end">10</text>
+    </svg>
+  </div>
+
+  <div class="chart-card">
+    <span class="widget-tag">HeatMatrix</span>
+    <h4>Mei is the only one cool on Cornwall</h4>
+    <p class="sub">Members × options — the spreadsheet this replaces</p>
+    <svg class="viz" viewBox="0 0 340 128" role="img" aria-label="Score matrix of three members across four options">
+      <text class="lbl-muted" x="82" y="16" text-anchor="middle">Cornwall</text>
+      <text class="lbl-muted" x="146" y="16" text-anchor="middle">Somerset</text>
+      <text class="lbl-muted" x="210" y="16" text-anchor="middle">Lakes</text>
+      <text class="lbl-muted" x="274" y="16" text-anchor="middle">Devon</text>
+
+      <text class="lbl" x="44" y="42" text-anchor="end">Ana R.</text>
+      <rect class="cell-9 cell-stroke" x="50" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="82" y="42" text-anchor="middle">9</text>
+      <rect class="cell-6 cell-stroke" x="114" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="146" y="42" text-anchor="middle">6</text>
+      <rect class="cell-2 cell-stroke" x="178" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="210" y="42" text-anchor="middle">2</text>
+      <rect class="cell-7 cell-stroke" x="242" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="274" y="42" text-anchor="middle">7</text>
+
+      <text class="lbl" x="44" y="72" text-anchor="end">Tom P.</text>
+      <rect class="cell-10 cell-stroke" x="50" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="82" y="72" text-anchor="middle">10</text>
+      <rect class="cell-7 cell-stroke" x="114" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="146" y="72" text-anchor="middle">7</text>
+      <rect class="cell-9 cell-stroke" x="178" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="210" y="72" text-anchor="middle">9</text>
+      <rect class="cell-5 cell-stroke" x="242" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="274" y="72" text-anchor="middle">5</text>
+
+      <text class="lbl" x="44" y="102" text-anchor="end">Mei J.</text>
+      <rect class="cell-5 cell-stroke" x="50" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="82" y="102" text-anchor="middle">5</text>
+      <rect class="cell-5 cell-stroke" x="114" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="146" y="102" text-anchor="middle">5</text>
+      <rect class="cell-3 cell-stroke" x="178" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="210" y="102" text-anchor="middle">3</text>
+      <rect class="cell-8 cell-stroke" x="242" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="274" y="102" text-anchor="middle">8</text>
+
+      <text class="lbl-muted" x="50" y="124">0 — 10 preference ramp; the number is always printed</text>
+    </svg>
+  </div>
+
+  <div class="chart-card">
+    <span class="widget-tag">DistributionStrip</span>
+    <h4>Two Guys Pizza: 7 in favour, 2 against</h4>
+    <p class="sub">Thumbs vote · 11 members, 2 not voted</p>
+    <svg class="viz" viewBox="0 0 340 40" role="img" aria-label="7 thumbs up, 2 thumbs down, 2 not voted">
+      <rect class="seg-up" x="0" y="8" width="216" height="24" rx="4"/>
+      <rect class="seg-down" x="218" y="8" width="60" height="24" rx="4"/>
+      <rect class="seg-none" x="280" y="8" width="60" height="24" rx="4"/>
+    </svg>
+    <div class="legend">
+      <span><span class="sw seg-up" style="background: var(--color-success)"></span>Up <span class="n">7</span></span>
+      <span><span class="sw" style="background: var(--color-danger)"></span>Down <span class="n">2</span></span>
+      <span><span class="sw" style="background: var(--color-border-strong)"></span>Not voted <span class="n">2</span></span>
+    </div>
+  </div>
+
+</div>
+
+</div>
+<div class="panel" data-theme="dark">
+<p class="panel-label">Dark theme</p>
+
+<div class="charts">
+
+  <div class="chart-card">
+    <span class="widget-tag">AvgBar</span>
+    <h4>Cornwall leads by two full points</h4>
+    <p class="sub">Average score per destination, 11 members · scale 0–10</p>
+    <svg class="viz" viewBox="0 0 340 118" role="img" aria-label="Cornwall 8.0, Somerset 6.0, Lake District 5.0 out of 10">
+      <line class="axis" x1="100" y1="8" x2="100" y2="104"/>
+      <text class="lbl" x="94" y="27" text-anchor="end">Cornwall</text>
+      <rect class="bar" x="100" y="14" width="160" height="18" rx="3"/>
+      <text class="val" x="266" y="27">8.0</text>
+
+      <text class="lbl" x="94" y="61" text-anchor="end">Somerset</text>
+      <rect class="bar" x="100" y="48" width="120" height="18" rx="3"/>
+      <text class="val" x="226" y="61">6.0</text>
+
+      <text class="lbl" x="94" y="95" text-anchor="end">Lake District</text>
+      <rect class="bar" x="100" y="82" width="100" height="18" rx="3"/>
+      <text class="val" x="206" y="95">5.0</text>
+
+      <text class="lbl-muted" x="100" y="116">0</text>
+      <text class="lbl-muted" x="300" y="116" text-anchor="end">10</text>
+    </svg>
+  </div>
+
+  <div class="chart-card">
+    <span class="widget-tag">SpreadDots</span>
+    <h4>Everyone likes Cornwall; the Lake District splits the group</h4>
+    <p class="sub">One dot per member, 0–10</p>
+    <svg class="viz" viewBox="0 0 340 128" role="img" aria-label="Cornwall scores cluster between 7 and 10; Lake District scores split between 1-3 and 8-10">
+      <text class="lbl" x="94" y="30" text-anchor="end">Cornwall</text>
+      <line class="axis" x1="100" y1="26" x2="300" y2="26"/>
+      <circle class="dot" cx="240" cy="26" r="5"/><circle class="dot" cx="260" cy="26" r="5"/>
+      <circle class="dot" cx="260" cy="14" r="5"/><circle class="dot" cx="260" cy="38" r="5"/>
+      <circle class="dot" cx="280" cy="26" r="5"/><circle class="dot" cx="280" cy="14" r="5"/>
+      <circle class="dot" cx="300" cy="26" r="5"/><circle class="dot" cx="240" cy="14" r="5"/>
+      <text class="lbl-muted" x="306" y="30">tight</text>
+
+      <text class="lbl" x="94" y="86" text-anchor="end">Lake District</text>
+      <line class="axis" x1="100" y1="82" x2="300" y2="82"/>
+      <circle class="dot-dim" cx="120" cy="82" r="5"/><circle class="dot-dim" cx="140" cy="82" r="5"/>
+      <circle class="dot-dim" cx="140" cy="70" r="5"/><circle class="dot-dim" cx="160" cy="82" r="5"/>
+      <circle class="dot-dim" cx="200" cy="82" r="5"/>
+      <circle class="dot-dim" cx="260" cy="82" r="5"/><circle class="dot-dim" cx="280" cy="82" r="5"/>
+      <circle class="dot-dim" cx="280" cy="70" r="5"/><circle class="dot-dim" cx="300" cy="82" r="5"/>
+      <text class="lbl-muted" x="306" y="86">split</text>
+
+      <text class="lbl-muted" x="100" y="112">0</text>
+      <text class="lbl-muted" x="200" y="112" text-anchor="middle">5</text>
+      <text class="lbl-muted" x="300" y="112" text-anchor="end">10</text>
+    </svg>
+  </div>
+
+  <div class="chart-card">
+    <span class="widget-tag">HeatMatrix</span>
+    <h4>Mei is the only one cool on Cornwall</h4>
+    <p class="sub">Members × options — the spreadsheet this replaces</p>
+    <svg class="viz" viewBox="0 0 340 128" role="img" aria-label="Score matrix of three members across four options">
+      <text class="lbl-muted" x="82" y="16" text-anchor="middle">Cornwall</text>
+      <text class="lbl-muted" x="146" y="16" text-anchor="middle">Somerset</text>
+      <text class="lbl-muted" x="210" y="16" text-anchor="middle">Lakes</text>
+      <text class="lbl-muted" x="274" y="16" text-anchor="middle">Devon</text>
+
+      <text class="lbl" x="44" y="42" text-anchor="end">Ana R.</text>
+      <rect class="cell-9 cell-stroke" x="50" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="82" y="42" text-anchor="middle">9</text>
+      <rect class="cell-6 cell-stroke" x="114" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="146" y="42" text-anchor="middle">6</text>
+      <rect class="cell-2 cell-stroke" x="178" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="210" y="42" text-anchor="middle">2</text>
+      <rect class="cell-7 cell-stroke" x="242" y="24" width="64" height="26" rx="4"/><text class="cell-val" x="274" y="42" text-anchor="middle">7</text>
+
+      <text class="lbl" x="44" y="72" text-anchor="end">Tom P.</text>
+      <rect class="cell-10 cell-stroke" x="50" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="82" y="72" text-anchor="middle">10</text>
+      <rect class="cell-7 cell-stroke" x="114" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="146" y="72" text-anchor="middle">7</text>
+      <rect class="cell-9 cell-stroke" x="178" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="210" y="72" text-anchor="middle">9</text>
+      <rect class="cell-5 cell-stroke" x="242" y="54" width="64" height="26" rx="4"/><text class="cell-val" x="274" y="72" text-anchor="middle">5</text>
+
+      <text class="lbl" x="44" y="102" text-anchor="end">Mei J.</text>
+      <rect class="cell-5 cell-stroke" x="50" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="82" y="102" text-anchor="middle">5</text>
+      <rect class="cell-5 cell-stroke" x="114" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="146" y="102" text-anchor="middle">5</text>
+      <rect class="cell-3 cell-stroke" x="178" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="210" y="102" text-anchor="middle">3</text>
+      <rect class="cell-8 cell-stroke" x="242" y="84" width="64" height="26" rx="4"/><text class="cell-val" x="274" y="102" text-anchor="middle">8</text>
+
+      <text class="lbl-muted" x="50" y="124">0 — 10 preference ramp; the number is always printed</text>
+    </svg>
+  </div>
+
+  <div class="chart-card">
+    <span class="widget-tag">DistributionStrip</span>
+    <h4>Two Guys Pizza: 7 in favour, 2 against</h4>
+    <p class="sub">Thumbs vote · 11 members, 2 not voted</p>
+    <svg class="viz" viewBox="0 0 340 40" role="img" aria-label="7 thumbs up, 2 thumbs down, 2 not voted">
+      <rect class="seg-up" x="0" y="8" width="216" height="24" rx="4"/>
+      <rect class="seg-down" x="218" y="8" width="60" height="24" rx="4"/>
+      <rect class="seg-none" x="280" y="8" width="60" height="24" rx="4"/>
+    </svg>
+    <div class="legend">
+      <span><span class="sw seg-up" style="background: var(--color-success)"></span>Up <span class="n">7</span></span>
+      <span><span class="sw" style="background: var(--color-danger)"></span>Down <span class="n">2</span></span>
+      <span><span class="sw" style="background: var(--color-border-strong)"></span>Not voted <span class="n">2</span></span>
+    </div>
+  </div>
+
+</div>
+
+</div>
+</div>

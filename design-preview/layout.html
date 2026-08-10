@@ -1,0 +1,685 @@
+<!-- @dsCard group="Layout" name="App layout" subtitle="desktop 62/38 diorama + mobile sheet diorama" -->
+<meta charset="utf-8">
+<title>Kindred — App layout</title>
+<style>
+/* ============================================================================
+   Kindred design tokens
+   ----------------------------------------------------------------------------
+   Three layers (see plan/design-system.md):
+     1. Primitives  — raw scales. Never referenced by components.
+     2. Semantic    — meaning. The ONLY layer components may reference.
+     3. Component   — per-component knobs, defined next to their component.
+   Themes swap the semantic layer via [data-theme]. Light is the default.
+   Non-color values (spacing, type, radii, motion) are theme-invariant.
+   ========================================================================== */
+
+/* ============================== 1. PRIMITIVES ============================= */
+:root {
+  /* --- Warm neutral scale (stone) --- */
+  --stone-0: #FFFFFF;
+  --stone-25: #FCFAF7;
+  --stone-50: #FAF7F2;
+  --stone-100: #F1ECE4;
+  --stone-200: #E7E0D6;
+  --stone-300: #D6CCBE;
+  --stone-400: #A69C8F;
+  --stone-500: #85796B;
+  --stone-600: #6E675E;
+  --stone-700: #4A443D;
+  --stone-800: #332E29;
+  --stone-850: #2A2622;
+  --stone-900: #201D1A;
+  --stone-950: #171412;
+
+  /* --- Brand + status hues --- */
+  --coral-300: #F2A08B;
+  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  --coral-600: #C24A33;
+  --coral-700: #A03C2A;
+  --green-500: #2E8540;
+  --green-400: #5FAE72;
+  --amber-500: #B45309;
+  --amber-400: #D9A441;
+  --red-500: #B91C1C;
+  --red-400: #E5766B;
+  --blue-500: #2563EB;
+  --blue-400: #7CA7F5;
+
+  /* --- Family colors (8 slots, used by name: family-1..8) --- */
+  --family-rose: #C0426B;
+  --family-orange: #D96C2F;
+  --family-gold: #C9A227;
+  --family-moss: #6F8F3B;
+  --family-teal: #2E8C7F;
+  --family-sky: #4C8FD1;
+  --family-indigo: #5B5FC7;
+  --family-plum: #9A4F9E;
+
+  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
+         Data never lives in hue alone: always pair with the numeric value. --- */
+  --scale-pref-0: #B3362B;
+  --scale-pref-1: #BC4A2A;
+  --scale-pref-2: #C55E29;
+  --scale-pref-3: #CD7228;
+  --scale-pref-4: #D48627;
+  --scale-pref-5: #D99A2B;
+  --scale-pref-6: #B79A33;
+  --scale-pref-7: #93973E;
+  --scale-pref-8: #5E9468;
+  --scale-pref-9: #3A8E74;
+  --scale-pref-10: #128778;
+
+  /* --- Spacing (golden-ratio-derived, px) --- */
+  --space-1: 5px;
+  --space-2: 8px;
+  --space-3: 13px;
+  --space-4: 21px;
+  --space-5: 34px;
+  --space-6: 55px;
+
+  /* --- Type scale --- */
+  --text-sm: 13px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-sub: 26px;
+  --text-heading: 42px;
+  --text-display: 68px;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+
+  /* --- Radii (soft, not bubbly) --- */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (single-layer, subtle) --- */
+  --shadow-1: 0 1px 3px rgba(32, 29, 26, 0.08);
+  --shadow-2: 0 4px 16px rgba(32, 29, 26, 0.10);
+  --shadow-3: 0 8px 32px rgba(32, 29, 26, 0.14);
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+
+  /* --- Touch --- */
+  --hit-target: 44px;
+}
+
+/* ============================ 2. SEMANTIC — LIGHT ========================= */
+:root,
+[data-theme="light"] {
+  --color-bg: var(--stone-50);
+  --color-surface: var(--stone-0);
+  --color-surface-raised: var(--stone-25);
+  --color-surface-sunken: var(--stone-100);
+  --color-border: var(--stone-200);
+  --color-border-strong: var(--stone-300);
+
+  --color-text: #2D2A26;
+  --color-text-muted: var(--stone-600);
+  --color-text-faint: var(--stone-400);
+  --color-text-on-accent: #FFFFFF;
+  --color-text-on-status: #FFFFFF;
+
+  --color-accent: var(--coral-500);
+  --color-accent-hover: var(--coral-600);
+  --color-accent-active: var(--coral-700);
+  --color-accent-soft: #FBEAE5;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--amber-500);
+  --color-danger: var(--red-500);
+  --color-info: var(--blue-500);
+  --color-success-soft: #E4F2E7;
+  --color-warning-soft: #F8EEDD;
+  --color-danger-soft: #F9E5E5;
+  --color-info-soft: #E4EDFC;
+
+  --color-focus-ring: var(--blue-500);
+  --color-overlay: rgba(32, 29, 26, 0.4);
+  --color-skeleton: var(--stone-100);
+  --color-skeleton-sheen: var(--stone-200);
+
+  --family-1: var(--family-rose);
+  --family-2: var(--family-orange);
+  --family-3: var(--family-gold);
+  --family-4: var(--family-moss);
+  --family-5: var(--family-teal);
+  --family-6: var(--family-sky);
+  --family-7: var(--family-indigo);
+  --family-8: var(--family-plum);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-popover: var(--shadow-2);
+  --shadow-sheet: var(--shadow-3);
+}
+
+/* ============================ 2. SEMANTIC — DARK ==========================
+   Tuned set, not an inversion: raised surfaces get lighter, accents
+   desaturate, shadows give way to borders. */
+[data-theme="dark"] {
+  --color-bg: var(--stone-900);
+  --color-surface: var(--stone-850);
+  --color-surface-raised: var(--stone-800);
+  --color-surface-sunken: var(--stone-950);
+  --color-border: #453E37;
+  --color-border-strong: #5A5148;
+
+  --color-text: #F0EAE2;
+  --color-text-muted: var(--stone-400);
+  --color-text-faint: var(--stone-500);
+  /* Dark ink on the lifted dark-theme accents — white fails AA on them */
+  --color-text-on-accent: #201D1A;
+  --color-text-on-status: #201D1A;
+
+  --color-accent: #E06A50;
+  --color-accent-hover: #E87F68;
+  --color-accent-active: #C85A42;
+  --color-accent-soft: #43302B;
+
+  --color-success: var(--green-400);
+  --color-warning: var(--amber-400);
+  --color-danger: var(--red-400);
+  --color-info: var(--blue-400);
+  --color-success-soft: #263A2B;
+  --color-warning-soft: #3D3323;
+  --color-danger-soft: #422A28;
+  --color-info-soft: #263349;
+
+  --color-focus-ring: var(--blue-400);
+  --color-overlay: rgba(23, 20, 18, 0.6);
+  --color-skeleton: #332E29;
+  --color-skeleton-sheen: #453E37;
+
+  /* Family colors: lifted for dark surfaces */
+  --family-1: #D66A8C;
+  --family-2: #E68A55;
+  --family-3: #D9B84E;
+  --family-4: #93AD5F;
+  --family-5: #55A79A;
+  --family-6: #74A9DE;
+  --family-7: #8286D9;
+  --family-8: #B573B8;
+
+  --shadow-card: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================= 3. COMPONENT (shared knobs) ====================
+   Only cross-cutting component tokens live here; single-use knobs are
+   defined next to their component. */
+:root {
+  --button-radius: var(--radius-2);
+  --button-height: 40px;
+  --button-height-mobile: var(--hit-target);
+  --card-radius: var(--radius-3);
+  --card-padding: var(--space-4);
+  --chip-radius: var(--radius-full);
+  --field-radius: var(--radius-2);
+  --field-height: 44px;
+  --table-row-height: 40px;
+  --pin-size: 32px;
+  --timeline-track-h: 56px;
+
+  /* Tint recipe — the ONLY sanctioned way to derive a wash from a token:
+     color-mix(in srgb, <semantic token> var(--mix-tint-weak|strong), var(--color-surface))
+     Components must use these percentages, never invent their own. */
+  --mix-tint-weak: 12%;
+  --mix-tint-strong: 24%;
+}
+
+/* ================================ BASE ==================================== */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- specimen page chrome (preview only) ---- */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  padding: var(--space-4);
+  -webkit-font-smoothing: antialiased;
+}
+.spec-head { margin: 0 0 var(--space-4); }
+.spec-head h1 {
+  font-size: var(--text-sub);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.spec-head p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 70ch;
+}
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (max-width: 980px) { .panels { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  overflow: hidden;
+}
+.panel-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-label::before {
+  content: "";
+  width: 10px; height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  flex: none;
+}
+.group-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.group-title:first-of-type { margin-top: 0; }
+.note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 0;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+[data-theme="light"] .only-dark { display: none; }
+[data-theme="dark"] .only-light { display: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+</style>
+<style>
+  .dioramas { display: grid; gap: var(--space-4); }
+  .cap { font-size: 11px; font-family: var(--font-mono); color: var(--color-text-muted); margin: 0 0 var(--space-2); }
+
+  /* ---- desktop ---- */
+  .desktop {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-3);
+    padding: var(--space-2);
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: var(--space-2);
+  }
+  .rail {
+    background: var(--color-surface-sunken);
+    border-radius: var(--radius-2);
+    display: grid;
+    align-content: start;
+    justify-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+  }
+  .rail .icon {
+    width: 18px; height: 18px;
+    border-radius: var(--radius-1);
+    background: var(--color-border-strong);
+  }
+  .rail .icon.on { background: var(--color-accent); }
+  .work { display: grid; grid-template-rows: 1fr auto; gap: var(--space-2); }
+  .split { display: grid; grid-template-columns: 62fr 38fr; gap: var(--space-2); }
+  .map {
+    position: relative;
+    min-height: 190px;
+    border-radius: var(--radius-2);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+  }
+  .map .road {
+    position: absolute;
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+  }
+  .map .water {
+    position: absolute;
+    inset: auto -10% -18% 40%;
+    height: 62%;
+    background: color-mix(in srgb, var(--color-info) 12%, var(--color-surface-sunken));
+    border-radius: 50% 50% 0 0 / 60% 60% 0 0;
+  }
+  .map .pin {
+    position: absolute;
+    width: 16px; height: 21px;
+  }
+  .map .pin svg { width: 100%; height: 100%; display: block; }
+  .map .badge {
+    position: absolute;
+    left: var(--space-2); top: var(--space-2);
+    font-size: 10px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--chip-radius);
+    padding: 1px var(--space-2);
+    color: var(--color-text-muted);
+  }
+  .side {
+    border-radius: var(--radius-2);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    padding: var(--space-2);
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+  }
+  .sk {
+    background: color-mix(in srgb, var(--color-text-faint) 22%, var(--color-surface-sunken));
+    border-radius: var(--radius-1);
+    height: 9px;
+    display: block;
+  }
+  .sk.tall { height: 46px; border-radius: var(--radius-2); }
+  .sk.chip { height: 15px; width: 56px; border-radius: var(--chip-radius); }
+  .side .row { display: flex; gap: var(--space-1); }
+  .timeline {
+    height: var(--timeline-track-h);
+    border-radius: var(--radius-2);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    padding: var(--space-2);
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--space-1);
+    align-items: center;
+  }
+  .tl-day {
+    height: 22px;
+    border-radius: var(--radius-1);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    font-size: 9px;
+    color: var(--color-text-muted);
+    display: grid;
+    place-items: center;
+  }
+  .tl-day.has { background: var(--color-accent-soft); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); color: var(--color-text); }
+
+  /* ---- mobile ---- */
+  .phone {
+    width: 208px;
+    margin: 0 auto;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-3);
+    background: var(--color-surface-sunken);
+    position: relative;
+    overflow: hidden;
+    height: 340px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-card);
+  }
+  .phone .map { border: 0; border-radius: 0; flex: 1; min-height: 0; }
+  .sheet {
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius-3) var(--radius-3) 0 0;
+    box-shadow: var(--shadow-sheet);
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    position: relative;
+    z-index: 2;
+  }
+  .grab {
+    width: 34px; height: 4px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+    margin: 0 auto var(--space-2);
+  }
+  .mini-card .t { font-size: var(--text-sm); font-weight: 600; }
+  .mini-card .m { font-size: 10px; color: var(--color-text-muted); }
+  .mini-chips { display: flex; gap: var(--space-1); margin: var(--space-1) 0 var(--space-2); }
+  .mchip {
+    font-size: 9px;
+    padding: 1px var(--space-1);
+    border-radius: var(--chip-radius);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+  }
+  .mchip.accent { background: var(--color-accent-soft); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
+  .mini-btn {
+    height: 30px;
+    width: 100%;
+    border-radius: var(--button-radius);
+    border: 0;
+    background: var(--color-accent);
+    color: var(--color-text-on-accent);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    z-index: 3;
+  }
+  .tab {
+    height: var(--hit-target);
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    font-size: 9px;
+    color: var(--color-text-muted);
+  }
+  .tab .g { width: 15px; height: 15px; border-radius: 3px; background: var(--color-border-strong); }
+  .tab.on { color: var(--color-accent); }
+  .tab.on .g { background: var(--color-accent); }
+  .ratio {
+    display: flex;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+    margin-top: var(--space-1);
+  }
+  .ratio .a { flex: 62; }
+  .ratio .b { flex: 38; text-align: right; }
+</style>
+
+<div class="spec-head">
+  <h1>App layout</h1>
+  <p>Illustrative proportions only. Desktop: slim nav rail, map at ~62%, side panel at ~38% for the selected record, collapsible timeline along the bottom. Mobile: full-bleed map, bottom sheet in thumb reach, bottom tab nav.</p>
+</div>
+
+<div class="panels">
+<div class="panel" data-theme="light">
+<p class="panel-label">Light theme</p>
+
+<div class="dioramas">
+  <div>
+    <p class="cap">desktop · rail + map 62% + side panel 38% + timeline</p>
+    <div class="desktop">
+      <div class="rail">
+        <span class="icon on"></span><span class="icon"></span><span class="icon"></span><span class="icon"></span>
+      </div>
+      <div class="work">
+        <div class="split">
+          <div class="map">
+            <span class="badge">Cornwall · 12 suggestions</span>
+            <span class="road" style="left: 6%; top: 44%; width: 88%; height: 3px; transform: rotate(-7deg)"></span>
+            <span class="road" style="left: 22%; top: 8%; width: 3px; height: 84%"></span>
+            <span class="road" style="left: 40%; top: 20%; width: 46%; height: 3px; transform: rotate(24deg)"></span>
+            <span class="water"></span>
+            <span class="pin" style="left: 28%; top: 30%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-1)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+            <span class="pin" style="left: 52%; top: 55%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-2)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+            <span class="pin" style="left: 70%; top: 26%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-3)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+          </div>
+          <div class="side">
+            <span class="sk tall"></span>
+            <span class="sk" style="width: 70%"></span>
+            <div class="row"><span class="sk chip"></span><span class="sk chip" style="width: 40px"></span></div>
+            <span class="sk" style="width: 92%"></span>
+            <span class="sk" style="width: 84%"></span>
+            <span class="sk" style="width: 60%"></span>
+            <span class="sk" style="width: 88%"></span>
+          </div>
+        </div>
+        <div class="timeline">
+          <span class="tl-day">Sat</span>
+          <span class="tl-day has">Sun</span>
+          <span class="tl-day has">Mon</span>
+          <span class="tl-day">Tue</span>
+          <span class="tl-day has">Wed</span>
+          <span class="tl-day has">Thu</span>
+          <span class="tl-day">Fri</span>
+        </div>
+      </div>
+    </div>
+    <div class="ratio"><span class="a">map ≈ 62%</span><span class="b">panel ≈ 38%</span></div>
+  </div>
+
+  <div>
+    <p class="cap">mobile · full-bleed map + peeking bottom sheet + tab bar</p>
+    <div class="phone">
+      <div class="map">
+        <span class="road" style="left: 4%; top: 30%; width: 92%; height: 3px; transform: rotate(-12deg)"></span>
+        <span class="road" style="left: 46%; top: 4%; width: 3px; height: 70%"></span>
+        <span class="water"></span>
+        <span class="pin" style="left: 30%; top: 22%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-1)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+        <span class="pin" style="left: 58%; top: 40%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-2)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+      </div>
+      <div class="sheet">
+        <span class="grab"></span>
+        <div class="mini-card">
+          <span class="t">Two Guys Pizza</span>
+          <div class="mini-chips">
+            <span class="mchip">Meal</span>
+            <span class="mchip accent">Shortlisted</span>
+            <span class="mchip mono">7.5</span>
+          </div>
+          <span class="m">Jiangs 0h 55m · Parkers 2h 40m · 6 comments</span>
+          <button class="mini-btn" style="margin-top: var(--space-2)">Details</button>
+        </div>
+      </div>
+      <div class="tabbar">
+        <span class="tab on"><span class="g"></span>Map</span>
+        <span class="tab"><span class="g"></span>Plan</span>
+        <span class="tab"><span class="g"></span>Polls</span>
+        <span class="tab"><span class="g"></span>Us</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<div class="panel" data-theme="dark">
+<p class="panel-label">Dark theme</p>
+
+<div class="dioramas">
+  <div>
+    <p class="cap">desktop · rail + map 62% + side panel 38% + timeline</p>
+    <div class="desktop">
+      <div class="rail">
+        <span class="icon on"></span><span class="icon"></span><span class="icon"></span><span class="icon"></span>
+      </div>
+      <div class="work">
+        <div class="split">
+          <div class="map">
+            <span class="badge">Cornwall · 12 suggestions</span>
+            <span class="road" style="left: 6%; top: 44%; width: 88%; height: 3px; transform: rotate(-7deg)"></span>
+            <span class="road" style="left: 22%; top: 8%; width: 3px; height: 84%"></span>
+            <span class="road" style="left: 40%; top: 20%; width: 46%; height: 3px; transform: rotate(24deg)"></span>
+            <span class="water"></span>
+            <span class="pin" style="left: 28%; top: 30%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-1)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+            <span class="pin" style="left: 52%; top: 55%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-2)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+            <span class="pin" style="left: 70%; top: 26%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-3)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+          </div>
+          <div class="side">
+            <span class="sk tall"></span>
+            <span class="sk" style="width: 70%"></span>
+            <div class="row"><span class="sk chip"></span><span class="sk chip" style="width: 40px"></span></div>
+            <span class="sk" style="width: 92%"></span>
+            <span class="sk" style="width: 84%"></span>
+            <span class="sk" style="width: 60%"></span>
+            <span class="sk" style="width: 88%"></span>
+          </div>
+        </div>
+        <div class="timeline">
+          <span class="tl-day">Sat</span>
+          <span class="tl-day has">Sun</span>
+          <span class="tl-day has">Mon</span>
+          <span class="tl-day">Tue</span>
+          <span class="tl-day has">Wed</span>
+          <span class="tl-day has">Thu</span>
+          <span class="tl-day">Fri</span>
+        </div>
+      </div>
+    </div>
+    <div class="ratio"><span class="a">map ≈ 62%</span><span class="b">panel ≈ 38%</span></div>
+  </div>
+
+  <div>
+    <p class="cap">mobile · full-bleed map + peeking bottom sheet + tab bar</p>
+    <div class="phone">
+      <div class="map">
+        <span class="road" style="left: 4%; top: 30%; width: 92%; height: 3px; transform: rotate(-12deg)"></span>
+        <span class="road" style="left: 46%; top: 4%; width: 3px; height: 70%"></span>
+        <span class="water"></span>
+        <span class="pin" style="left: 30%; top: 22%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-1)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+        <span class="pin" style="left: 58%; top: 40%"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 0C5.9 0 1 4.9 1 11c0 8 11 21 11 21s11-13 11-21c0-6.1-4.9-11-11-11z" fill="var(--family-2)"/><circle cx="12" cy="11" r="4" fill="var(--color-surface)"/></svg></span>
+      </div>
+      <div class="sheet">
+        <span class="grab"></span>
+        <div class="mini-card">
+          <span class="t">Two Guys Pizza</span>
+          <div class="mini-chips">
+            <span class="mchip">Meal</span>
+            <span class="mchip accent">Shortlisted</span>
+            <span class="mchip mono">7.5</span>
+          </div>
+          <span class="m">Jiangs 0h 55m · Parkers 2h 40m · 6 comments</span>
+          <button class="mini-btn" style="margin-top: var(--space-2)">Details</button>
+        </div>
+      </div>
+      <div class="tabbar">
+        <span class="tab on"><span class="g"></span>Map</span>
+        <span class="tab"><span class="g"></span>Plan</span>
+        <span class="tab"><span class="g"></span>Polls</span>
+        <span class="tab"><span class="g"></span>Us</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
