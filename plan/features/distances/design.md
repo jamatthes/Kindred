@@ -1,0 +1,288 @@
+# distances — Design
+
+Implements `requirements.md` in this directory. Read `plan/architecture.md` (especially the
+Google API usage table and cost rules) and `plan/design-system.md` first.
+
+---
+
+## HARD INVARIANT — never call Google in a render path
+
+From `CLAUDE.md` and `plan/architecture.md`. This feature is the main place that rule could be
+broken, so it is restated concretely:
+
+1. A request serving a page, a list, a card, or a panel **never** calls Distance Matrix. It
+   reads `distance_cache`, and falls back to a haversine value computed in SQL.
+2. Distance Matrix is called **only** from a FastAPI background task in
+   `server/app/services/distances.py`, triggered by a small, closed set of events listed below.
+3. A (family, suggestion) pair is computed **once** and cached forever. It is recomputed only
+   when the pin moves beyond the epsilon or the family's home changes.
+4. In the **End** stage no external call is made at all.
+
+---
+
+## Data model
+
+### `distance_cache` (exists in `architecture.md`, two PROPOSED ADDITIONS)
+
+| Column | Use here |
+|---|---|
+| `id` | uuid pk |
+| `family_id` | FK, part of the unique pair |
+| `suggestion_id` | FK, part of the unique pair |
+| `duration_s` | driving seconds; nullable when no route exists |
+| `distance_m` | driving metres; nullable when no route exists |
+| `mode` | always `driving` in v1 |
+| `computed_at` | when the value was obtained |
+| `created_at` / `updated_at` | standard |
+
+Unique constraint on `(family_id, suggestion_id)` — the pair is the identity, and the upsert
+depends on it.
+
+**PROPOSED ADDITION — `distance_cache.status`** (varchar, not null, default `pending`).
+Values: `pending` / `ok` / `no_route` / `failed`.
+
+Rationale: `architecture.md` gives `distance_cache` no way to record a *negative* result. With
+only nullable `duration_s`, a pair that genuinely has no driving route — a home in the UK and a
+suggestion on a Greek island, a ferry-only crossing, an ocean between them — is
+indistinguishable from a pair that has not been computed yet. Every list render would see a
+null, conclude "not computed", and re-queue the task, calling Distance Matrix forever for a
+pair that will never resolve. `status` makes the negative result a real, cacheable answer.
+
+**PROPOSED ADDITION — `distance_cache.attempts`** (int, not null, default 0).
+
+Rationale: transient failures (quota exhaustion, a timeout, a 5xx) must be retried, but not
+indefinitely. `attempts` bounds the retry loop. Once it reaches the cap (target 3), the row
+settles at `failed` and is left alone until the main admin's explicit force-recompute. Without
+it, a bad afternoon at the API turns into an unbounded retry storm against a paid endpoint.
+
+Both additions are small, additive, and default-safe on existing rows.
+
+### `families` (read-only here)
+
+`home_lat`, `home_lng`, `home_geocoded_at` supply the origins. A family with a null
+`home_lat`/`home_lng` is not sent to Distance Matrix and is reported to the UI as
+"home address not set yet" rather than being silently dropped.
+
+### `suggestions` (read-only here)
+
+`lat`/`lng` supply the destination. For `type = 'region'` these already hold the geometry
+centroid — `map-suggestions` computes and stores it on write, so this feature needs no special
+case. NOTE: measuring to a region's centroid is an approximation by nature; a large region's
+edge may be materially closer. The UI labels region distances as "to the centre of" so the
+approximation is stated rather than implied.
+
+---
+
+## The batching strategy
+
+Distance Matrix accepts multiple origins and multiple destinations in one call and bills per
+origin-destination *element*. Element count is what matters, so the win is in round trips and
+latency rather than raw cost — but fewer, well-shaped calls also make quota behaviour far
+easier to reason about.
+
+### On suggestion create or move — one call
+
+**Origins:** every family in the trip with a geocoded home.
+**Destination:** the single suggestion.
+
+One call covers the whole trip's worth of new pairs. With six families that is one request
+producing six cached rows. This is the common case and the one the design optimises for.
+
+### On family home change — chunked calls
+
+**Origin:** the one family.
+**Destinations:** every suggestion in the trip.
+
+Distance Matrix caps destinations per request (25 at time of writing) and total elements per
+request (100), so this is chunked into batches of at most 25 destinations. A trip with 60
+suggestions costs three calls for that family. Home changes are rare, so this is acceptable.
+
+### Chunking rules
+- Never exceed the documented per-request origin, destination, and element limits; keep the
+  limits as named settings in `core/config.py`, not literals scattered through the service.
+- Chunk boundaries are deterministic (ordered by suggestion `created_at`) so a retry re-issues
+  the same chunks rather than a fresh random split.
+- A chunk that fails does not fail its siblings — each chunk's rows are upserted independently.
+
+### Trigger list (exhaustive)
+| Trigger | Shape | Source |
+|---|---|---|
+| Suggestion created | 1 call, all homes → new suggestion | `map-suggestions` POST |
+| Suggestion moved > epsilon (25 m) | 1 call, all homes → moved suggestion | `map-suggestions` PATCH |
+| Family home geocoded or changed | chunked, that home → all suggestions | `families` |
+| Family created with a home | chunked, that home → all suggestions | `families` |
+| Main admin force-recompute | scoped to a suggestion or the trip | this feature |
+
+Nothing else queues a call. In particular: opening a card, loading the list, sorting, filtering,
+reconnecting a WebSocket, and any read whatsoever queue nothing.
+
+---
+
+## Haversine fallback
+
+Computed in SQL on every read where a cached `ok` row is absent, using the shared
+`haversine_m` expression helper (`server/app/models/geo.py`, introduced by `map-suggestions`).
+
+- Returned as `distance_m` with `is_estimate: true` and **no** `duration_s` — inventing a
+  driving duration from a straight line would be dishonest, and `design-system.md`'s honesty
+  rules apply to numbers on cards just as much as to charts.
+- The UI renders an estimate as a distance only ("~48 km away, driving time pending").
+- Estimates are never written to `distance_cache`. The cache holds real answers only.
+
+---
+
+## REST endpoints
+
+All under `/api/v1`, session auth, Pydantic schemas both directions.
+
+### `GET /api/v1/suggestions/{id}/distances`
+Every family's distance for one suggestion.
+
+Response:
+```
+{ suggestion_id,
+  distances: [ { family_id, family_name, family_color,
+                 status,            // ok | pending | no_route | failed | no_home
+                 duration_s | null,
+                 distance_m,
+                 is_estimate,       // true when the value is haversine
+                 computed_at | null } ] }
+```
+Ordered with the calling user's own family first. Families without a geocoded home appear with
+`status: no_home`. Permission: `require_member`. Available in every stage.
+
+### `GET /api/v1/distances`
+Bulk form for the list view, so rendering fifty rows costs one request.
+Query: `trip_id` (required), `suggestion_ids[]` (optional; defaults to the whole trip),
+`family_id` (optional; defaults to the caller's family — restricts the response to one family's
+values for a lighter payload).
+Response: a map of `suggestion_id → distances[]` in the shape above.
+Permission: `require_member`.
+
+NOTE: `map-suggestions`' `GET /api/v1/suggestions` already embeds a `distances` array per item
+for exactly this reason. This endpoint exists for the case where the client needs to re-fetch
+distances alone — for example after switching the sort to another family's perspective.
+
+### `POST /api/v1/distances/recompute`
+Request: `{ trip_id, suggestion_id? }` — omit `suggestion_id` to recompute the whole trip.
+Response: `{ queued_pairs, estimated_api_calls }`, returned **before** the work runs so the UI
+can state the cost.
+Permission: `require_main_admin`. Stage: `require_stage("planning", "holiday")` — explicitly
+rejected in End.
+Behaviour: resets matching rows to `pending` with `attempts = 0`, including rows currently at
+`no_route` or `failed`, then queues the background task. This is the only path that retries a
+settled negative result.
+
+---
+
+## WebSocket events
+
+### Emitted
+| Event | Payload | When |
+|---|---|---|
+| `distance.updated` | `suggestion_id, family_id, status, duration_s, distance_m, is_estimate: false, computed_at` | a cached row is written |
+
+Emitted per row rather than per batch, so a chip swaps from estimate to real value as soon as
+its own answer lands rather than waiting for the slowest sibling.
+
+### Consumed
+| Event | Effect |
+|---|---|
+| `suggestion.created` | render the new row with an estimate immediately |
+| `suggestion.moved` | revert the affected chips to the estimate state pending recomputation |
+| `suggestion.deleted` | drop cached rows from client state |
+
+---
+
+## Background task
+
+Lives in `server/app/services/distances.py`, wrapped behind an interface so tests fake it and
+never touch Google (per `architecture.md`'s testing strategy).
+
+Flow:
+1. Resolve the work set into (family, suggestion) pairs, skipping families with no geocoded home.
+2. Upsert `pending` rows for pairs not already `ok`, so a concurrent read shows "pending" rather
+   than nothing.
+3. Shape the calls per the batching strategy; respect origin/destination/element caps.
+4. Issue the call with a timeout and bounded retry.
+5. Map each element's status onto a row:
+   - `OK` → `status = ok`, store `duration_s` and `distance_m`, set `computed_at`.
+   - `ZERO_RESULTS` → `status = no_route`, null duration and distance. **Cached permanently** —
+     this is the answer, not a failure.
+   - `NOT_FOUND` → `status = failed`, increment `attempts` (bad coordinates; worth one retry).
+   - Transport error, timeout, `OVER_QUERY_LIMIT`, or 5xx → increment `attempts`; re-queue with
+     exponential backoff while `attempts` is below the cap, otherwise settle at `failed`.
+6. Emit `distance.updated` per written row.
+7. Never raise into the request that queued it — a failed distance must not fail a suggestion
+   creation. The suggestion is the user's work; the distance is a convenience.
+
+Concurrency: an advisory lock or a `pending` guard prevents two overlapping tasks from
+duplicating calls for the same pair, which is the realistic way this feature would leak budget.
+
+---
+
+## UI behaviour
+
+### Distance chips
+- Format: duration first, then the origin — "2h 40m from Parkers". Duration is what people
+  plan around. Under an hour reads as "35m from Parkers".
+- Estimate state: distance only, visually muted, with an explicit approximation marker —
+  "~48 km from Parkers · driving time pending". A tooltip explains that a straight-line estimate
+  is shown until the driving time is calculated.
+- `no_route`: "No driving route from Parkers", with a tooltip noting a ferry or flight may be
+  needed. Rendered as information, not as an error.
+- `failed`: "Distance unavailable", quiet, with the main admin additionally seeing a retry
+  affordance that calls the recompute endpoint.
+- `no_home`: "Home address not set" — actionable for that family's admin, who gets a link to
+  set it.
+- Region destinations append "to the centre of" in the tooltip so the centroid approximation is
+  stated.
+
+### Placement
+- **Popover card** — the caller's own family chip only. Cards stay glanceable per
+  `design-system.md`.
+- **Side panel / bottom sheet** — own family first, then an expander revealing every family,
+  each row carrying the family colour accent from the `--family-1…8` slots.
+- **List row** — own family's value in the distance column, right-aligned with tabular figures
+  per the data-table pattern.
+
+### Sorting
+- Distance is one of the tri-state sort columns (asc → desc → original) in the suggestion list.
+- Sort uses the caller's own family by default; a selector switches the perspective to another
+  family, and the column header states whose perspective is active so a sorted list is never
+  ambiguous.
+- Ordering: real values ascending, then estimates (marked), then `failed`/`no_home`, then
+  `no_route` last. A suggestion nobody can drive to belongs at the bottom.
+
+### Colour and honesty
+Colour never carries the meaning alone — every state pairs with text and an icon, per the
+accessibility baseline. Distance is deliberately **not** tinted with the preference ramp:
+that ramp means "how much the group likes this", and reusing it for "how far away this is"
+would make two different meanings look identical on one card.
+
+### Loading
+Chips never show a spinner. An estimate is a real number and renders immediately; it simply
+sharpens when the driving value arrives. The transition is a 150–250 ms crossfade, suppressed
+under `prefers-reduced-motion`.
+
+---
+
+## Edge cases and error states
+
+| Case | Handling |
+|---|---|
+| Family home not geocoded yet | Excluded from the API call entirely; reported as `no_home`. Once `families` geocodes it, the home-change trigger fills in every pair. |
+| Suggestion created before any family has a home | No call is made; rows stay absent and reads show estimates. The first geocoded home backfills. |
+| Genuinely unroutable pair (island, overseas) | `ZERO_RESULTS` → `no_route`, cached permanently. Never retried automatically. This is the single most important case the `status` column exists for. |
+| Pin nudged a few metres | Below the 25 m epsilon, no recompute is queued. Shared with `map-suggestions`, which owns the epsilon check. |
+| Pin moved far | Existing rows for that suggestion reset to `pending`; chips revert to estimates; one call re-fills them. |
+| Home changed | Only that family's rows reset. Other families' cached values are untouched. |
+| Quota exhausted | Rows increment `attempts` and settle at `failed` after the cap; the UI degrades to estimates everywhere. The main admin sees a banner explaining that the distance service is unavailable and that estimates are being shown. |
+| API key missing or misconfigured | Same degraded path — estimates only, admin banner. The trip stays fully usable; distances are an enhancement, not a dependency. |
+| Distance Matrix returns a partial result | Each element is mapped independently; successful elements cache normally and failures retry on their own. |
+| Two overlapping recompute tasks | Advisory lock / `pending` guard ensures one call per pair. |
+| Suggestion deleted mid-computation | The upsert finds no suggestion and discards the result; the cascade from `map-suggestions` removes any rows already written. |
+| Family deleted | Its `distance_cache` rows cascade away with it. |
+| End stage reached with pairs still pending | Those pairs stay pending forever and render as estimates. No call is made in End, including force-recompute, which returns the stage guard's rejection. |
+| Force-recompute on a large trip | The response states `estimated_api_calls` before running so the admin sees the cost; a trip with 60 suggestions and 6 families is roughly 6 chunked calls, not 360. |
+| Clock skew / very old `computed_at` | Values are never expired by age. A driving distance between two fixed points does not change; that is the premise of caching forever. Only a move or a home change invalidates. |
