@@ -253,6 +253,15 @@ Per `design-system.md`, detail escalates and never skips a level.
    Details, notes, external link, all families' distances, grouped children, comment thread,
    admin controls. This is where the heavy lifting happens.
 
+Both the popover card and the details view carry an **"Open in Google Maps" action**
+(prominent on mobile, secondary on desktop): a universal Maps deep link —
+`https://www.google.com/maps/dir/?api=1&destination=<lat>,<lng>` plus
+`&destination_place_id=<place_id>` when one is stored — which opens the native Google Maps
+app on phones for turn-by-turn navigation. This is a plain URL, not an API call: no key, no
+quota, ToS-fine. Region suggestions use
+`https://www.google.com/maps/search/?api=1&query=<lat>,<lng>` instead (an area to look at,
+not a navigation destination).
+
 ### Map layer specifics
 - **Clustering** for pins. Clusters show a count and a composition hint so a cluster of
   restaurants reads differently from a mixed cluster. Regions never cluster.

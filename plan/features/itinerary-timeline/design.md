@@ -275,7 +275,11 @@ clearly separated "sometime today" band. Between consecutive mapped items, a leg
 duration and distance from `route_cache` — or "route unavailable" for a fallback leg.
 
 Each item shows its title, type icon, family colour accent from the linked suggestion's author,
-vote summary, and comment count, and links through to the suggestion's full record.
+vote summary, and comment count, and links through to the suggestion's full record. Located
+items also carry an **"Open in Google Maps" action** (prominent on mobile, secondary on
+desktop) using the universal deep link
+`https://www.google.com/maps/dir/?api=1&destination=<lat>,<lng>` (+ `&destination_place_id`
+when stored) — opens the native Maps app for navigation; a plain URL, no API key or quota.
 
 Admin controls per item: move up, move down, move to day, edit times, remove. Removal opens a
 confirm dialog (admin-destructive per `design-system.md`) stating that the suggestion returns to

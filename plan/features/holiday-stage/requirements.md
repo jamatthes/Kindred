@@ -57,6 +57,10 @@ toggle is off by default and there is a visible indicator the entire time sharin
 - If nothing is left today, it shows tomorrow's first item labelled as such.
 - If the itinerary is empty, an empty state points to the itinerary view.
 - The screen refreshes on focus and when an `itinerary.*` or stage websocket event arrives.
+- Each item with a location carries a prominent **"Open in Google Maps"** action (≥44px)
+  that opens the native Maps app for turn-by-turn navigation to the location, via a
+  universal Maps deep link (`https://www.google.com/maps/dir/?api=1&destination=…`) — a
+  plain URL, no API key or quota involved. Items without a location omit the action.
 
 ### Holiday: check-in
 

@@ -130,6 +130,9 @@ inline stage message appears.
 - [ ] Make it the default mobile route while the stage is `holiday`; embed as a card atop the
       itinerary view on desktop.
 - [ ] Tap-through from each card to the map focused on that item.
+- [ ] "Open in Google Maps" action (≥44px) on each located card — universal deep link
+      `https://www.google.com/maps/dir/?api=1&destination=<lat>,<lng>` (+
+      `&destination_place_id` when stored); omitted for items without a location.
 
 **Verify:** On a phone-sized viewport with a seeded itinerary, confirm the correct current/next items
 render, the boundary rolls over when the clock passes an item's end time, and both empty states are
