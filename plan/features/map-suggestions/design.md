@@ -91,6 +91,12 @@ Rules:
 - Validation: polygon needs ≥ 4 positions (closed triangle minimum); `radius_m` must be
   positive and is clamped to a sane maximum (target 200 km) to prevent a whole-globe circle.
 - Non-region types must have `geometry_geojson` null; regions must have it non-null.
+- **Polygon is the primary shape** (user directive 2026-08-11): regions should read like
+  Google Maps' own locality boundaries — an organic outlined area, not a circle. The draw
+  tool defaults to freehand/click-to-place polygon outlining; circle remains only as a
+  quick-draw convenience, and both render identically as a dashed outline with a tinted
+  fill (preference-ramp tint when poll/vote scores exist, neutral otherwise). Reference
+  rendering: `design-preview/screen-planning-map.html`.
 
 ### Grouping (derived, never stored)
 

@@ -1,0 +1,728 @@
+<!-- @dsCard group="Screens" name="Planning — map view" subtitle="Desktop 1440 · map + side panel + timeline, light theme" -->
+<meta charset="utf-8">
+<style>
+/* ============================================================================
+   Kindred design tokens
+   ----------------------------------------------------------------------------
+   Three layers (see plan/design-system.md):
+     1. Primitives  — raw scales. Never referenced by components.
+     2. Semantic    — meaning. The ONLY layer components may reference.
+     3. Component   — per-component knobs, defined next to their component.
+   Themes swap the semantic layer via [data-theme]. Light is the default.
+   Non-color values (spacing, type, radii, motion) are theme-invariant.
+   ========================================================================== */
+
+/* ============================== 1. PRIMITIVES ============================= */
+:root {
+  /* --- Warm neutral scale (stone) --- */
+  --stone-0: #FFFFFF;
+  --stone-25: #FCFAF7;
+  --stone-50: #FAF7F2;
+  --stone-100: #F1ECE4;
+  --stone-200: #E7E0D6;
+  --stone-300: #D6CCBE;
+  --stone-400: #A69C8F;
+  --stone-500: #85796B;
+  --stone-600: #6E675E;
+  --stone-700: #4A443D;
+  --stone-800: #332E29;
+  --stone-850: #2A2622;
+  --stone-900: #201D1A;
+  --stone-950: #171412;
+
+  /* --- Brand + status hues --- */
+  --coral-300: #F2A08B;
+  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  --coral-600: #C24A33;
+  --coral-700: #A03C2A;
+  --green-500: #2E8540;
+  --green-400: #5FAE72;
+  --amber-500: #B45309;
+  --amber-400: #D9A441;
+  --red-500: #B91C1C;
+  --red-400: #E5766B;
+  --blue-500: #2563EB;
+  --blue-400: #7CA7F5;
+
+  /* --- Family colors (8 slots, used by name: family-1..8) --- */
+  --family-rose: #C0426B;
+  --family-orange: #D96C2F;
+  --family-gold: #C9A227;
+  --family-moss: #6F8F3B;
+  --family-teal: #2E8C7F;
+  --family-sky: #4C8FD1;
+  --family-indigo: #5B5FC7;
+  --family-plum: #9A4F9E;
+
+  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
+         Data never lives in hue alone: always pair with the numeric value. --- */
+  --scale-pref-0: #B3362B;
+  --scale-pref-1: #BC4A2A;
+  --scale-pref-2: #C55E29;
+  --scale-pref-3: #CD7228;
+  --scale-pref-4: #D48627;
+  --scale-pref-5: #D99A2B;
+  --scale-pref-6: #B79A33;
+  --scale-pref-7: #93973E;
+  --scale-pref-8: #5E9468;
+  --scale-pref-9: #3A8E74;
+  --scale-pref-10: #128778;
+
+  /* --- Spacing (golden-ratio-derived, px) --- */
+  --space-1: 5px;
+  --space-2: 8px;
+  --space-3: 13px;
+  --space-4: 21px;
+  --space-5: 34px;
+  --space-6: 55px;
+
+  /* --- Type scale --- */
+  --text-sm: 13px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-sub: 26px;
+  --text-heading: 42px;
+  --text-display: 68px;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+
+  /* --- Radii (soft, not bubbly) --- */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (single-layer, subtle) --- */
+  --shadow-1: 0 1px 3px rgba(32, 29, 26, 0.08);
+  --shadow-2: 0 4px 16px rgba(32, 29, 26, 0.10);
+  --shadow-3: 0 8px 32px rgba(32, 29, 26, 0.14);
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+
+  /* --- Touch --- */
+  --hit-target: 44px;
+}
+
+/* ============================ 2. SEMANTIC — LIGHT ========================= */
+:root,
+[data-theme="light"] {
+  --color-bg: var(--stone-50);
+  --color-surface: var(--stone-0);
+  --color-surface-raised: var(--stone-25);
+  --color-surface-sunken: var(--stone-100);
+  --color-border: var(--stone-200);
+  --color-border-strong: var(--stone-300);
+
+  --color-text: #2D2A26;
+  --color-text-muted: var(--stone-600);
+  --color-text-faint: var(--stone-400);
+  --color-text-on-accent: #FFFFFF;
+  --color-text-on-status: #FFFFFF;
+
+  --color-accent: var(--coral-500);
+  --color-accent-hover: var(--coral-600);
+  --color-accent-active: var(--coral-700);
+  --color-accent-soft: #FBEAE5;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--amber-500);
+  --color-danger: var(--red-500);
+  --color-info: var(--blue-500);
+  --color-success-soft: #E4F2E7;
+  --color-warning-soft: #F8EEDD;
+  --color-danger-soft: #F9E5E5;
+  --color-info-soft: #E4EDFC;
+
+  --color-focus-ring: var(--blue-500);
+  --color-overlay: rgba(32, 29, 26, 0.4);
+  --color-skeleton: var(--stone-100);
+  --color-skeleton-sheen: var(--stone-200);
+
+  --family-1: var(--family-rose);
+  --family-2: var(--family-orange);
+  --family-3: var(--family-gold);
+  --family-4: var(--family-moss);
+  --family-5: var(--family-teal);
+  --family-6: var(--family-sky);
+  --family-7: var(--family-indigo);
+  --family-8: var(--family-plum);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-popover: var(--shadow-2);
+  --shadow-sheet: var(--shadow-3);
+}
+
+/* ============================ 2. SEMANTIC — DARK ==========================
+   Tuned set, not an inversion: raised surfaces get lighter, accents
+   desaturate, shadows give way to borders. */
+[data-theme="dark"] {
+  --color-bg: var(--stone-900);
+  --color-surface: var(--stone-850);
+  --color-surface-raised: var(--stone-800);
+  --color-surface-sunken: var(--stone-950);
+  --color-border: #453E37;
+  --color-border-strong: #5A5148;
+
+  --color-text: #F0EAE2;
+  --color-text-muted: var(--stone-400);
+  --color-text-faint: var(--stone-500);
+  /* Dark ink on the lifted dark-theme accents — white fails AA on them */
+  --color-text-on-accent: #201D1A;
+  --color-text-on-status: #201D1A;
+
+  --color-accent: #E06A50;
+  --color-accent-hover: #E87F68;
+  --color-accent-active: #C85A42;
+  --color-accent-soft: #43302B;
+
+  --color-success: var(--green-400);
+  --color-warning: var(--amber-400);
+  --color-danger: var(--red-400);
+  --color-info: var(--blue-400);
+  --color-success-soft: #263A2B;
+  --color-warning-soft: #3D3323;
+  --color-danger-soft: #422A28;
+  --color-info-soft: #263349;
+
+  --color-focus-ring: var(--blue-400);
+  --color-overlay: rgba(23, 20, 18, 0.6);
+  --color-skeleton: #332E29;
+  --color-skeleton-sheen: #453E37;
+
+  /* Family colors: lifted for dark surfaces */
+  --family-1: #D66A8C;
+  --family-2: #E68A55;
+  --family-3: #D9B84E;
+  --family-4: #93AD5F;
+  --family-5: #55A79A;
+  --family-6: #74A9DE;
+  --family-7: #8286D9;
+  --family-8: #B573B8;
+
+  --shadow-card: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================= 3. COMPONENT (shared knobs) ====================
+   Only cross-cutting component tokens live here; single-use knobs are
+   defined next to their component. */
+:root {
+  --button-radius: var(--radius-2);
+  --button-height: 40px;
+  --button-height-mobile: var(--hit-target);
+  --card-radius: var(--radius-3);
+  --card-padding: var(--space-4);
+  --chip-radius: var(--radius-full);
+  --field-radius: var(--radius-2);
+  --field-height: 44px;
+  --table-row-height: 40px;
+  --pin-size: 32px;
+  --timeline-track-h: 56px;
+
+  /* Tint recipe — the ONLY sanctioned way to derive a wash from a token:
+     color-mix(in srgb, <semantic token> var(--mix-tint-weak|strong), var(--color-surface))
+     Components must use these percentages, never invent their own. */
+  --mix-tint-weak: 12%;
+  --mix-tint-strong: 24%;
+}
+
+/* ================================ BASE ==================================== */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* ---------- screen scaffold ---------- */
+* { box-sizing: border-box; margin: 0; }
+.screen {
+  width: 1440px; height: 900px; display: flex;
+  background: var(--color-bg); color: var(--color-text);
+  font-family: var(--font-sans); font-size: var(--text-body);
+  line-height: var(--leading-body); overflow: hidden;
+}
+
+/* ---------- nav rail ---------- */
+.rail {
+  width: 64px; background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex; flex-direction: column; align-items: center;
+  padding: var(--space-3) 0; gap: var(--space-2);
+}
+.rail .logo {
+  width: 36px; height: 36px; border-radius: var(--radius-2);
+  background: var(--color-accent); color: var(--color-text-on-accent);
+  display: grid; place-items: center; font-weight: 700; font-size: var(--text-lg);
+  margin-bottom: var(--space-3);
+}
+.rail-btn {
+  width: 44px; height: 44px; border-radius: var(--radius-2); border: none;
+  background: transparent; color: var(--color-text-muted);
+  display: grid; place-items: center; cursor: pointer;
+}
+.rail-btn.active { background: var(--color-accent-soft); color: var(--color-accent); }
+.rail-btn:hover { background: var(--color-surface-sunken); }
+.rail .spacer { flex: 1; }
+.avatar {
+  width: 34px; height: 34px; border-radius: var(--radius-full);
+  display: grid; place-items: center; font-size: var(--text-sm); font-weight: 600;
+  color: #fff;
+}
+
+/* ---------- main column ---------- */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* top bar */
+.topbar {
+  height: 60px; background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 0 var(--space-4);
+}
+.trip-name { font-size: var(--text-lg); font-weight: 700; }
+.stage-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--chip-radius);
+  background: var(--color-info-soft); color: var(--color-info);
+  font-size: var(--text-sm); font-weight: 600;
+}
+.stage-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--color-info); }
+.topbar .grow { flex: 1; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: var(--radius-2); border: none;
+  background: transparent; color: var(--color-text-muted); cursor: pointer;
+  display: grid; place-items: center; position: relative;
+}
+.icon-btn:hover { background: var(--color-surface-sunken); }
+.badge {
+  position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px;
+  border-radius: var(--radius-full); background: var(--color-accent);
+  color: var(--color-text-on-accent); font-size: 11px; font-weight: 700;
+  display: grid; place-items: center; padding: 0 4px;
+}
+
+/* ---------- workspace: map + panel ---------- */
+.workspace { flex: 1; display: flex; min-height: 0; }
+
+/* map area */
+.map-wrap { flex: 1.63; position: relative; min-width: 0; background: #EAE6DC; overflow: hidden; }
+.map-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* filter chips over map */
+.map-filters {
+  position: absolute; top: var(--space-3); left: var(--space-3);
+  display: flex; gap: var(--space-2);
+}
+.fchip {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px;
+  padding: 0 14px; border-radius: var(--chip-radius);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card); font-size: var(--text-sm); font-weight: 600;
+  color: var(--color-text-muted); cursor: pointer;
+}
+.fchip.on { background: var(--color-text); color: var(--color-surface); border-color: var(--color-text); }
+
+/* map controls */
+.map-controls {
+  position: absolute; right: var(--space-3); top: var(--space-3);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.mc {
+  width: 40px; height: 40px; border-radius: var(--radius-2);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card); display: grid; place-items: center;
+  font-size: var(--text-lg); color: var(--color-text-muted); cursor: pointer;
+}
+
+/* suggest CTA */
+.suggest-cta {
+  position: absolute; right: var(--space-3); bottom: var(--space-4);
+  height: 44px; padding: 0 var(--space-4); border: none;
+  border-radius: var(--chip-radius); background: var(--color-accent);
+  color: var(--color-text-on-accent); font-size: var(--text-body); font-weight: 700;
+  box-shadow: var(--shadow-popover); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+
+/* region labels */
+.region-label {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  pointer-events: none;
+}
+.region-score {
+  background: var(--color-surface); border-radius: var(--chip-radius);
+  box-shadow: var(--shadow-card); padding: 3px 10px;
+  font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;
+}
+.region-name { font-size: var(--text-sm); font-weight: 700; color: var(--color-text); text-shadow: 0 1px 0 rgba(255,255,255,.7); }
+
+/* pins */
+.pin {
+  position: absolute; transform: translate(-50%, -100%);
+  width: var(--pin-size); height: var(--pin-size);
+  border-radius: 50% 50% 50% 4px; rotate: 0deg;
+  display: grid; place-items: center; color: #fff;
+  box-shadow: var(--shadow-card); border: 2px solid var(--color-surface);
+  cursor: pointer;
+}
+.pin svg { width: 15px; height: 15px; }
+.pin.selected { outline: 3px solid var(--color-accent); outline-offset: 1px; }
+.cluster {
+  position: absolute; transform: translate(-50%, -50%);
+  min-width: 36px; height: 36px; border-radius: var(--radius-full);
+  background: var(--color-text); color: var(--color-surface);
+  display: grid; place-items: center; font-weight: 700; font-size: var(--text-sm);
+  border: 2px solid var(--color-surface); box-shadow: var(--shadow-card);
+  padding: 0 6px;
+}
+
+/* popover card on map */
+.popover {
+  position: absolute; width: 300px;
+  background: var(--color-surface); border-radius: var(--card-radius);
+  box-shadow: var(--shadow-popover); padding: var(--space-3);
+  border: 1px solid var(--color-border);
+}
+.popover h4 { font-size: var(--text-body); font-weight: 700; margin-bottom: 4px; }
+.pop-meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); flex-wrap: wrap; }
+.minichip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px;
+  border-radius: var(--chip-radius); font-size: var(--text-sm); font-weight: 600;
+  background: var(--color-surface-sunken); color: var(--color-text-muted);
+}
+.minichip.status { background: color-mix(in srgb, var(--color-warning) var(--mix-tint-weak), var(--color-surface)); color: var(--color-warning); }
+.vote-line { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.vote-avg { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-lg); }
+.vote-bar { flex: 1; height: 8px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
+.vote-bar i { display: block; height: 100%; border-radius: var(--radius-full); }
+.dist-row { display: flex; gap: 6px; margin-bottom: var(--space-3); flex-wrap: wrap; }
+.dchip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+  border-radius: var(--radius-1); font-size: 12px; font-family: var(--font-mono);
+  background: var(--color-surface-sunken); color: var(--color-text-muted);
+}
+.dchip b { width: 8px; height: 8px; border-radius: 50%; }
+.pop-actions { display: flex; gap: var(--space-2); }
+.btn {
+  height: 36px; padding: 0 14px; border-radius: var(--button-radius);
+  font-size: var(--text-sm); font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;
+}
+.btn-primary { background: var(--color-accent); color: var(--color-text-on-accent); }
+.btn-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
+.btn-ghost { background: transparent; color: var(--color-text-muted); }
+
+/* attribution */
+.map-attr {
+  position: absolute; left: var(--space-3); bottom: var(--space-2);
+  font-size: 11px; color: var(--color-text-faint);
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+  padding: 2px 8px; border-radius: var(--radius-1);
+}
+
+/* ---------- side panel ---------- */
+.panel {
+  flex: 1; max-width: 460px; background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.panel-tabs {
+  display: flex; padding: 0 var(--space-4); gap: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.ptab {
+  padding: var(--space-3) 0; font-size: var(--text-sm); font-weight: 700;
+  color: var(--color-text-muted); border: none; background: none; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ptab.on { color: var(--color-accent); border-bottom-color: var(--color-accent); }
+.ptab .count { font-family: var(--font-mono); font-weight: 600; color: var(--color-text-faint); }
+.panel-scroll { flex: 1; overflow: hidden; padding: var(--space-4); }
+
+.photo-strip { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+.photo {
+  flex: 1; height: 96px; border-radius: var(--radius-2);
+  background: linear-gradient(135deg, var(--stone-200), var(--stone-300));
+}
+.photo:first-child { flex: 1.8; }
+
+.rec-title { font-size: var(--text-sub); font-weight: 700; line-height: var(--leading-tight); margin-bottom: 6px; }
+.rec-sub { color: var(--color-text-muted); font-size: var(--text-sm); margin-bottom: var(--space-3); }
+
+.section-label {
+  font-size: 12px; font-weight: 700; color: var(--color-text-faint);
+  margin: var(--space-3) 0 var(--space-2);
+}
+.fam-dist { display: flex; flex-direction: column; gap: 6px; }
+.fd-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.fd-row b.dot { width: 10px; height: 10px; border-radius: 50%; }
+.fd-row .who { flex: 1; }
+.fd-row .val { font-family: var(--font-mono); color: var(--color-text-muted); }
+
+.comment { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+.comment .avatar { flex: none; }
+.comment .bubble {
+  background: var(--color-surface-sunken); border-radius: var(--radius-2);
+  padding: var(--space-2) var(--space-3); font-size: var(--text-sm); flex: 1;
+}
+.comment .who { font-weight: 700; margin-right: 6px; }
+.comment .when { color: var(--color-text-faint); font-size: 12px; }
+.mention { color: var(--color-accent); font-weight: 600; }
+
+.admin-bar {
+  border-top: 1px solid var(--color-border); padding: var(--space-3) var(--space-4);
+  display: flex; gap: var(--space-2); align-items: center;
+  background: var(--color-surface-raised);
+}
+.admin-bar .note { flex: 1; font-size: 12px; color: var(--color-text-faint); }
+.btn-approve { background: var(--color-success); color: var(--color-text-on-status); }
+.btn-reject { background: transparent; color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 40%, var(--color-surface)); }
+
+/* ---------- bottom timeline ---------- */
+.timeline {
+  height: var(--timeline-track-h); background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 0 var(--space-4);
+}
+.tl-label { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+.tl-track { flex: 1; display: flex; gap: 4px; align-items: center; }
+.tl-day {
+  flex: 1; height: 28px; border-radius: var(--radius-1);
+  background: var(--color-surface-sunken); border: 1px solid var(--color-border);
+  display: grid; place-items: center; font-family: var(--font-mono);
+  font-size: 11px; color: var(--color-text-muted);
+}
+.tl-day.hint { border-style: dashed; color: var(--color-text-faint); background: transparent; }
+.tl-cta { font-size: var(--text-sm); }
+</style>
+
+<div class="screen" data-theme="light">
+  <!-- nav rail -->
+  <nav class="rail">
+    <div class="logo">K</div>
+    <button class="rail-btn active" title="Map">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></svg>
+    </button>
+    <button class="rail-btn" title="Polls">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+    </button>
+    <button class="rail-btn" title="Itinerary">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>
+    </button>
+    <button class="rail-btn" title="Families">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><circle cx="17.5" cy="9.5" r="2.7"/><path d="M16 15.2c2.6.2 4.7 1.8 5.5 4.3"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <button class="rail-btn" title="Admin">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.5-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.5 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
+    </button>
+    <div class="avatar" style="background: var(--family-2);">J</div>
+  </nav>
+
+  <div class="main">
+    <!-- top bar -->
+    <header class="topbar">
+      <span class="trip-name">Summer Trip 2027</span>
+      <span class="stage-chip">Planning</span>
+      <div class="grow"></div>
+      <button class="icon-btn" title="Search">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </button>
+      <button class="icon-btn" title="Notifications">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+    </header>
+
+    <div class="workspace">
+      <!-- map -->
+      <div class="map-wrap">
+        <svg class="map-svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice">
+          <!-- sea -->
+          <rect width="900" height="620" fill="#DCE7E4"/>
+          <!-- land -->
+          <path d="M120 620 C 90 520 150 470 220 430 C 300 380 330 300 420 280 C 520 255 560 180 660 150 C 760 122 830 60 900 40 L 900 620 Z" fill="#EFEAE0"/>
+          <path d="M60 620 C 80 560 60 540 30 520 L 0 540 L 0 620 Z" fill="#EFEAE0"/>
+          <!-- roads -->
+          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#FFFFFF" stroke-width="7"/>
+          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#D9D2C4" stroke-width="2"/>
+          <path d="M340 620 C 380 540 460 520 520 400" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+          <!-- region tints: organic outlined areas (Google-style locality boundary),
+               preference-ramp fill; numbers shown in labels -->
+          <path id="region-cornwall" d="M 205 561
+            C 180 540 172 505 190 478
+            C 205 452 235 440 262 428
+            C 292 415 322 402 355 408
+            C 390 414 415 436 420 468
+            C 425 498 410 528 384 546
+            C 355 566 318 574 282 578
+            C 252 581 224 578 205 561 Z"
+            fill="#5E9468" opacity="0.30"/>
+          <use href="#region-cornwall" fill="none" stroke="#3A8E74" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
+          <path id="region-lakes" d="M 640 265
+            C 615 250 605 220 615 192
+            C 624 166 648 150 675 140
+            C 703 130 733 128 757 143
+            C 780 157 792 183 788 210
+            C 784 238 765 260 738 271
+            C 706 284 668 282 640 265 Z"
+            fill="#D99A2B" opacity="0.28"/>
+          <use href="#region-lakes" fill="none" stroke="#CD7228" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
+        </svg>
+
+        <!-- region labels -->
+        <div class="region-label" style="left: 33%; top: 62%;">
+          <span class="region-score">8.0</span><span class="region-name">Cornwall</span>
+        </div>
+        <div class="region-label" style="left: 76.6%; top: 22%;">
+          <span class="region-score">5.0</span><span class="region-name">Lake District</span>
+        </div>
+
+        <!-- pins: family-colored, type icons -->
+        <div class="pin selected" style="left: 31%; top: 70%; background: var(--family-1);" title="Harbour House Cottages — Parkers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
+        </div>
+        <div class="pin" style="left: 38%; top: 64%; background: var(--family-5);" title="The Hidden Hut — Jiangs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/></svg>
+        </div>
+        <div class="pin" style="left: 27%; top: 58%; background: var(--family-6);" title="Coasteering — Riveras">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
+        </div>
+        <div class="cluster" style="left: 43%; top: 74%;">4</div>
+        <div class="pin" style="left: 74%; top: 30%; background: var(--family-5);" title="Windermere boat hire — Jiangs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
+        </div>
+
+        <!-- popover for selected pin -->
+        <div class="popover" style="left: calc(31% + 26px); top: 46%;">
+          <h4>Harbour House Cottages</h4>
+          <div class="pop-meta">
+            <span class="minichip">🏠 Accommodation</span>
+            <span class="minichip status">★ Shortlisted</span>
+          </div>
+          <div class="vote-line">
+            <span class="vote-avg">8.2</span>
+            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
+            <span style="font-size:12px; color: var(--color-text-faint);">6 votes</span>
+          </div>
+          <div class="dist-row">
+            <span class="dchip"><b style="background: var(--family-1);"></b>4h 05</span>
+            <span class="dchip"><b style="background: var(--family-5);"></b>4h 50</span>
+            <span class="dchip"><b style="background: var(--family-6);"></b>5h 20</span>
+          </div>
+          <div class="pop-actions">
+            <button class="btn btn-primary">Details</button>
+            <button class="btn btn-secondary">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
+              Open in Maps
+            </button>
+          </div>
+        </div>
+
+        <!-- overlays -->
+        <div class="map-filters">
+          <button class="fchip on">All</button>
+          <button class="fchip">🏠 Stays</button>
+          <button class="fchip">🍴 Meals</button>
+          <button class="fchip">⛰ Activities</button>
+          <button class="fchip">◌ Regions</button>
+        </div>
+        <div class="map-controls"><div class="mc">+</div><div class="mc">−</div></div>
+        <button class="suggest-cta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+          Suggest a place
+        </button>
+        <div class="map-attr">Map data ©2027 Google</div>
+      </div>
+
+      <!-- side panel -->
+      <aside class="panel">
+        <div class="panel-tabs">
+          <button class="ptab">List <span class="count">12</span></button>
+          <button class="ptab on">Details</button>
+          <button class="ptab">Comments <span class="count">3</span></button>
+        </div>
+        <div class="panel-scroll">
+          <div class="photo-strip"><div class="photo"></div><div class="photo"></div><div class="photo"></div></div>
+          <div class="rec-title">Harbour House Cottages</div>
+          <div class="rec-sub">Portloe, Cornwall · sleeps 14 · £2,340 for the week · suggested by <b style="color: var(--family-1);">Laurabel</b></div>
+
+          <div class="pop-meta">
+            <span class="minichip">🏠 Accommodation</span>
+            <span class="minichip status">★ Shortlisted</span>
+            <span class="minichip">↗ airbnb.co.uk</span>
+          </div>
+
+          <div class="section-label">GROUP SCORE</div>
+          <div class="vote-line">
+            <span class="vote-avg">8.2</span>
+            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
+            <span style="font-size:12px; color: var(--color-text-faint);">6 of 9 voted</span>
+          </div>
+
+          <div class="section-label">DRIVE FROM HOME</div>
+          <div class="fam-dist">
+            <div class="fd-row"><b class="dot" style="background: var(--family-1);"></b><span class="who">The Parkers</span><span class="val">4h 05 · 212 mi</span></div>
+            <div class="fd-row"><b class="dot" style="background: var(--family-5);"></b><span class="who">The Jiangs</span><span class="val">4h 50 · 251 mi</span></div>
+            <div class="fd-row"><b class="dot" style="background: var(--family-6);"></b><span class="who">The Riveras</span><span class="val">5h 20 · 268 mi</span></div>
+          </div>
+
+          <div class="section-label">LATEST COMMENTS</div>
+          <div class="comment">
+            <div class="avatar" style="background: var(--family-5);">Ji</div>
+            <div class="bubble"><span class="who">Jibby</span><span class="when">2h ago</span><br>Garden looks perfect for the kids — and it's 10 min from the beach.</div>
+          </div>
+          <div class="comment">
+            <div class="avatar" style="background: var(--family-6);">S</div>
+            <div class="bubble"><span class="who">Stu</span><span class="when">45m ago</span><br><span class="mention">@Laurabel</span> is the £2,340 total or per family?</div>
+          </div>
+        </div>
+        <div class="admin-bar">
+          <span class="note">Admin decision</span>
+          <button class="btn btn-reject">Reject</button>
+          <button class="btn btn-approve">✓ Approve for itinerary</button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- bottom timeline -->
+    <footer class="timeline">
+      <span class="tl-label">Jul 17 – 24 · 8 days</span>
+      <div class="tl-track">
+        <div class="tl-day">Sat 17</div><div class="tl-day">Sun 18</div><div class="tl-day">Mon 19</div>
+        <div class="tl-day">Tue 20</div><div class="tl-day">Wed 21</div><div class="tl-day">Thu 22</div>
+        <div class="tl-day">Fri 23</div><div class="tl-day hint">Sat 24</div>
+      </div>
+      <button class="btn btn-ghost tl-cta">Open itinerary →</button>
+    </footer>
+  </div>
+</div>
