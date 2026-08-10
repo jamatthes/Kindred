@@ -194,6 +194,21 @@ redirect limit, and http/https-only scheme check. Parses OpenGraph then plain `<
 Results are held in an in-memory LRU with a short TTL; **nothing is persisted**.
 NOTE: a `link_preview_cache` table is deliberately not part of v1. It is a reasonable later
 addition if scrape latency becomes noticeable.
+
+**Airbnb-aware extraction** (verified against a live listing from a residential IP,
+2026-08-11 — HTTP 200, no bot-block): two layers with different reliability contracts.
+- *OG contract (stable — these tags exist for link previews):* `og:title` carries
+  structured facts ("Home in Dent · ★4.8 · 5 bedrooms · 7 beds · 4.5 bathrooms"),
+  `og:description` the listing name, `og:image` a 720px hero photo, and the `<title>` tag
+  the locality ("Dent, England, United Kingdom"). Parse the rating/bedroom/bath facts out
+  of `og:title` when present; response gains optional fields `facts`, `locality`.
+- *Best-effort bonus (embedded page JSON — may break on any Airbnb redesign, degrade
+  silently):* approximate coordinates (`"latitude"/"longitude"` — Airbnb's own fuzzed
+  location, so the pin can pre-drop itself) and `personCapacity` (sleeps). Response gains
+  optional `lat`, `lng`, `capacity`. When absent the create flow simply asks the user to
+  drop the pin, exactly as before — no error surfaced.
+- *Never available:* price (rendered client-side from their API) and the full gallery —
+  price stays a typed field; gallery photos come from user-uploaded attachments.
 Security: the fetch must refuse private/loopback/link-local address ranges after DNS
 resolution (SSRF guard) — this endpoint takes a user-supplied URL.
 
@@ -255,9 +270,17 @@ Per `design-system.md`, detail escalates and never skips a level.
    icon or a glyph differs too.
 2. **Popover card** (map click). Title, type, vote tally widget, comment count, distance
    chips, and a "Details" action. Compact and glanceable; no scrolling.
-3. **Side panel / bottom sheet** ("Details"). Full record: photo strip from live Place
-   Details, notes, external link, all families' distances, grouped children, comment thread,
-   admin controls. This is where the heavy lifting happens.
+3. **Side panel / bottom sheet** ("Details"). Full record: photo strip, notes, external
+   link, all families' distances, grouped children, comment thread, admin controls. This is
+   where the heavy lifting happens.
+
+**Photo-source tiering** — the photo strip resolves from the first non-empty tier:
+1. live Google Place Details photos (when the suggestion has a `place_id`);
+2. user-uploaded `attachments` (the norm for Airbnbs — family members screenshot the
+   listing's best photos and drop them on the suggestion);
+3. the link preview's `og:image` hero (hot-linked, never copied to our storage);
+4. designed placeholder. Tiers never mix in one strip; upload always available regardless
+   of tier.
 
 Both the popover card and the details view carry an **"Open in Google Maps" action**
 (prominent on mobile, secondary on desktop): a universal Maps deep link —

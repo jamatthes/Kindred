@@ -110,6 +110,11 @@ SSRF test proving a URL resolving to a private address is refused.
 - [ ] Implement `PATCH /{id}/status` (`require_main_admin`), validating the transition table
       in `design.md` and rejecting `scheduled` with `422`.
 - [ ] Implement `POST /api/v1/link-preview` returning `200` or `204`.
+- [ ] Airbnb-aware extraction in the link-preview service per `design.md`: parse facts/
+      locality from `og:title`/`<title>` (stable OG contract), plus best-effort `lat`/`lng`/
+      `capacity` from embedded page JSON — regex-level, wrapped so any parse failure
+      degrades to the plain OG result. Unit-test against a saved HTML fixture; never fetch
+      airbnb.co.uk in tests.
 - [ ] Wire WS broadcasts: `suggestion.created`, `.updated`, `.moved`, `.status_changed`,
       `.deleted` to the trip room.
 - [ ] Queue the background distance task on create and on a move beyond the epsilon.
@@ -197,6 +202,11 @@ opens with a photo strip; toggle the theme and confirm no raw colour leaks; enab
 - [ ] Draw-region mode: circle and polygon tools, adjustable pre-save, type locked to
       `region`, computed centroid displayed.
 - [ ] Paste-URL: calls `POST /api/v1/link-preview`; `200` prefills the title, `204` is silent.
+- [ ] Airbnb prefill: when the preview carries `facts`/`locality`/`capacity` they prefill
+      the notes and sleeps fields; when it carries `lat`/`lng` the pin pre-drops (user can
+      still drag it). Absence of any field changes nothing.
+- [ ] Photo-source tiering on the details view per `design.md`: place_id photos →
+      attachments → `og:image` hero (hot-linked) → placeholder; upload always offered.
 - [ ] Duplicate warning when an accommodation with the same `place_id` already exists, linking
       to the existing record; warning only, never a block.
 - [ ] All six field states styled; validate on blur, re-validate on change after first error;

@@ -209,6 +209,26 @@ NOTE: a manifest is a static JSON file and cannot reference CSS custom propertie
 values are injected from the token source during the build. This is the one sanctioned place a
 literal colour value is emitted, and it is generated, not authored.
 
+### Share target (suggest-by-share)
+
+The manifest also registers Kindred as a **share target**, so a phone's native share sheet
+(e.g. from the Airbnb or Google Maps app) can send a URL straight into the
+"Suggest a place" flow:
+
+```json
+"share_target": {
+  "action": "/suggest/shared",
+  "method": "GET",
+  "params": { "title": "title", "text": "text", "url": "url" }
+}
+```
+
+`/suggest/shared` requires login, extracts the first URL from `url`/`text` (some apps put
+it in `text`), and opens the create-suggestion flow with that URL pasted — from there the
+`map-suggestions` link-preview endpoint takes over (OG prefill, Airbnb-aware extras).
+Available once installed: broadly on Android; on iOS from the home-screen app. During
+Planning and Holiday stages only — in End stage the route shows the frozen-trip notice.
+
 ## iOS flow (first-class, per P-2)
 
 The constraints, stated plainly so implementers do not fight them:

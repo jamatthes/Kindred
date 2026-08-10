@@ -95,6 +95,9 @@ skipped; a category the user disabled produces neither a notification nor a push
 - [ ] Inject `theme_color` / `background_color` from the design tokens **at build time** — no
       hand-typed hex anywhere in the source.
 - [ ] Link the manifest and Apple touch icons in the HTML head.
+- [ ] Add the `share_target` entry and implement the `/suggest/shared` route: login-gated,
+      extracts the first URL from `url`/`text`, opens the create-suggestion flow with it
+      pasted (stage-guarded: End shows the frozen-trip notice).
 
 **Verify:** Chrome DevTools → Application → Manifest shows no warnings and the install icon appears
 in the address bar. Run Lighthouse and confirm the Installable check passes.
