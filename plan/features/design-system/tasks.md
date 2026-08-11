@@ -219,3 +219,31 @@ outside `tokens.css` and the allow-listed generated files returns nothing.
 
 **Verify:** A developer unfamiliar with the project can read `web/src/design/README.md`, open
 `/styleguide`, and build a correctly-tokenised component without asking which colour to use.
+
+---
+
+## Phase 11 — Date and time picker components (added 2026-08-11)
+
+No date/time picker was ever specced; native `<input type="date">` is what the admin console
+ships. Consumers queued behind this: trip dates (admin-console Section 1 + AC-0), itinerary
+day/time editing and "give it a time" (M4), suggestion date windows (M3+). Build once, here.
+
+- [ ] `DateRangePicker` — the trip-dates case: one calendar surface, click start then end,
+      range highlighted; typing remains possible (the input is the accessible base, the
+      calendar is progressive enhancement); no six-click month spelunking — year/month jump
+      controls and "next weekend / next week" quick-picks where the caller opts in.
+- [ ] `DatePicker` — single date; same base; trip-aware variant that, given the trip's date
+      span, renders those days as the primary strip (an itinerary item is almost always
+      scheduled inside the trip) with the full calendar one gesture away.
+- [ ] `TimeField` — time-of-day entry snapping to the itinerary's 15-minute grid
+      (`--daytrack-snap`), typeable ("14:30"), with a wheel/list on touch; pairs with
+      `DatePicker` for the "give it a time" flow.
+- [ ] Both themes, token-only, keyboard complete (arrows move days, PgUp/Dn months, typed
+      entry always works), `--hit-target` on touch, and honest fallback: if JS fails, the
+      native input still submits.
+- [ ] Styleguide section with all three, both themes, disabled/error states.
+- [ ] Swap into the admin console's trip dates (the only shipped consumer) without API change.
+
+**Verify:** in the styleguide, pick a trip range with two clicks and no month navigation for
+adjacent months; set an itinerary-style time by typing and by wheel; tab through the whole
+range picker without a mouse; `npm run verify` green.
