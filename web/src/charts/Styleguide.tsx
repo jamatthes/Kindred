@@ -27,6 +27,7 @@ import { MiniBar, Sparkline } from './MiniBar'
 import { StyleguideTokens } from './StyleguideTokens'
 import { StyleguidePrimitives } from './StyleguidePrimitives'
 import { StyleguidePickers } from './StyleguidePickers'
+import { StyleguideMap } from './StyleguideMap'
 import type { ChartMember, ChartOption } from './types'
 import './Styleguide.css'
 
@@ -99,6 +100,8 @@ export function Styleguide() {
       <StyleguidePrimitives />
 
       <StyleguidePickers />
+
+      <StyleguideMap />
 
       <p className="k-styleguide__section-title">Charts — realistic data (York/Cornwall poll)</p>
       <div className="k-styleguide__grid">
