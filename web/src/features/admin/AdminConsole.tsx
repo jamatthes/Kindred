@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../app/apiClient'
 import { useSession } from '../../app/session'
+import { useStage } from '../../app/useStage'
 import { socket } from '../../app/socket'
 import { Banner, Button, Skeleton, TextField } from '../../app/ui/primitives'
 import type {
@@ -70,6 +71,9 @@ export function AdminConsole() {
   const [query, setQuery] = useState('')
 
   const isOwner = Boolean(user?.is_owner)
+  // Presentation only. Every one of these routes is stage-guarded server-side; hiding the
+  // control just means nobody presses a button that was always going to be refused.
+  const { canMutate } = useStage()
 
   const load = useCallback(async (search = '') => {
     try {
@@ -188,6 +192,7 @@ export function AdminConsole() {
             <TripForm
               trip={data.trip}
               submitLabel="Save"
+              readOnly={!canMutate}
               onSaved={(trip) => {
                 setData((current) => (current ? { ...current, trip } : current))
                 // The name is in the app header, which comes from `auth/me`.
@@ -206,6 +211,7 @@ export function AdminConsole() {
           />
 
           <VotingModesSection
+            readOnly={!canMutate}
             settings={data.categories}
             onSaved={(categories) =>
               setData((current) => (current ? { ...current, categories } : current))
@@ -213,6 +219,7 @@ export function AdminConsole() {
           />
 
           <MembersSection
+            canRemove={canMutate}
             families={data.families}
             members={data.members}
             query={query}
@@ -239,6 +246,7 @@ export function AdminConsole() {
 
           {isOwner ? (
             <OrganisersSection
+              readOnly={!canMutate}
               organisers={data.organisers}
               members={data.members}
               onChanged={() => void load(query)}
@@ -260,7 +268,7 @@ function InstanceSection({
   canEdit: boolean
   onSaved: (next: InstanceSettings) => void
 }) {
-  const [name, setName] = useState(settings.instance_name)
+  const [name, setName] = useState(settings.instance_name ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

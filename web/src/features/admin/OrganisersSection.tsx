@@ -23,12 +23,15 @@ export type OrganisersSectionProps = {
   /** The universe to appoint from — the same members Section 4 lists. */
   members: AdminMember[]
   onChanged: () => void
+  /** End stage: the list is still worth reading, and nobody joins or leaves it. */
+  readOnly?: boolean
 }
 
 export function OrganisersSection({
   organisers,
   members,
   onChanged,
+  readOnly = false,
 }: OrganisersSectionProps) {
   const [query, setQuery] = useState('')
   const [demoting, setDemoting] = useState<Organiser | null>(null)
@@ -131,6 +134,8 @@ export function OrganisersSection({
               <button
                 type="button"
                 className="admin__link admin__link--danger"
+                disabled={readOnly}
+                title={readOnly ? 'The trip has finished.' : undefined}
                 onClick={() => setDemoting(row)}
               >
                 Remove
@@ -141,12 +146,17 @@ export function OrganisersSection({
       )}
 
       <div className="organisers__add">
+        {readOnly ? (
+          <p className="admin__hint">
+            The trip has finished, so organisers can no longer be appointed or removed.
+          </p>
+        ) : null}
         <TextField
           label="Add an organiser"
           placeholder="Search members by name, username or family"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          disabled={busy}
+          disabled={busy || readOnly}
         />
         {candidates.length > 0 ? (
           <ul className="organisers__candidates">

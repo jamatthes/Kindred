@@ -39,6 +39,12 @@ export type MembersSectionProps = {
   query: string
   onQueryChange: (value: string) => void
   onChanged: () => void
+  /**
+   * End stage. Removal is refused — it would alter the archived record of who was on the
+   * trip — but a **password reset is not**: that is an account operation, not trip data, and
+   * someone locked out of an archived trip still needs to be able to read it.
+   */
+  canRemove?: boolean
 }
 
 export function MembersSection({
@@ -47,6 +53,7 @@ export function MembersSection({
   query,
   onQueryChange,
   onChanged,
+  canRemove = true,
 }: MembersSectionProps) {
   const { user } = useSession()
   const navigate = useNavigate()
@@ -167,6 +174,8 @@ export function MembersSection({
           : isSelf
             ? 'Use your profile page for your own account.'
             : undefined
+        const whyNoRemove =
+          why ?? (canRemove ? undefined : 'The trip has finished; its membership is archived.')
         return (
           <span className="admin__row-actions">
             <button
@@ -181,8 +190,8 @@ export function MembersSection({
             <button
               type="button"
               className="admin__link admin__link--danger"
-              disabled={Boolean(why)}
-              title={why}
+              disabled={Boolean(whyNoRemove)}
+              title={whyNoRemove}
               onClick={() => setRemoving(row)}
             >
               Remove

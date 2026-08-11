@@ -42,9 +42,21 @@ export type TripFormProps = {
   onSaved: (trip: TripAdmin) => void
   /** The setup screen wants the dates explained as optional; the console does not. */
   datesOptionalHint?: boolean
+  /**
+   * End stage. The fields stay readable — the console is readable in every stage — but
+   * nothing can be submitted, because the server would refuse it. Hiding the control is a
+   * courtesy; `require_stage` is the enforcement.
+   */
+  readOnly?: boolean
 }
 
-export function TripForm({ trip, submitLabel, onSaved, datesOptionalHint }: TripFormProps) {
+export function TripForm({
+  trip,
+  submitLabel,
+  onSaved,
+  datesOptionalHint,
+  readOnly = false,
+}: TripFormProps) {
   const [name, setName] = useState(trip.name)
   const [startDate, setStartDate] = useState(trip.start_date ?? '')
   const [endDate, setEndDate] = useState(trip.end_date ?? '')
@@ -115,7 +127,7 @@ export function TripForm({ trip, submitLabel, onSaved, datesOptionalHint }: Trip
         value={name}
         onChange={(event) => setName(event.target.value)}
         error={fieldErrors.name}
-        disabled={busy}
+        disabled={busy || readOnly}
         autoComplete="off"
       />
 
@@ -126,7 +138,7 @@ export function TripForm({ trip, submitLabel, onSaved, datesOptionalHint }: Trip
           value={startDate}
           onChange={(event) => setStartDate(event.target.value)}
           error={fieldErrors.start_date}
-          disabled={busy}
+          disabled={busy || readOnly}
           hint={datesOptionalHint ? 'You can decide this later.' : undefined}
         />
         <TextField
@@ -135,7 +147,7 @@ export function TripForm({ trip, submitLabel, onSaved, datesOptionalHint }: Trip
           value={endDate}
           onChange={(event) => setEndDate(event.target.value)}
           error={fieldErrors.end_date}
-          disabled={busy}
+          disabled={busy || readOnly}
           hint={datesOptionalHint ? 'You can decide this later.' : undefined}
         />
       </div>
@@ -152,7 +164,7 @@ export function TripForm({ trip, submitLabel, onSaved, datesOptionalHint }: Trip
           list="trip-timezone-options"
           value={timezone}
           onChange={(event) => setTimezone(event.target.value)}
-          disabled={busy}
+          disabled={busy || readOnly}
           autoComplete="off"
         />
         <datalist id="trip-timezone-options">
@@ -172,12 +184,20 @@ export function TripForm({ trip, submitLabel, onSaved, datesOptionalHint }: Trip
       </label>
 
       <div className="trip-form__actions">
-        {/* Explicit save, disabled until something changes: these are consequential values
-            and AC-2 says they are not saved on blur. */}
-        <Button type="submit" busy={busy} disabled={!dirty}>
-          {submitLabel}
-        </Button>
-        {dirty ? <span className="admin__hint">Unsaved changes</span> : null}
+        {readOnly ? (
+          <span className="admin__hint">
+            The trip has finished, so its details can no longer be changed.
+          </span>
+        ) : (
+          <>
+            {/* Explicit save, disabled until something changes: these are consequential
+                values and AC-2 says they are not saved on blur. */}
+            <Button type="submit" busy={busy} disabled={!dirty}>
+              {submitLabel}
+            </Button>
+            {dirty ? <span className="admin__hint">Unsaved changes</span> : null}
+          </>
+        )}
       </div>
     </form>
   )

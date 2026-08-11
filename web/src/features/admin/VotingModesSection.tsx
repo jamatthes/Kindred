@@ -38,9 +38,15 @@ const MODE_BLURB: Record<VotingMode, string> = {
 export type VotingModesSectionProps = {
   settings: CategorySetting[]
   onSaved: (next: CategorySetting[]) => void
+  /** End stage: the modes are still worth reading, and can no longer be changed. */
+  readOnly?: boolean
 }
 
-export function VotingModesSection({ settings, onSaved }: VotingModesSectionProps) {
+export function VotingModesSection({
+  settings,
+  onSaved,
+  readOnly = false,
+}: VotingModesSectionProps) {
   const [draft, setDraft] = useState<Record<string, VotingMode>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -112,6 +118,7 @@ export function VotingModesSection({ settings, onSaved }: VotingModesSectionProp
                       className={modeOf(row) === mode ? 'is-on' : undefined}
                       aria-pressed={modeOf(row) === mode}
                       title={MODE_BLURB[mode]}
+                      disabled={readOnly}
                       onClick={() =>
                         setDraft((current) => ({ ...current, [row.category]: mode }))
                       }
@@ -127,8 +134,13 @@ export function VotingModesSection({ settings, onSaved }: VotingModesSectionProp
       </table>
 
       <div className="admin__actions">
+        {readOnly ? (
+          <span className="admin__hint">
+            The trip has finished, so the voting modes are fixed.
+          </span>
+        ) : null}
         <Button
-          disabled={changed.length === 0}
+          disabled={readOnly || changed.length === 0}
           busy={busy && !confirming}
           onClick={() => (withVotes.length > 0 ? setConfirming(true) : void save())}
         >

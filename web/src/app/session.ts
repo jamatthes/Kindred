@@ -297,7 +297,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setThemePref,
       refresh,
     }),
-    [status, user, adoptUser, themePref, resolvedTheme, themeError, login, logout, changePassword, setThemePref, refresh],
+    [
+      status,
+      user,
+      adoptUser,
+      themePref,
+      resolvedTheme,
+      themeError,
+      signedOutReason,
+      login,
+      logout,
+      changePassword,
+      setThemePref,
+      refresh,
+    ],
   )
 
   return createElement(SessionContext.Provider, { value }, children)
