@@ -16,6 +16,10 @@ __pycache__/
 node_modules/
 dist/
 
+# Playwright e2e harness (web/e2e) — reports, traces and screenshots from local runs.
+web/e2e/report/
+web/e2e/test-results/
+
 # Editor / OS
 .vscode/
 .idea/
