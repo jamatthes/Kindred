@@ -8,7 +8,14 @@ directory first.
 
 ## Phase 1 — Migration
 
-- [ ] Alembic migration `0003_admin_console`:
+> NOTE (implementation, 2026-08-11): there is no `0003_admin_console`. `CLAUDE.md`'s
+> pre-launch migration policy — adopted after this file was written — says there is exactly
+> one revision, `0001_schema.py`, and **all schema work edits it in place**, after which the
+> dev database is dropped and recreated. The three items below were added there; the
+> "upgrade / downgrade / upgrade" verify was run against that single revision. The rest of
+> this phase is unchanged.
+
+- [ ] Alembic migration (`0001_schema.py`, edited in place):
   - [ ] `trip_category_settings`: unique index on `(trip_id, category)`; check constraints on
         `category` (`poll|region|accommodation|activity|meal`) and `voting_mode`
         (`score|thumbs`).
@@ -18,6 +25,10 @@ directory first.
 - [ ] Backfill: for the existing trip, insert the five `trip_category_settings` rows with the
       defaults from `design.md` (`poll`/`region`/`accommodation` → `score`,
       `activity`/`meal` → `thumbs`).
+      *(Implementation: the dev database is recreated rather than backfilled, per the policy
+      NOTE above, so seeding at trip creation covers a fresh install. A trip that predates the
+      rule is repaired by the self-healing read in Phase 5 — which is the same code path, and
+      one fewer thing to keep in step.)*
 - [ ] Extend the trip-creation seed so any future trip gets all five rows at creation.
 - [ ] Record `trip_stage_transitions`, `users.last_login_at` and the unique index as
       **PROPOSED ADDITION**s in `plan/architecture.md` in the same commit.

@@ -19,11 +19,13 @@ from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.security import hash_password
 from app.models import (
+    DEFAULT_VOTING_MODES,
     SETTING_INSTANCE_NAME,
     SETTING_INVITE_ONLY,
     SETTING_REGISTRATION_OPEN,
     Setting,
     Trip,
+    TripCategorySetting,
     User,
     UserSettings,
 )
@@ -85,8 +87,27 @@ async def _seed_trip(db: AsyncSession, owner: User | None) -> Trip | None:
     )
     db.add(trip)
     await db.flush()
+    await seed_category_settings(db, trip)
     logger.info("Seeded trip %r in stage 'planning'.", trip.name)
     return trip
+
+
+async def seed_category_settings(db: AsyncSession, trip: Trip) -> None:
+    """Give a trip all five voting-mode rows.
+
+    Called at trip creation so no read ever has to invent a default and no voting UI ever
+    renders a blank control (`admin-console` AC-5). ``ON CONFLICT DO NOTHING`` makes it safe
+    to call on a trip that already has some or all of them, which is what the console's
+    self-healing read relies on.
+    """
+    for category, mode in DEFAULT_VOTING_MODES.items():
+        await db.execute(
+            pg_insert(TripCategorySetting)
+            .values(trip_id=trip.id, category=category, voting_mode=mode)
+            .on_conflict_do_nothing(
+                index_elements=[TripCategorySetting.trip_id, TripCategorySetting.category]
+            )
+        )
 
 
 async def _seed_settings(db: AsyncSession) -> None:
