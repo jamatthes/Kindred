@@ -28,11 +28,22 @@ from app.deps import (
     CurrentUser,
     DbDep,
     enforce_password_change,
+    require_member,
     require_organiser,
     require_stage,
 )
-from app.models import Trip, TripStageTransition, User
+from app.core.seed import seed_category_settings
+from app.models import (
+    VOTING_CATEGORIES,
+    Trip,
+    TripCategorySetting,
+    TripStageTransition,
+    User,
+)
 from app.schemas.admin import (
+    CategorySettingOut,
+    CategorySettingPublicOut,
+    CategorySettingsPutIn,
     StageActorOut,
     StageTransitionOut,
     TripAdminOut,
@@ -161,4 +172,139 @@ async def read_stage_history(db: DbDep, trip: ActiveTrip) -> list[StageTransitio
             created_at=row.created_at,
         )
         for row, actor in rows
+    ]
+
+
+# --- Section 3: category voting modes ----------------------------------------------------------
+
+
+async def _ensure_category_rows(db: DbDep, trip: Trip) -> list[TripCategorySetting]:
+    """Read the five rows, creating any that are missing first.
+
+    Self-healing rather than trusting the seed (AC-5's edge case): a trip created before the
+    seeding rule existed would otherwise render a partially blank editor, and "the row is
+    missing" is not a state any UI should have to have an opinion about. The insert is
+    `ON CONFLICT DO NOTHING` against the unique `(trip_id, category)`, so two readers racing
+    produce one row, not an error for the loser.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(TripCategorySetting).where(TripCategorySetting.trip_id == trip.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(rows) < len(VOTING_CATEGORIES):
+        await seed_category_settings(db, trip)
+        await db.commit()
+        rows = (
+            (
+                await db.execute(
+                    select(TripCategorySetting).where(TripCategorySetting.trip_id == trip.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    order = {category: index for index, category in enumerate(VOTING_CATEGORIES)}
+    return sorted(rows, key=lambda row: order.get(row.category, len(order)))
+
+
+async def _existing_vote_count(db: DbDep, trip: Trip, category: str) -> int:
+    """How many votes already exist in a category — the number AC-5's confirm names.
+
+    Every source table belongs to a feature that has not shipped: `poll_scores` arrives with
+    `polls` (M2) and `suggestion_votes` with `map-suggestions` (M3). Zero is the honest
+    answer until then, and it is returned rather than the endpoint erroring, so the console
+    works from M1 onward. Each feature replaces its own branch here as part of its tasks.
+    """
+    return 0
+
+
+@router.get(
+    "/category-settings",
+    response_model=list[CategorySettingOut],
+    summary="How each category is voted on, with the vote counts behind the warning",
+)
+async def read_category_settings(db: DbDep, trip: ActiveTrip) -> list[CategorySettingOut]:
+    current = _require_trip(trip)
+    rows = await _ensure_category_rows(db, current)
+    return [
+        CategorySettingOut(
+            category=row.category,
+            voting_mode=row.voting_mode,
+            existing_vote_count=await _existing_vote_count(db, current, row.category),
+        )
+        for row in rows
+    ]
+
+
+@router.put(
+    "/category-settings",
+    response_model=list[CategorySettingOut],
+    summary="Set the voting mode for one or more categories",
+    dependencies=[Depends(require_stage("planning", "holiday"))],
+)
+async def put_category_settings(
+    payload: CategorySettingsPutIn, db: DbDep, trip: ActiveTrip
+) -> list[CategorySettingOut]:
+    """AC-5. Existing votes are kept, never deleted — the confirm the UI shows says so, and
+    this route is what makes that promise true."""
+    current = _require_trip(trip)
+    rows = {row.category: row for row in await _ensure_category_rows(db, current)}
+
+    changed = False
+    for wanted in payload.settings:
+        row = rows[wanted.category]
+        if row.voting_mode != wanted.voting_mode:
+            row.voting_mode = wanted.voting_mode
+            changed = True
+    await db.commit()
+
+    result = await read_category_settings(db, current)
+    if changed:
+        # Every voting UI in the product renders from this; a client holding the old mode
+        # would offer a control the server will reject.
+        await ws.broadcast(
+            current.id,
+            "category_settings.updated",
+            [
+                {"category": row.category, "voting_mode": row.voting_mode}
+                for row in result
+            ],
+        )
+    return result
+
+
+# --- the non-admin read every voting UI needs ----------------------------------------------
+
+
+#: Owned by this feature, but not gated by it: **every** role needs to know whether they are
+#: being shown a 1–10 scale or a thumbs control. Reading the mode is not an admin power — it
+#: is the difference between rendering the right control and the wrong one — so it lives on
+#: its own router with `require_member` rather than inside the `/admin` prefix.
+public_router = APIRouter(
+    prefix="/trip",
+    tags=["trip"],
+    dependencies=[Depends(enforce_password_change), Depends(require_member)],
+)
+
+
+@public_router.get(
+    "/category-settings",
+    response_model=list[CategorySettingPublicOut],
+    summary="How each category is voted on",
+)
+async def read_public_category_settings(
+    db: DbDep, trip: ActiveTrip
+) -> list[CategorySettingPublicOut]:
+    """No vote counts: how many votes exist is an organiser's business, and a member does not
+    need it to render a control."""
+    current = _require_trip(trip)
+    rows = await _ensure_category_rows(db, current)
+    return [
+        CategorySettingPublicOut(category=row.category, voting_mode=row.voting_mode)
+        for row in rows
     ]

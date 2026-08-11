@@ -134,6 +134,9 @@ def create_app() -> FastAPI:
     app.include_router(invites.router, prefix=API_PREFIX)
     app.include_router(attachments.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
+    # Same feature, different gate: every role reads the voting modes, so that one route is
+    # `require_member` and sits outside the /admin prefix.
+    app.include_router(admin.public_router, prefix=API_PREFIX)
     # Owned by `holiday-stage`; implemented now because the console's stage stepper needs it
     # and the single-endpoint ruling forbids a second one. See the module docstring.
     app.include_router(trips.router, prefix=API_PREFIX)
