@@ -103,7 +103,21 @@ async def _create_test_database() -> None:
 
 
 async def _create_schema() -> None:
+    """Rebuild the test schema from the models, from scratch, on every run.
+
+    ``create_all`` alone only creates *missing tables* — it never alters an existing one. A
+    feature that adds a column would therefore pass on a clean machine and fail on a
+    developer's, against a `kindred_test` left over from before the column existed.
+
+    The drop is raw DDL rather than ``Base.metadata.drop_all`` on purpose: ``drop_all`` can
+    only drop what the *current* models describe, so it chokes on a leftover table the models
+    no longer mention, and with a ``use_alter`` foreign key it emits a ``DROP CONSTRAINT`` for
+    a constraint an older database never had. ``DROP SCHEMA public CASCADE`` has neither
+    problem — whatever is in there, it goes.
+    """
     async with engine.begin() as conn:
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
         await conn.run_sync(Base.metadata.create_all)
 
 
@@ -186,11 +200,15 @@ async def make_user(
     password: str = "test-password-1234",
     is_platform_admin: bool = False,
     must_change_password: bool = False,
+    first_name: str | None = None,
+    last_name: str = "",
 ) -> User:
     user = User(
         username=username,
         password_hash=hash_password(password),
-        display_name=username.title(),
+        first_name=first_name if first_name is not None else username.title(),
+        last_name=last_name,
+        display_name=f"{first_name or username.title()} {last_name}".strip(),
         is_platform_admin=is_platform_admin,
         must_change_password=must_change_password,
     )
