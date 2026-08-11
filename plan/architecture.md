@@ -79,12 +79,12 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 - **settings** — key/value platform config (singleton rows: instance name, registration open, etc.)
 
 ### Deciding
-- **polls** — trip_id, title, description, kind (`score_matrix`/`options`), status (`open`/`closed`), created_by, allow_member_options (bool)
-- **poll_options** — poll_id, label, created_by, lat/lng + place_id (nullable — geographic options become map overlays), sort
-- **poll_scores** — poll_id, option_id, user_id, score (int 0–10) or thumb (`up`/`down`/null per voting_mode); unique (option_id, user_id)
+- **polls** — trip_id, title, description, kind (`score_matrix`/`options`, check-constrained, **immutable after creation**), status (`open`/`closed`, check-constrained), created_by, allow_member_options (bool), **decision_option_id** (nullable, FK → poll_options `ON DELETE SET NULL`), **decided_by**, **decided_at**, **closed_at**, **closed_by**, **last_nudge_at**. Indexed on trip_id. *polls*
+- **poll_options** — poll_id, label, created_by, lat/lng + place_id (nullable — geographic options become map overlays), sort, **suggestion_id** (nullable uuid, **no FK constraint at M2** — `suggestions` does not exist until `map-suggestions`, which adds it). Indexed on (poll_id, sort). *polls*
+- **poll_scores** — poll_id, option_id, user_id, score (smallint 0–10) **or** thumb (`up`/`down`); unique (option_id, user_id). Both columns nullable with a check that at least one is set, plus range and enum checks. Two columns rather than one overloaded value **on purpose**: a score and a thumb for the same (option, user) coexist in one row, which is what makes "switching the voting mode deletes nothing" (polls PL-4) true — the active mode decides which is read. Indexed on poll_id and user_id. *polls*
 - **suggestions** — trip_id, type (`region`/`accommodation`/`activity`/`meal`), title, notes, status (`proposed`/`shortlisted`/`approved`/`scheduled`/`rejected`), created_by, lat/lng (point types), geometry_geojson (regions: circle/polygon), place_id (nullable), place_snapshot_json (user-authored fields only — name/address as entered; Google details are re-fetched live, per ToS), external_url (Airbnb links etc.)
 - **suggestion_votes** — suggestion_id, user_id, score (0–10) or thumb, unique (suggestion_id, user_id)
-- **comments** — polymorphic: subject_type (`suggestion`/`poll`/`itinerary_item`), subject_id, author_id, body (with @mention markup), edited_at (nullable)
+- **comments** — polymorphic: subject_type (`suggestion`/`poll`/`itinerary_item`, check-constrained), subject_id, author_id (nullable, `ON DELETE SET NULL` — a removed account leaves its discussion attributed to nobody rather than deleting it), body (with @mention markup), edited_at (nullable). Indexed on (subject_type, subject_id). **Carries no FK to its subject** — that is the cost of one thread implementation serving three subjects, so deleting a poll deletes its comments in the service layer, in the same transaction. Created by *polls*
 
 ### Agreed plan
 - **itinerary_items** — trip_id, suggestion_id (nullable — admin can add directly), day (date), start_time/end_time (nullable), title override, confirmed_by, sort
@@ -98,7 +98,7 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 - **user_settings** — user_id, live_location_enabled (bool default false), push_enabled (bool)
 
 ### Platform
-- **notifications** — recipient_user_id, type, payload_json (deep-link target), read_at (nullable)
+- **notifications** — recipient_user_id, type, payload_json (deep-link target), read_at (nullable). Indexed on (recipient_user_id, created_at), matching the bell's "my unread, newest first". Created by *polls*, which writes `poll.nudge` rows from M2 onward even though the *notifications* feature (M6) builds the UI that reads them — deferring the write would mean the nudge silently did nothing.
 - **push_subscriptions** — user_id, endpoint (unique), p256dh, auth, user_agent, last_used_at, failure_count, created_at
 - **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive, and for profile pictures (`subject_type = 'user'`, referenced back from `users.avatar_attachment_id`). All uploads are re-encoded server-side and **stripped of EXIF, GPS included** — a location-privacy product must not republish coordinates hidden in a photo. Also carries `thumb_path` (nullable — avatars emit two renditions, 256px and 64px, and `MemberOut` exposes both) and `byte_size` (what was written after re-encoding, which is not the size of the upload). *families*
 

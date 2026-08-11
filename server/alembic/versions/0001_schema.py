@@ -21,7 +21,8 @@ Contents:
 * **Trip + configuration** — `trips`, `settings`, `trip_organisers`,
   `trip_category_settings`, `trip_stage_transitions`
 * **Families** — `families`, `family_members`, `invites`
-* **Platform** — `attachments`
+* **Deciding** — `polls`, `poll_options`, `poll_scores`, `comments`
+* **Platform** — `attachments`, `notifications`
 
 ``gen_random_uuid()`` is built into Postgres 13+, so no extension is created.
 """
@@ -60,6 +61,21 @@ VOTING_CATEGORIES = ("poll", "region", "accommodation", "activity", "meal")
 
 #: `trip_category_settings.voting_mode`.
 VOTING_MODES = ("score", "thumbs")
+
+#: `polls.kind`. Immutable after creation — changing it would invalidate every stored row.
+POLL_KINDS = ("score_matrix", "options")
+
+#: `polls.status`. A closed poll stays fully visible; closing is not hiding.
+POLL_STATUSES = ("open", "closed")
+
+#: `poll_scores.thumb`. Null when the trip is in `score` mode, and vice versa — both columns
+#: are nullable and exactly one is populated per mode, which is what lets a score and a thumb
+#: for the same (option, user) coexist across a mode switch.
+THUMBS = ("up", "down")
+
+#: `comments.subject_type`. Polymorphic; polls uses `poll`, and the other two arrive with
+#: their own features.
+COMMENT_SUBJECTS = ("poll", "suggestion", "itinerary_item")
 
 #: `trip_stage_transitions.direction`. Stored rather than derived: reading a row should not
 #: require knowing the stage machine to tell a correction from a normal advance.
@@ -430,6 +446,136 @@ def upgrade() -> None:
     op.create_index("ix_invites_expires_at", "invites", ["expires_at"], unique=False)
     op.create_index("ix_invites_trip_id", "invites", ["trip_id"], unique=False)
 
+    # --- deciding ------------------------------------------------------------------------------
+    # The feature that replaces the family's spreadsheet. Everything here exists so that a
+    # group decision can be read back honestly: who scored what, where the group agreed, and
+    # what was actually decided — which is not always the highest average.
+    op.create_table(
+        "polls",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("trip_id", sa.UUID(), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        # Immutable after creation: `score_matrix` stores one row per (option, member),
+        # `options` stores one row total per member, so changing it would orphan every score.
+        sa.Column("kind", sa.String(length=16), nullable=False),
+        sa.Column("status", sa.String(length=16), server_default="open", nullable=False),
+        sa.Column("created_by", sa.UUID(), nullable=True),
+        sa.Column(
+            "allow_member_options", sa.Boolean(), server_default="false", nullable=False
+        ),
+        # --- the decision (PL-13). `status` alone cannot carry an outcome: a poll can be
+        # closed without a winner, and decided without being closed.
+        sa.Column("decision_option_id", sa.UUID(), nullable=True),
+        sa.Column("decided_by", sa.UUID(), nullable=True),
+        sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
+        # --- the close/reopen record (PL-12).
+        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("closed_by", sa.UUID(), nullable=True),
+        # --- the nudge rate limit (PL-10), which needs no table of its own: one poll can
+        # only be nudged one at a time, so the last time is the whole state.
+        sa.Column("last_nudge_at", sa.DateTime(timezone=True), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["decided_by"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["closed_by"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint(f"kind IN {POLL_KINDS}", name="ck_polls_kind"),
+        sa.CheckConstraint(f"status IN {POLL_STATUSES}", name="ck_polls_status"),
+    )
+    op.create_index("ix_polls_trip_id", "polls", ["trip_id"], unique=False)
+
+    op.create_table(
+        "poll_options",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("poll_id", sa.UUID(), nullable=False),
+        sa.Column("label", sa.String(length=200), nullable=False),
+        sa.Column("created_by", sa.UUID(), nullable=True),
+        # Nullable together: an option either has a point or it does not, and one without
+        # coordinates is listed as "not on the map" rather than dropped from a mapped poll.
+        sa.Column("lat", sa.Float(), nullable=True),
+        sa.Column("lng", sa.Float(), nullable=True),
+        sa.Column("place_id", sa.Text(), nullable=True),
+        sa.Column("sort", sa.Integer(), server_default="0", nullable=False),
+        # Set when a winning option is seeded into a map region (PL-14). Deliberately a plain
+        # uuid with **no foreign key**: `suggestions` does not exist until `map-suggestions`
+        # (M3), and that feature's tasks say to add the constraint then. Recorded in
+        # `plan/architecture.md` and in `plan/features/polls/tasks.md`'s hand-off notes.
+        sa.Column("suggestion_id", sa.UUID(), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["poll_id"], ["polls.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_poll_options_poll_sort", "poll_options", ["poll_id", "sort"])
+
+    # Added after `poll_options` exists, for the same reason the avatar FK is: the two tables
+    # reference each other. `ON DELETE SET NULL` is what makes "delete the decided option and
+    # the decision clears itself" a database guarantee rather than a service-layer promise.
+    op.create_foreign_key(
+        "fk_polls_decision_option_id",
+        "polls",
+        "poll_options",
+        ["decision_option_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+
+    op.create_table(
+        "poll_scores",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("poll_id", sa.UUID(), nullable=False),
+        sa.Column("option_id", sa.UUID(), nullable=False),
+        sa.Column("user_id", sa.UUID(), nullable=False),
+        # Both nullable, exactly one populated per the trip's current voting mode. Kept as two
+        # columns rather than one overloaded value so that switching the mode does not delete
+        # anything (PL-4): a score and a thumb for one (option, user) coexist in one row and
+        # the active mode decides which is read.
+        sa.Column("score", sa.SmallInteger(), nullable=True),
+        sa.Column("thumb", sa.String(length=8), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["poll_id"], ["polls.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["option_id"], ["poll_options.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        # One vote per person per option. This is also what makes two devices scoring the same
+        # cell converge on last-write-wins instead of silently duplicating.
+        sa.UniqueConstraint("option_id", "user_id", name="uq_poll_scores_option_user"),
+        # An empty row is not a vote. Without this, a bug that wrote neither value would look
+        # like a response in every count.
+        sa.CheckConstraint(
+            "score IS NOT NULL OR thumb IS NOT NULL", name="ck_poll_scores_not_empty"
+        ),
+        # The stored range is 0-10 even though the UI collects 1-10: a future "0 = veto"
+        # affordance then needs no migration (`requirements.md`, the NOTE on PL-3).
+        sa.CheckConstraint("score IS NULL OR score BETWEEN 0 AND 10", name="ck_poll_scores_range"),
+        sa.CheckConstraint(f"thumb IS NULL OR thumb IN {THUMBS}", name="ck_poll_scores_thumb"),
+    )
+    op.create_index("ix_poll_scores_poll_id", "poll_scores", ["poll_id"], unique=False)
+    op.create_index("ix_poll_scores_user_id", "poll_scores", ["user_id"], unique=False)
+
+    # Polymorphic, so it carries no foreign key to its subject and cascade is the service
+    # layer's job — deleting a poll deletes its comments in the same transaction.
+    op.create_table(
+        "comments",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("subject_type", sa.String(length=32), nullable=False),
+        sa.Column("subject_id", sa.UUID(), nullable=False),
+        sa.Column("author_id", sa.UUID(), nullable=True),
+        sa.Column("body", sa.Text(), nullable=False),
+        # Set on edit, and shown as an "edited" marker: an edit that left no trace would
+        # falsify the discussion record.
+        sa.Column("edited_at", sa.DateTime(timezone=True), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["author_id"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint(
+            f"subject_type IN {COMMENT_SUBJECTS}", name="ck_comments_subject_type"
+        ),
+    )
+    op.create_index("ix_comments_subject", "comments", ["subject_type", "subject_id"])
+
     # --- platform ------------------------------------------------------------------------------
     # Every file behind a row here has been re-encoded server-side with all metadata dropped,
     # GPS included. That is a property of the write path, not of this table.
@@ -457,6 +603,30 @@ def upgrade() -> None:
         "ix_attachments_subject", "attachments", ["subject_type", "subject_id"], unique=False
     )
 
+
+    # Written from M2 onward by the poll nudge (PL-10). The `notifications` feature (M6) builds
+    # the bell and the centre; until then the rows accumulate and are picked up when it lands,
+    # which is why the nudge must never be blocked on that feature.
+    op.create_table(
+        "notifications",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("recipient_user_id", sa.UUID(), nullable=False),
+        sa.Column("type", sa.String(length=64), nullable=False),
+        # The deep-link target lives here rather than in columns, because each `type` carries
+        # a different shape and a column per type would be mostly nulls.
+        sa.Column("payload_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["recipient_user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    # The bell's query is "my unread, newest first", so the index matches it.
+    op.create_index(
+        "ix_notifications_recipient_created",
+        "notifications",
+        ["recipient_user_id", "created_at"],
+    )
+
     # Added last, and named, because `users` and `attachments` reference each other: an
     # attachment records its uploader, and a user points at their avatar. One side has to be
     # an ALTER after both tables exist.
@@ -473,6 +643,24 @@ def upgrade() -> None:
 def downgrade() -> None:
     # The cycle again, in reverse: drop the ALTERed constraint before either table.
     op.drop_constraint("fk_users_avatar_attachment_id", "users", type_="foreignkey")
+
+    op.drop_index("ix_notifications_recipient_created", table_name="notifications")
+    op.drop_table("notifications")
+
+    op.drop_index("ix_comments_subject", table_name="comments")
+    op.drop_table("comments")
+
+    op.drop_index("ix_poll_scores_user_id", table_name="poll_scores")
+    op.drop_index("ix_poll_scores_poll_id", table_name="poll_scores")
+    op.drop_table("poll_scores")
+
+    # The polls <-> poll_options cycle again, in reverse.
+    op.drop_constraint("fk_polls_decision_option_id", "polls", type_="foreignkey")
+    op.drop_index("ix_poll_options_poll_sort", table_name="poll_options")
+    op.drop_table("poll_options")
+
+    op.drop_index("ix_polls_trip_id", table_name="polls")
+    op.drop_table("polls")
 
     op.drop_index("ix_attachments_subject", table_name="attachments")
     op.drop_table("attachments")

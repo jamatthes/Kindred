@@ -14,6 +14,19 @@ kid-friendly days out).
 
 ## Phase 1 — Migration
 
+> NOTE (implementation): there is **no `0004_polls`**. `CLAUDE.md`'s migration rule changed
+> after this file was written: pre-launch there is exactly one revision,
+> `server/alembic/versions/0001_schema.py`, and all schema work edits it in place. Everything
+> below is done there instead, and the dev database is dropped and recreated afterwards. The
+> chain restarts at `0002` from the first production deploy.
+>
+> The Phase 1 `Verify` steps are `server/tests/test_poll_constraints.py` rather than psql
+> commands, for the reason every "check it by hand" step eventually deserves: a check run once
+> at authoring time proves the constraint existed that afternoon; a check in the suite proves
+> it still does. `server/tests/test_schema_identity.py` is new and enforces the other half of
+> `CLAUDE.md`'s rule mechanically — it runs `alembic upgrade head` against a scratch database
+> and asserts Alembic's own `compare_metadata` finds no difference from the models.
+
 - [ ] Alembic migration `0004_polls`:
   - [ ] `polls`: confirm `trip_id`, `title`, `description`, `kind`, `status`, `created_by`,
         `allow_member_options` exist; add `decision_option_id` (uuid null),
