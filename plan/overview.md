@@ -79,6 +79,12 @@ The first deploy seeds a platform account `admin`/`admin` and **forces a passwor
 
 Each milestone executes its feature's `tasks.md` and ends with the verification steps listed there.
 
+**UI-first working style (added 2026-08-11):** the key screens are mocked as static,
+token-pure pages in `design-preview/` (also pushed to the Claude Design project) *before*
+their features are built. Feature UI work starts from the agreed mockup and may run against
+mock data ahead of its backend endpoints; the backend for a feature is introduced when its
+UI needs to persist or share state, per that feature's tasks.md ordering.
+
 ## Glossary
 
 - **Suggestion** — anything proposed for the trip: a *region* (drawn area), *accommodation*, *activity*, or *meal*. Statuses: proposed → shortlisted → approved → scheduled.

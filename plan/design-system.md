@@ -21,6 +21,19 @@ Final visual direction (exact palette, type choices) is locked by a **DesignSync
 the M0 scaffold**, before any feature UI is built. This document constrains that pass; it
 does not pre-pick the palette.
 
+## Brand (added 2026-08-11)
+
+- **Wordmark:** "Kindred" set in **Bricolage Grotesque** (bold, slight negative tracking),
+  colored `--color-accent`. Token: `--font-brand` — used for the wordmark only, never body
+  copy. The font is self-hosted in production (no runtime Google Fonts dependency).
+- **Icon mark:** the compact "K" tile (accent background, `--radius-2`) — used for the PWA
+  icon, favicon, and anywhere the full wordmark doesn't fit. Both marks coexist: wordmark
+  in the top bar, K tile as the app icon.
+- **Trip naming convention:** trips display as **"Destination · Month Year"**
+  (e.g. "Cornwall · July 2027"), with the stage chip alongside. While the destination is
+  undecided in early Planning, the trip's working name fills the slot until a poll decision
+  updates it.
+
 ## Token architecture (three layers)
 
 1. **Primitives** — raw scales, never referenced by components:
@@ -52,6 +65,17 @@ Implementation: CSS custom properties + Tailwind 4 `@theme`; `data-theme` on `<h
 
 - **Desktop:** left slim nav rail → map center (~62%) → right side panel (~38%) for the
   selected suggestion/poll/itinerary item; bottom timeline panel collapsible.
+- **Top bar (canonical composition, 2026-08-11):** trip name + stage chip (left) ·
+  global search "Search places or people" (center) · notification bell with unread badge,
+  **family presence stack**, and the primary "Suggest a place" action (right). The primary
+  create action lives in the top bar, not floating on the map.
+- **Family presence stack:** one avatar per family (family color, initial), overlapping.
+  A family's avatar is **full color when at least one member has a live session** and
+  greyed/desaturated when nobody is online. Hovering a family opens a tooltip listing its
+  members: online members in normal text with a small `--color-success` dot, offline
+  members in faint text with a neutral dot; the viewing user is marked "you". Presence is
+  ephemeral (derived from live WebSocket sessions — see `architecture.md`), never stored.
+  Reference: `design-preview/screen-planning-map.html`.
 - **Mobile (holiday-stage priority):** bottom tab nav; map full-bleed; cards appear as
   **bottom sheets** (thumb reach) instead of side panels; "now / next up" is the default
   holiday screen.

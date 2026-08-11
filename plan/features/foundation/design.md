@@ -237,9 +237,12 @@ guarantee: at-most-once delivery with a refetch fallback, not an event log.
 
 Events reserved by `architecture.md` and emitted by later features: `poll.vote.updated`,
 `suggestion.vote.updated`, `suggestion.created`, `notification.new`, `location.updated`,
-`stage.changed`. Vote events are namespaced by domain — polls and suggestions emit distinct
-types, never a shared `vote.updated`. Foundation emits none of them; it ships `hello`,
-`pong` and `resync`.
+`stage.changed`, `presence.updated`. Vote events are namespaced by domain — polls and
+suggestions emit distinct types, never a shared `vote.updated`. Foundation emits `hello`,
+`pong`, `resync` — and owns `presence.updated`: the socket registry broadcasts
+`{user_id, online}` on connect/disconnect with a short debounce (refreshes must not flap),
+and exposes a REST snapshot of currently-online user ids for initial render. Presence is
+ephemeral; nothing is persisted.
 
 Broadcast helper exposed for features: `await ws.broadcast(trip_id, type, payload)` and
 `await ws.send_user(user_id, type, payload)`.

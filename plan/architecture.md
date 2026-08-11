@@ -19,7 +19,8 @@
 ```
 
 - **Everything external is called server-side and cached in Postgres** except the Google Maps JS map itself and Places Autocomplete/Details in the create-suggestion flow (browser SDK requirement).
-- One WebSocket channel per authenticated session; server pushes typed events, namespaced by domain (`poll.vote.updated`, `suggestion.vote.updated`, `suggestion.created`, `notification.new`, `location.updated`, `stage.changed`). Frontend applies optimistic UI for own actions.
+- One WebSocket channel per authenticated session; server pushes typed events, namespaced by domain (`poll.vote.updated`, `suggestion.vote.updated`, `suggestion.created`, `notification.new`, `location.updated`, `stage.changed`, `presence.updated`). Frontend applies optimistic UI for own actions.
+- **Presence** is ephemeral: the socket registry knows which users have live sessions, broadcasts `presence.updated {user_id, online}` on connect/disconnect (with a short debounce so refreshes don't flap), and answers a REST snapshot for initial render. No table — presence is never persisted. It drives the top bar's family avatar stack (see `plan/design-system.md`).
 
 ## Repo layout (monorepo)
 
