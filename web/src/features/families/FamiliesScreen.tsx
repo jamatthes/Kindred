@@ -15,16 +15,15 @@
  * mattered.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useSession } from '../../app/session'
 import { useNavigate } from '../../app/router'
-import { Banner, Button, Skeleton } from '../../app/ui/primitives'
+import { Banner, Skeleton } from '../../app/ui/primitives'
 import { IdentityBadge } from '../../design/IdentityBadge'
 import type { Family, FamilyDetail } from '../../app/types'
 import { useFamilies, useFamilyDetail } from './useFamilies'
 import { FamilyPanel } from './FamilyPanel'
 import { NewFamilyInviteCard } from './InviteBlock'
-import { CreateFamilyForm } from './CreateFamilyForm'
 import { ROLE_LABEL } from './labels'
 import './families.css'
 
@@ -104,7 +103,6 @@ export function FamiliesScreen({ selectedId }: { selectedId?: string }) {
   const { user } = useSession()
   const navigate = useNavigate()
   const { families, loading, error } = useFamilies()
-  const [creating, setCreating] = useState(false)
 
   // What to *render*. The server refuses regardless, so this is a courtesy — but a control
   // that is visible and always fails is worse than one that was never offered.
@@ -143,8 +141,12 @@ export function FamiliesScreen({ selectedId }: { selectedId?: string }) {
         <div className="families__empty">
           {isOrganiser ? (
             <>
-              <p>No families yet — create the first one.</p>
-              <Button onClick={() => setCreating(true)}>Create a family</Button>
+              {/* "Invite", not "create": a family is born with its head, and the link is how
+                  that head arrives (FM-1, revised 2026-08-11). The card below carries the
+                  action, so the empty state does not need a second one that means the same
+                  thing. */}
+              <p>No families yet — invite the first one.</p>
+              <NewFamilyInviteCard />
             </>
           ) : (
             <p>The trip organiser hasn&apos;t added any families yet.</p>
@@ -160,19 +162,9 @@ export function FamiliesScreen({ selectedId }: { selectedId?: string }) {
               onOpen={() => navigate({ name: 'families', familyId: family.id })}
             />
           ))}
-          {isOrganiser ? <NewFamilyInviteCard onCreateFamily={() => setCreating(true)} /> : null}
+          {isOrganiser ? <NewFamilyInviteCard /> : null}
         </div>
       )}
-
-      {creating ? (
-        <CreateFamilyForm
-          onClose={() => setCreating(false)}
-          onCreated={(family) => {
-            setCreating(false)
-            navigate({ name: 'families', familyId: family.id })
-          }}
-        />
-      ) : null}
 
       {selectedId ? (
         <FamilyPanel familyId={selectedId} onClose={() => navigate({ name: 'families' })} />

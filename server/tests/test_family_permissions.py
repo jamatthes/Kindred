@@ -77,7 +77,8 @@ async def test_an_organiser_manages_any_family(
     _, other_family = family_admin
     await login_as(client, db, user)
 
-    assert (await client.post(FAMILIES, json={"name": "Made by organiser"})).status_code == 201
+    # No `POST /families`: an organiser brings a family onto the trip with a new-family
+    # invite, which is the last assertion in this list (`families` FM-1, revised 2026-08-11).
     assert (
         await client.patch(f"{FAMILIES}/{other_family.id}", json={"name": "Renamed"})
     ).status_code == 200
@@ -150,7 +151,6 @@ async def test_a_plain_member_cannot_mutate_anything(
     await login_as(client, db, user)
 
     refused = [
-        await client.post(FAMILIES, json={"name": "Mine"}),
         await client.patch(f"{FAMILIES}/{family.id}", json={"name": "Renamed"}),
         await client.put(f"{FAMILIES}/{family.id}/home", json={"home_address": "Anywhere"}),
         await client.delete(f"{FAMILIES}/{family.id}/home"),

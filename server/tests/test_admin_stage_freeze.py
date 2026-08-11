@@ -10,7 +10,8 @@ what makes a mistaken freeze correctable rather than permanent.
 
 Features covered so far:
 
-* `families` — create a family, rename one, change a member's role, remove a member, invite.
+* `families` — found a family (the setup route), rename one, change a member's role, remove a
+  member, invite.
 * `admin-console` — trip settings, voting modes, user removal, organiser appointment.
 
 Still to add, as each lands: `polls` (M2), `map-suggestions` / `voting-comments` (M3),
@@ -19,10 +20,13 @@ Still to add, as each lands: `polls` (M2), `map-suggestions` / `voting-comments`
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Family, Trip, TripOrganiser, User
+from app.models import Family, Invite, Trip, TripOrganiser, User
 from tests.conftest import add_member, login_as, make_family, make_user
 
 pytestmark = pytest.mark.asyncio
@@ -58,10 +62,26 @@ def _stage_forbidden(response) -> bool:
 
 
 async def test_creating_a_family_is_frozen(client, db, frozen) -> None:
-    owner, _family, _victim = frozen
-    await login_as(client, db, owner)
+    """Through `POST /families/mine`, which since 2026-08-11 is the only route that creates a
+    family at all — the bare `POST /families` was withdrawn with the memberless-family shells
+    it produced (`families` FM-1). The caller here is a pending founder, since that is who the
+    route admits."""
+    _owner, _family, _victim = frozen
+    founder = await make_user(db, "latecomer")
+    db.add(
+        Invite(
+            trip_id=(await db.scalar(select(Trip))).id,
+            mode="create_family",
+            token_hash="hash-latecomer",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+            used_by=founder.id,
+            used_at=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+    await login_as(client, db, founder)
     assert _stage_forbidden(
-        await client.post("/api/v1/families", json={"name": "Latecomers"})
+        await client.post("/api/v1/families/mine", json={"name": "Latecomers"})
     )
 
 

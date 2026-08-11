@@ -44,17 +44,34 @@ every other member of the family freely.
 
 ## User stories
 
-### FM-1 — Owner or organiser: create a family
+### FM-1 — Owner or organiser: bring a family onto the trip (revised 2026-08-11)
 
-**As the owner or an organiser, I can create a family so I can invite its members.**
+**As the owner or an organiser, I can bring a family onto the trip by inviting the adult who
+will run it — and that is the only way a family comes into existence.**
 
-- Required: name. Optional at creation: home address.
+- **A family is only ever born with a head.** There is no way, for any role, to create a family
+  that nobody is in. Every family is created by the person who becomes its head, in the same
+  transaction that writes their membership row: either through the family setup screen after a
+  new-family invite (FM-6 → FM-13), or by the owner naming their own family during their own
+  onboarding (FM-13).
+- So the owner's and organisers' action here is **"Invite a family"** (FM-6), not "create a
+  family": they issue a new-family invite, and the recipient names the family and becomes its
+  head.
+- Required at setup: name. Optional: home address.
 - A colour slot from `--family-1…8` is assigned automatically, choosing the lowest-numbered
-  slot not currently in use on the trip.
-- The creator can override the colour slot; slots already used by another family are shown
-  as taken.
+  slot not currently in use on the trip. Nobody picks a slot at creation — the colour is
+  changed afterwards from the family panel (FM-2), where the taken slots are visible.
 - The family is created on the active trip (`families.trip_id`).
 - A family name that duplicates an existing name on the trip is rejected with a clear message.
+
+> REVISED 2026-08-11 (user ruling). The original story gave the owner and organisers a bare
+> "create a family" endpoint and a form to go with it. In use it produced exactly what it
+> describes: a family with zero members, created by an admin who was then *not* in it — an
+> orphan row that nobody could enter, that the invite flow does not need, and that the delete
+> route exists to sweep up. The capability is withdrawn rather than fixed, because the flow it
+> was meant to serve (an organiser sets up a family, then invites its members) is already the
+> new-family invite, and that one arrives with a head attached. See "No memberless families"
+> below.
 
 ### FM-2 — Head or spouse: edit my family's name and colour
 
@@ -215,8 +232,8 @@ switching accounts.**
 
 ### FM-13 — New head of family: name my family on first login
 
-**As someone who accepted an invite to start a new family, I am asked to name my family before
-I enter the app.**
+**As someone who accepted an invite to start a new family — or as the trip's owner on a fresh
+install — I am asked to name my family before I enter the app.**
 
 - After registering I am logged in and taken straight to a family setup screen. I am not yet on
   the trip: I have an account, but no family.
@@ -232,11 +249,57 @@ I enter the app.**
 - Until I finish, no other part of the app is reachable — not because the UI hides it, but
   because I am genuinely not on the trip yet and the server refuses.
 
+- **My own location sharing starts on**, because I am about to be a head of family and that is
+  the head rule (FM-15). It pre-sets a toggle; the browser prompt and the one-time disclosure
+  still stand between it and a marker.
+
 > NOTE: this splits what would otherwise be one long registration form into two screens. The
 > reason is that the two questions have different owners in time: who you are is answered by
 > the person holding the link, at the moment they click it; what your family is called is often
 > agreed with the rest of the family first. A resumable second screen lets that happen without
 > the invite going stale.
+
+#### The owner takes this step too (added 2026-08-11, user ruling)
+
+**As the owner of a brand-new instance, I name my own family before I reach the app, in the
+same way and on the same screen as anyone I invite.**
+
+- The owner's onboarding is, in order: `change_password` → `setup_trip` (AC-0) → `setup_family`
+  → `app`. The order is fixed and asserted by tests. Trip setup comes first because the family
+  is created *on* a trip, and because naming the trip is the decision that makes the instance
+  theirs.
+- The owner reaches the screen **without an invite**. Every other founder is admitted by having
+  accepted a `create_family` invite; the owner is admitted by being the owner, which is the
+  same evidence in a different form — nobody invited them to their own instance.
+- They name their own family, become its head, get colour slot 1 on an empty trip, and their
+  own location sharing starts on, exactly as an invited founder does. There is nothing special
+  about the family they end up with.
+- Nothing else is reachable until they finish, for the same reason it is not for anybody else:
+  they have no family, so `require_member` refuses them everywhere except the setup route.
+
+> REVISED 2026-08-11 (user ruling). The gate previously carved the platform admin out of this
+> step — the code said sending them to family setup "would lock them out of their own instance
+> on first boot". That was true only while the setup route refused them; with the owner
+> admitted to it, the step completes in one form and the carve-out is what actually caused
+> harm. The owner reached `app` with no family, which meant the map had nowhere to put them,
+> the families screen showed them a trip they were not in, and — reaching for the only tool
+> they were offered — they created a family from the admin UI and were not placed in it. The
+> whole of that follows from letting one account past the gate.
+
+#### No memberless families (invariant, added 2026-08-11)
+
+**No route, in any feature, may leave a family with nobody in it.**
+
+- A family is created only in the same transaction that writes its head's `family_members` row.
+- No role — owner included — can create a family they are not in.
+- Removing the last member of a family is already refused: the head cannot be removed or
+  demoted, only handed on (FM-9, FM-16), so the last member of a family is always its head and
+  is always protected.
+- `DELETE /families/{id}` (FM-10) still requires the family to be empty. It is now reachable
+  only for a family whose members were moved out one by one until the head-transfer rule was
+  the only thing left, or for a shell created before this ruling. It stays because a route that
+  refuses everything with members is the safe way to sweep up, not because empty families are
+  expected.
 
 ### FM-14 — Any user: put a face to my name
 
@@ -343,8 +406,8 @@ person's effective permission is the union of their row in each half of the tabl
 | List families and member counts | yes | yes | yes | yes | yes | no |
 | See a family's full home address | yes (any) | yes (any) | own only | own only | own only | no |
 | See a family's coarse home locality | yes | yes | yes | yes | yes | no |
-| Create a family for someone else | yes | yes | no | no | no | no |
-| Create my own family during setup | n/a | n/a | n/a (this is how you become one) | no | no | no |
+| Create a family for someone else | **no** | **no** | no | no | no | no |
+| Create my own family during setup | yes (once, at their own setup) | n/a | n/a (this is how you become one) | no | no | no |
 | Rename / recolour a family | yes (any) | yes (any) | own only | own only | no | no |
 | Set or clear a home address | yes (any) | yes (any) | own only | own only | no | no |
 | Retry geocoding | yes (any) | yes (any) | own only | own only | no | no |
@@ -377,9 +440,14 @@ The three `no` cells marked for spouse are the whole of the spouse asymmetry. A 
 could hand themselves the head role, or remove the head, would make the distinction
 decorative.
 
-"Create my own family during setup" is available to exactly one caller: an authenticated user
-who has accepted a new-family invite and has no family yet. It is not a general capability of
-any role, which is why it does not fit the columns above.
+"Create a family for someone else" is `no` in every column as of 2026-08-11, and the row is
+kept rather than deleted so that a later reader can see the capability was withdrawn on purpose
+(FM-1). Organisers bring a family onto the trip by inviting its head.
+
+"Create my own family during setup" is available to two callers, and only while they have no
+family: an authenticated user who has accepted a new-family invite, and the trip's owner. It is
+not a general capability of any role, which is why it barely fits the columns above — the
+owner's `yes` is the owner's own onboarding, not a power over other families.
 
 The "turn on another user's sharing" row is `no` in every column on purpose. It is the one
 capability this feature deliberately gives to nobody, and it is listed rather than omitted so
@@ -390,7 +458,7 @@ that a later reader can see it was a decision.
 | Capability | Planning | Holiday | End |
 |---|---|---|---|
 | View families, members, home pins | yes | yes | yes (read-only) |
-| Create / edit / delete a family | yes | yes | no (`409`) |
+| Edit / delete a family | yes | yes | no (`409`) |
 | Create my own family during setup | yes | yes | no — an End-stage invite is refused before this point |
 | Set or retry a home address | yes | yes | no (`409`) |
 | Create / revoke invites | yes | yes | no (`409`) |

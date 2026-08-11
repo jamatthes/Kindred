@@ -255,17 +255,15 @@ FAMILY_DETAIL_RESPONSE = {
 }
 
 
-class FamilyCreateIn(BaseModel):
-    """`POST /families` — the main admin creating a family for someone else (FM-1)."""
-
-    name: str = Field(min_length=1, max_length=120)
-    #: Omitted means "assign the lowest free slot". A taken slot is `409 color_taken`.
-    color: int | None = Field(default=None, ge=1, le=8)
-    home_address: str | None = Field(default=None, max_length=500)
+# REMOVED 2026-08-11 with `POST /families` itself: `FamilyCreateIn`, the only body that ever
+# carried a `color` at creation. Nothing sets a slot when a family is made any more — the
+# lowest free one is assigned and `PATCH /families/{id}` changes it afterwards, from a screen
+# that can show which slots are taken. See `plan/features/families/requirements.md` FM-1.
 
 
 class FamilyMineIn(BaseModel):
-    """`POST /families/mine` — the family setup screen's only write (FM-13).
+    """`POST /families/mine` — the family setup screen's only write (FM-13), and the only
+    route in the product that creates a family.
 
     No colour: it is assigned automatically, because someone naming their family on their
     first login has no idea which slots are free and should not be asked.

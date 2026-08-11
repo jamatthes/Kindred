@@ -44,8 +44,15 @@ function CopyOnce({ created }: { created: InviteCreated }) {
   )
 }
 
-/** The organiser's separate action: whoever opens this link founds their own family. */
-export function NewFamilyInviteCard({ onCreateFamily }: { onCreateFamily: () => void }) {
+/**
+ * The organiser's separate action: whoever opens this link founds their own family.
+ *
+ * As of 2026-08-11 it is also the *only* way an organiser brings a family onto the trip. The
+ * card used to carry a second action, `Or add one myself`, over the bare `POST /families` —
+ * which made a family with nobody in it and left the organiser outside what they had just
+ * created. Both the action and the route are gone (FM-1).
+ */
+export function NewFamilyInviteCard() {
   const [created, setCreated] = useState<InviteCreated | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,9 +89,6 @@ export function NewFamilyInviteCard({ onCreateFamily }: { onCreateFamily: () => 
         <div className="panel-block__actions">
           <Button variant="secondary" onClick={() => void create()} busy={busy}>
             Create a link
-          </Button>
-          <Button variant="ghost" onClick={onCreateFamily}>
-            Or add one myself
           </Button>
         </div>
       )}

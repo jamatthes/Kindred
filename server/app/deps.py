@@ -240,20 +240,23 @@ async def require_family_manager(
     return await require_family_head_or_spouse(family_id)(db, user, trip)
 
 
-async def require_pending_family(db: DbDep, user: CurrentUser) -> User:
+async def require_pending_family(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> User:
     """The single route in the product a user with no family may call (`families` FM-13).
 
     `require_member` refuses anyone without a family everywhere, which includes someone who
-    has accepted a new-family invite but not yet named their family. `POST /families/mine` is
-    the one exception, and this is it. `plan/architecture.md` states the rule and the reason
-    it is stated at all: "a second route in this category is a decision to be documented, not
-    a quiet exemption."
+    has accepted a new-family invite but not yet named their family — and, from 2026-08-11, the
+    trip's owner, who takes the same setup step without an invite because nobody invited them
+    to their own instance. `POST /families/mine` is the one exception, and this is it.
+    `plan/architecture.md` states the rule and the reason it is stated at all: "a second route
+    in this category is a decision to be documented, not a quiet exemption."
 
     The predicate itself lives in `app/core/onboarding.py`, shared with the `next_step` gate,
     so the screen a user is sent to and the route that screen calls can never disagree about
-    who is allowed to be there.
+    who is allowed to be there. `trip` is passed for the same reason: ownership is a fact about
+    a trip, and a dependency that resolved it differently from the gate would send the owner to
+    a screen whose only button is refused.
     """
-    if await is_pending_family(db, user):
+    if await is_pending_family(db, user, trip):
         return user
     raise forbidden("Only someone setting up a new family can do that.")
 

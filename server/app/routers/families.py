@@ -17,8 +17,8 @@ asserts it rather than trusting this paragraph.
 
 Geocoding reaches the network through exactly one helper, `_apply_geocode`, and only mutating
 handlers call it: `set_home` and `retry_geocode` (the two `design.md` names), plus
-`create_family` and `create_my_family`, both of which accept an optional address because FM-1
-and FM-13 say they do. **No read path can reach it** — that is the cost rule
+`create_my_family`, which accepts an optional address because FM-13 says it does. **No read
+path can reach it** — that is the cost rule
 (`plan/architecture.md`), and funnelling every call through one helper is what makes it
 checkable with a grep rather than by reading the file. Recorded as a NOTE in `design.md`.
 """
@@ -58,6 +58,7 @@ from app.models import (
     TripOrganiser,
     User,
     UserSettings,
+    is_owner_of,
     next_free_color,
     spouse_may_act_on,
 )
@@ -65,7 +66,6 @@ from app.schemas.common import ApiError, forbidden
 from app.schemas.family import (
     FAMILY_DETAIL_RESPONSE,
     FAMILY_RESPONSE,
-    FamilyCreateIn,
     FamilyDetailOut,
     FamilyMineIn,
     FamilyOut,
@@ -344,38 +344,18 @@ async def list_members(
 # --- writes -------------------------------------------------------------------------------
 
 
-@router.post(
-    "",
-    **FAMILY_DETAIL_RESPONSE,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_organiser), PLANNING_OR_HOLIDAY],
-    summary="Create a family (main admin)",
-)
-async def create_family(
-    payload: FamilyCreateIn,
-    db: DbDep,
-    viewer: ViewerDep,
-    trip: ActiveTrip,
-    geocoder: GeocoderProtocol = Depends(get_geocoder),
-) -> FamilyDetailOut:
-    """FM-1. The main admin creates a family so they can invite its members."""
-    if trip is None:
-        raise ApiError(409, "no_trip", "There is no trip to add a family to yet.")
-
-    await _reject_duplicate_name(db, trip.id, payload.name)
-    color = await _claim_color(db, trip.id, payload.color)
-
-    family = Family(trip_id=trip.id, name=payload.name.strip(), color=color)
-    db.add(family)
-    await db.flush()
-
-    if payload.home_address:
-        await _apply_geocode(family, payload.home_address, geocoder)
-
-    await db.commit()
-    family = await _load_family(db, family.id)
-    await ws.broadcast(trip.id, "family.created", {"family": _wire(family)})
-    return await _detail(db, family, viewer, trip)
+# REMOVED 2026-08-11 (user ruling): `POST /families`, the organiser-guarded bare create.
+# It made a family with nobody in it — the only artefact it could produce, since the creator
+# was not added to what they created — and one was found in the wild, made by the owner
+# reaching for the only tool the UI offered them. `plan/features/families/requirements.md`
+# FM-1 now states the invariant it violated: a family is only ever born with a head, in the
+# same transaction that writes their membership row. `create_my_family` below is the only
+# route that creates one, which is what makes the invariant enforceable by reading one
+# function rather than by auditing a router. Organisers bring a family onto the trip with a
+# new-family invite (FM-6), which already existed and always arrived with a head attached.
+#
+# `GET /families` still answers on this path, so an un-updated client gets `405` rather than
+# a 404 that might read as "wrong URL, try another".
 
 
 @router.post(
@@ -392,11 +372,18 @@ async def create_my_family(
     trip: ActiveTrip,
     geocoder: GeocoderProtocol = Depends(get_geocoder),
 ) -> FamilyDetailOut:
-    """FM-13 — the family setup screen's only write, and this feature's only route a user
-    with no family may call.
+    """FM-13 — the family setup screen's only write, this feature's only route a user with no
+    family may call, and (since 2026-08-11) the **only route in the product that creates a
+    family**. That last one is the invariant: no family without a head, guaranteed by there
+    being one place a family can come from and that place writing both rows together.
+
+    Two kinds of caller reach it, and `require_pending_family` is where they are told apart:
+    someone who accepted a `create_family` invite, and the trip's owner naming their own family
+    during their own onboarding. The handler does not care which — an owner's family is an
+    ordinary family and they are its ordinary head.
 
     One transaction: create the family on the trip with the lowest free colour, write the
-    membership as `admin`, seed **that caller's own** `live_location_enabled = true`, and
+    membership as `head`, seed **that caller's own** `live_location_enabled = true`, and
     geocode the home address if one was supplied.
 
     The seed is the single point in this feature where a value reaches
@@ -435,10 +422,15 @@ async def create_my_family(
 
     await db.commit()
     family = await _load_family(db, family.id)
+    # Built here rather than taken from `ViewerDep`, because the caller had no family when the
+    # request began and the response describes the one they now have. `is_owner` is asked
+    # rather than assumed false: the owner reaches this route too, and a response that told
+    # them they were not the owner of their own trip would be wrong on the one screen where
+    # they have no other source of truth.
     viewer = Viewer(
         user_id=user.id,
         family_id=family.id,
-        is_owner=False,
+        is_owner=is_owner_of(trip, user),
         is_organiser=False,
         manages_own_family=True,
     )

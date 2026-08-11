@@ -1,12 +1,20 @@
 /**
  * `/setup/family` — name your family on first login (FM-13).
  *
- * Rendered whenever the server's `next_step` is `setup_family`, which is the state a new
- * family's head is in from the moment they accept a `create_family` invite until they finish
- * here. Outside the app shell for the same reason the join screen is: they are not on the
- * trip yet, and nothing else is reachable — **not because the UI hides it, but because the
- * server refuses**. This screen carries its own log-out action, since there is no nav rail to
- * hold one.
+ * Rendered whenever the server's `next_step` is `setup_family`: the state a new family's head
+ * is in from the moment they accept a `create_family` invite until they finish here, and — as
+ * of 2026-08-11 — the state the **owner** is in between naming the trip and entering the app.
+ * Outside the app shell for the same reason the join screen is: they are not on the trip yet,
+ * and nothing else is reachable — **not because the UI hides it, but because the server
+ * refuses**. This screen carries its own log-out action, since there is no nav rail to hold
+ * one.
+ *
+ * The copy is deliberately not branched on who the caller is. It never says "you were
+ * invited", so it is true for the owner, who arrives here from their own trip-setup screen
+ * rather than from a link; and "You will be this family's head" is exactly as true for them,
+ * because owning the trip and heading a family are independent things (`plan/overview.md` >
+ * Roles). A screen that explained the difference would be teaching the distinction at the one
+ * moment it does not matter.
  *
  * Abandoning it costs nothing. Nothing is written until submit, and `next_step` is derived
  * from stored state, so the next login lands right back here with nothing stale to reconcile.

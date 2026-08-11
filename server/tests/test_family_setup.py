@@ -33,9 +33,15 @@ def code(response: httpx.Response) -> str:
 async def _consume_invite(
     db: AsyncSession, trip: Trip, user: User, *, family: Family | None = None
 ) -> Invite:
-    """Mark ``user`` as having accepted an invite, exactly as the accept route will."""
+    """Mark ``user`` as having accepted an invite, exactly as the accept route will.
+
+    `mode` is set, not left to the column default, because the predicate under test keys on it:
+    a fixture that let every invite default to `join` would make the allow case unreachable and
+    every denial pass for the wrong reason.
+    """
     invite = Invite(
         trip_id=trip.id,
+        mode="join" if family else "create_family",
         family_id=family.id if family else None,
         token_hash=f"hash-{user.username}",
         expires_at=datetime.now(UTC) + timedelta(days=7),
@@ -98,13 +104,51 @@ async def test_denied_when_the_invite_was_family_scoped(
     assert await is_pending_family(db, user) is False
 
 
-async def test_the_platform_admin_is_never_pending(
+async def test_the_owner_with_no_family_is_pending(
     db: AsyncSession, trip: Trip, main_admin: User
 ) -> None:
-    """The seeded admin has no family on first boot. Sending them to a family setup screen
-    would lock them out of their own instance."""
-    assert await is_pending_family(db, main_admin) is False
-    assert await resolve_next_step(db, main_admin, trip) == "app"
+    """Revised 2026-08-11: the owner takes the same step, without an invite.
+
+    This assertion is the exact inverse of the one it replaces, which read "the platform admin
+    is never pending" on the grounds that a family setup screen would lock them out of their
+    own instance. It only would have while `POST /families/mine` also refused them; both halves
+    moved together.
+    """
+    assert await is_pending_family(db, main_admin, trip) is True
+
+
+async def test_the_owner_by_ownership_is_pending_too(
+    db: AsyncSession, trip: Trip
+) -> None:
+    """`trips.owner_user_id`, not just the platform flag — the two are different people on any
+    instance where ownership has been handed on."""
+    owner = await make_user(db, "handedowner")
+    trip.owner_user_id = owner.id
+    await db.commit()
+    assert await is_pending_family(db, owner, trip) is True
+
+
+async def test_the_owner_stops_being_pending_once_they_have_a_family(
+    db: AsyncSession, trip: Trip, main_admin: User
+) -> None:
+    """Ownership admits them to the route; it is not a standing licence to found families."""
+    family = await make_family(db, trip, "The Owners", color=3)
+    await add_member(db, family, main_admin, role="head")
+    assert await is_pending_family(db, main_admin, trip) is False
+
+
+async def test_a_used_join_invite_whose_family_was_deleted_is_not_a_licence(
+    db: AsyncSession, trip: Trip
+) -> None:
+    """`family_id` is `ON DELETE SET NULL`, so deleting a family nulls the column on the
+    consumed join invites of everyone who was in it. Keying on `mode` is what stops an
+    unrelated deletion from handing each of them the right to found a family."""
+    family = await make_family(db, trip, "Doomed", color=4)
+    user = await make_user(db, "wasjoined")
+    invite = await _consume_invite(db, trip, user, family=family)
+    invite.family_id = None  # what the FK does when the family goes
+    await db.commit()
+    assert await is_pending_family(db, user, trip) is False
 
 
 # --- the gate -----------------------------------------------------------------------------
@@ -123,6 +167,54 @@ async def test_the_password_change_outranks_the_family_setup(
     pending.must_change_password = True
     await db.commit()
     assert await resolve_next_step(db, pending, trip) == "change_password"
+
+
+async def test_the_owners_onboarding_order_on_a_truly_fresh_install(
+    db: AsyncSession, main_admin: User
+) -> None:
+    """`change_password` → `setup_trip` → `setup_family` → `app`, in that order.
+
+    Asserted as a sequence rather than as four independent facts, because the ordering is the
+    only thing here that could break silently: each individual step would still work if two of
+    them swapped, and the owner would find themselves on a family setup screen whose submit
+    button answers `409 no_trip` — a family is created *on* a trip.
+    """
+    main_admin.must_change_password = True
+    trip = Trip(name="", stage="planning", timezone="Europe/London")
+    trip.owner_user_id = main_admin.id
+    db.add(trip)
+    await db.commit()
+
+    seen = [await resolve_next_step(db, main_admin, trip)]
+
+    main_admin.must_change_password = False
+    await db.commit()
+    seen.append(await resolve_next_step(db, main_admin, trip))
+
+    trip.name = "Cornwall"  # what AC-0's setup screen writes
+    await db.commit()
+    seen.append(await resolve_next_step(db, main_admin, trip))
+
+    family = await make_family(db, trip, "The Owners", color=1)
+    await add_member(db, family, main_admin, role="head")
+    seen.append(await resolve_next_step(db, main_admin, trip))
+
+    assert seen == ["change_password", "setup_trip", "setup_family", "app"]
+
+
+async def test_a_removed_member_is_not_sent_to_family_setup(
+    db: AsyncSession, trip: Trip
+) -> None:
+    """The one family-less `app`, and deliberately so.
+
+    They were never invited to found a family, and sending them to the setup screen would let
+    anyone removed from the trip re-admit themselves. `require_member` refuses them every
+    route; the app shows "you are not on this trip".
+    """
+    family = await make_family(db, trip, "Wasmine", color=5)
+    user = await make_user(db, "exmember")
+    await _consume_invite(db, trip, user, family=family)
+    assert await resolve_next_step(db, user, trip) == "app"
 
 
 async def test_auth_me_reports_the_gate(
@@ -229,6 +321,46 @@ async def test_someone_who_already_has_a_family_is_refused(
     response = await client.post(MINE, json={"name": "A second one"})
     assert response.status_code == 403
     assert code(response) == "forbidden"
+    assert await db.scalar(select(func.count()).select_from(Family)) == 1
+
+
+async def test_the_owner_founds_their_own_family_without_an_invite(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
+) -> None:
+    """FM-13, the owner's path. Nobody invites them to their own instance, so ownership is the
+    evidence that stands in for the invite — and what they end up with is an ordinary family
+    they are the ordinary head of."""
+    await login_as(client, db, main_admin)
+    response = await client.post(MINE, json={"name": "The Parkers"})
+    assert response.status_code == 201
+
+    body = response.json()
+    assert body["color"] == 1
+    assert [(m["username"], m["role"]) for m in body["members"]] == [("mainadmin", "head")]
+
+    settings = await db.scalar(
+        select(UserSettings).where(UserSettings.user_id == main_admin.id)
+    )
+    await db.refresh(settings)
+    # The head rule (FM-15): the person organising a family's travel is the one the rest of
+    # them expect to be able to find. Two gates still stand between this and a marker.
+    assert settings.live_location_enabled is True
+
+    me = (await client.get("/api/v1/auth/me")).json()
+    assert me["next_step"] == "app"
+    assert me["family"]["role"] == "head"
+
+
+async def test_the_owner_cannot_found_a_second_family(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
+) -> None:
+    """Ownership admits them to the route only while they have no family. Otherwise the owner
+    would be the one account that could mint families all day — which is the shape of the bug
+    this whole change is about."""
+    await login_as(client, db, main_admin)
+    assert (await client.post(MINE, json={"name": "The Parkers"})).status_code == 201
+    second = await client.post(MINE, json={"name": "Also Mine"})
+    assert second.status_code == 403
     assert await db.scalar(select(func.count()).select_from(Family)) == 1
 
 
