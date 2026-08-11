@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from app.deps import ActiveTrip, CurrentUser, DbDep, enforce_password_change, require_member
 from app.models import Attachment
 from app.routers.auth import build_user_out
+from app.routers.families import broadcast_member_updated
 from app.schemas.user import PreferencesIn, PreferencesOut, ProfilePatchIn, UserOut
 from app.services import attachments as store
 from app.services.images import (
@@ -41,10 +42,9 @@ async def update_profile(
 ) -> UserOut:
     """FM-11. First name, last name and display name, editable at any time, in any stage.
 
-    Changing a name changes the initials badge and the map label everywhere, live — the
-    `member.updated` broadcast is emitted by the caller's own socket refresh rather than here,
-    because a name change is not scoped to one family and the trip room needs the whole
-    `MemberOut` a family route would build.
+    Changing a name changes the initials badge and the map label everywhere, live (FM-12) —
+    which is why this emits `member.updated` through `families`' own helper rather than
+    building a payload here. That helper owns the redaction the trip room requires.
     """
     changes = payload.model_dump(exclude_unset=True, exclude_none=True)
     for field, value in changes.items():
@@ -58,6 +58,9 @@ async def update_profile(
 
     await db.commit()
     await db.refresh(user)
+    # FM-12: "When someone changes their picture or name, their badge and map label update."
+    # The payload is built by `families`, because that is where the redaction rule lives.
+    await broadcast_member_updated(db, user.id, trip)
     return await build_user_out(db, user, trip)
 
 
@@ -117,6 +120,7 @@ async def upload_avatar(
 
     await db.commit()
     await db.refresh(user)
+    await broadcast_member_updated(db, user.id, trip)
     return await build_user_out(db, user, trip)
 
 
@@ -136,6 +140,7 @@ async def delete_avatar(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> UserO
         await db.delete(attachment)
     await db.commit()
     await db.refresh(user)
+    await broadcast_member_updated(db, user.id, trip)
     return await build_user_out(db, user, trip)
 
 

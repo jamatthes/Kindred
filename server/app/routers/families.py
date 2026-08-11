@@ -96,8 +96,14 @@ def _family_query():
     each of those would be a `MissingGreenlet` on an async session — a loud failure, but one
     discovered at runtime by whoever adds the next route.
     """
-    return select(Family).options(
-        selectinload(Family.members).selectinload(FamilyMember.user)
+    return (
+        select(Family)
+        .options(selectinload(Family.members).selectinload(FamilyMember.user))
+        # `populate_existing` because almost every call here is a re-read *after* a write.
+        # The session has `expire_on_commit=False`, so without this a `Family` already in the
+        # identity map keeps the `members` collection it was loaded with — and a route that
+        # had just added a membership row would re-read the family and not find it.
+        .execution_options(populate_existing=True)
     )
 
 
@@ -361,11 +367,7 @@ async def create_my_family(
     )
     detail = _detail(family, viewer, trip)
     await ws.broadcast(trip.id, "family.created", {"family": _wire(family)})
-    await ws.broadcast(
-        trip.id,
-        "member.joined",
-        {"family_id": str(family.id), "member": detail.members[0].model_dump(mode="json")},
-    )
+    await broadcast_member_joined(db, family.id, user.id, trip)
     return detail
 
 
@@ -677,6 +679,52 @@ def _wire(family: Family) -> dict:
     refetches `GET /families/{id}`.
     """
     return family_out(family).model_dump(mode="json")
+
+
+async def broadcast_member_updated(
+    db: AsyncSession, user_id: uuid.UUID, trip: Trip | None
+) -> None:
+    """Announce that a person changed — a name, an avatar, or a visibility switch.
+
+    Exported because the profile routes (`routers/me.py`) change the same person the member
+    lists and map labels render, and a badge that only updates for the person who changed it
+    is worse than one that never updates at all. They must not build the payload themselves:
+    `member.updated` reaches the whole trip room, and the redaction lives in `_member_wire`.
+
+    Silent when the user is in no family — there is no room to announce to, and someone
+    mid-onboarding editing their name is not an event anybody is waiting for.
+    """
+    if trip is None:
+        return
+    member = await db.scalar(
+        select(FamilyMember)
+        .where(FamilyMember.user_id == user_id)
+        .options(selectinload(FamilyMember.family).selectinload(Family.members))
+    )
+    if member is None:
+        return
+    await ws.broadcast(
+        trip.id,
+        "member.updated",
+        {
+            "family_id": str(member.family_id),
+            "member": _member_wire(member.family, user_id, trip),
+        },
+    )
+
+
+async def broadcast_member_joined(
+    db: AsyncSession, family_id: uuid.UUID, user_id: uuid.UUID, trip: Trip | None
+) -> None:
+    """Announce a new member, so lists and counts update without a reload (FM-12)."""
+    if trip is None:
+        return
+    family = await _load_family(db, family_id)
+    await ws.broadcast(
+        trip.id,
+        "member.joined",
+        {"family_id": str(family_id), "member": _member_wire(family, user_id, trip)},
+    )
 
 
 def _member_wire(family: Family, user_id: uuid.UUID, trip: Trip | None) -> dict:

@@ -61,6 +61,7 @@ from app.models import (
     is_invite_usable,
 )
 from app.routers.auth import _set_auth_cookies, build_user_out
+from app.routers.families import broadcast_member_joined
 from app.schemas.common import ApiError, forbidden
 from app.schemas.family import derive_display_name
 from app.schemas.invite import (
@@ -444,6 +445,12 @@ async def accept_invite(
         next_step="app" if family is not None else "setup_family",
     )
     await db.commit()
+
+    if family is not None:
+        # FM-12: member lists and counts update without a reload. Emitted after the commit,
+        # never before — a client that refetches on receipt must not be able to read state
+        # older than the event announcing it (`app/ws.py`).
+        await broadcast_member_joined(db, family.id, user.id, trip)
 
     _set_auth_cookies(response, token=raw_session, csrf_token=auth_session.csrf_token)
     return result
