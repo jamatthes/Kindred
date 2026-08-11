@@ -80,38 +80,9 @@
   stroke-width: 2;
 }
 
-/* ---- HeatMatrix cells ----
-   Tinted with the sanctioned recipe from tokens.components.css: color-mix() of the
-   semantic ramp token onto the surface, never the ramp at full saturation. The numeric
-   value is always drawn on top in `.k-chart__cell-value` — colour never carries the
-   value alone. */
-.k-chart__cell-value {
-  fill: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-.k-chart__cell-value--muted {
-  fill: var(--color-text-faint);
-}
-.k-chart__cell--0 { fill: color-mix(in srgb, var(--scale-pref-0) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--1 { fill: color-mix(in srgb, var(--scale-pref-1) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--2 { fill: color-mix(in srgb, var(--scale-pref-2) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--3 { fill: color-mix(in srgb, var(--scale-pref-3) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--4 { fill: color-mix(in srgb, var(--scale-pref-4) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--5 { fill: color-mix(in srgb, var(--scale-pref-5) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--6 { fill: color-mix(in srgb, var(--scale-pref-6) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--7 { fill: color-mix(in srgb, var(--scale-pref-7) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--8 { fill: color-mix(in srgb, var(--scale-pref-8) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--9 { fill: color-mix(in srgb, var(--scale-pref-9) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--10 { fill: color-mix(in srgb, var(--scale-pref-10) var(--mix-tint-strong), var(--color-surface)); }
-.k-chart__cell--empty {
-  fill: var(--color-surface-sunken);
-}
-.k-chart__hatch-line {
-  stroke: var(--color-border-strong);
-  stroke-width: 2;
-}
+/* HeatMatrix cell styling lives in HeatMatrix.css — it renders a real HTML table, not
+   SVG, so it can genuinely stick its headers during scroll (see that file's header
+   comment). */
 
 /* ---- DistributionStrip ---- */
 .k-chart__seg--up {

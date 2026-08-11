@@ -3,11 +3,18 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { Styleguide } from './Styleguide'
 
 describe('Styleguide', () => {
-  it('renders every widget with its accessible role', () => {
+  it('renders every SVG widget with its accessible role', () => {
     render(<Styleguide />)
     const charts = screen.getAllByRole('img')
-    // 6 widgets with realistic data + 5 empty-state variants.
-    expect(charts.length).toBeGreaterThanOrEqual(11)
+    // 6 widgets with realistic data (HeatMatrix's real <table> isn't one of them — see
+    // HeatMatrix.tsx) + 5 empty-state variants (HeatMatrix's *empty* state still renders
+    // the shared ChartEmptyState, which is role="img").
+    expect(charts.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('renders HeatMatrix as a real, accessible table', () => {
+    render(<Styleguide />)
+    expect(screen.getAllByRole('table').length).toBeGreaterThanOrEqual(1)
   })
 
   it('has a page-scoped theme toggle that does not touch the document root', () => {

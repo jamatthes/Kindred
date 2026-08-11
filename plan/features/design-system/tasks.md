@@ -137,22 +137,26 @@ without the page scrolling horizontally.
 
 ## Phase 7 — Chart widget library
 
-- [ ] Create `web/src/charts/` with shared types and a header comment listing the props that
+- [x] Create `web/src/charts/` with shared types and a header comment listing the props that
       deliberately do not exist (`baseline`, `yMin`, `gridlines`, `shadow`, `depth`, `gradientFill`)
       and citing `plan/design-system.md`.
-- [ ] Shared API: `insight` title prop with good/bad examples in its doc comment, `ariaSummary` with
-      auto-generation, responsive sizing, `role="img"` wrapper.
+- [x] Shared API: `insight` title prop with good/bad examples in its doc comment, `ariaSummary` with
+      auto-generation, responsive sizing, `role="img"` wrapper. (`HeatMatrix` is the documented
+      exception: it's a real `<table>`, not SVG, so it carries its accessible structure natively
+      instead of a `role="img"` wrapper — see `HeatMatrix.tsx`'s header comment.)
 - [ ] Three separate palette token sets (categorical / sequential / diverging) with no caller-supplied
-      `colors` prop.
-- [ ] `HeatMatrix` — cells filled from `--scale-pref-N`, **number printed in every cell**, null
+      `colors` prop. (Categorical `--family-N` and diverging `--scale-pref-N` exist and are usable;
+      no widget consumes a distinct sequential single-hue ramp yet, and no such token set is defined
+      separately from the status colours.)
+- [x] `HeatMatrix` — cells filled from `--scale-pref-N`, **number printed in every cell**, null
       rendered as "—" not zero, sticky row/column headers.
-- [ ] `AvgBar` — horizontal, always zero-based, value printed at bar end, no gridlines.
-- [ ] `SpreadDots` — full 0–10 axis always, one dot per member, collision jitter, mean tick.
-- [ ] `MiniBar` / `Sparkline` — compact; `Sparkline` picks aspect ratio targeting a ~45° trend slope
+- [x] `AvgBar` — horizontal, always zero-based, value printed at bar end, no gridlines.
+- [x] `SpreadDots` — full 0–10 axis always, one dot per member, collision jitter, mean tick.
+- [x] `MiniBar` / `Sparkline` — compact; `Sparkline` picks aspect ratio targeting a ~45° trend slope
       and refuses to draw a trend from a single point.
-- [ ] `DistributionStrip` — stacked segments each carrying an icon and a count label.
-- [ ] Per-widget empty states ("No votes yet"), not empty axis frames.
-- [ ] Confirm `package.json` gained **no** charting dependency.
+- [x] `DistributionStrip` — stacked segments each carrying an icon and a count label.
+- [x] Per-widget empty states ("No votes yet"), not empty axis frames.
+- [x] Confirm `package.json` gained **no** charting dependency.
 
 **Verify:** `npm test` — assert `baseline` is not in any bar widget's prop types; assert null data
 renders "—" and not a zero bar; assert `AvgBar` axis starts at zero for a dataset ranging 7–9; snapshot
@@ -162,16 +166,21 @@ each widget in both themes. Confirm `npm ls` shows no chart library.
 
 ## Phase 8 — Styleguide route
 
-- [ ] Authenticated `/styleguide` route, not linked from navigation, no Storybook dependency.
-- [ ] Token sections: colour swatches with names and computed values, spacing scale, type ramp, radii,
+- [x] Authenticated `/styleguide` route, not linked from navigation, no Storybook dependency.
+- [x] Token sections: colour swatches with names and computed values, spacing scale, type ramp, radii,
       shadows.
-- [ ] Every primitive in every state, including all six Field states.
-- [ ] Preference ramp shown three ways side by side — swatches, a `HeatMatrix`, and map-style tints —
+- [ ] Every primitive in every state, including all six Field states. (Only what exists in
+      `web/src/app/ui/` and `web/src/design/` today is shown — `Button`, `Field`, `Banner`, `Spinner`,
+      `Toast`, `Skeleton`, `BottomSheet`, `IdentityBadge`. `Card`, `Table`, a general-purpose
+      `EmptyState`, and a dedicated `Chip` are not implemented yet, so they aren't in the gallery.
+      Field's hover state has no static representation — the gallery notes that it must be checked by
+      tabbing/pointing manually. Real focus is demonstrated with an actually-focused field.)
+- [x] Preference ramp shown three ways side by side — swatches, a `HeatMatrix`, and map-style tints —
       so the three views can be confirmed identical.
-- [ ] Every chart widget with realistic sample data, plus each one's empty and single-point states.
+- [x] Every chart widget with realistic sample data, plus each one's empty and single-point states.
 - [ ] Loading, empty, and error states for lists and panels.
-- [ ] Page-scoped theme toggle setting `data-theme` locally.
-- [ ] Contrast readout beside each colour pairing showing the computed ratio and pass/fail.
+- [x] Page-scoped theme toggle setting `data-theme` locally.
+- [x] Contrast readout beside each colour pairing showing the computed ratio and pass/fail.
 - [ ] Doubled-length-string test rendering for Button, Field label, and EmptyState.
 
 **Verify:** Open `/styleguide` in both themes and confirm every contrast readout passes AA. Confirm
