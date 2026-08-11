@@ -28,16 +28,32 @@
 
   /* --- Brand + status hues --- */
   --coral-300: #F2A08B;
-  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  /* brand accent (sunset coral). Darkened from the original #D95940 (a step below
+     --coral-600) so white text drawn on it — primary button labels, the wordmark's large
+     text — clears WCAG AA (4.57:1; #D95940 was 3.85:1). Same hue/saturation, lightness
+     only. Deliberately still visually distinct from --coral-600, if narrowly, so a hover
+     state reads as a hover state. */
+  --coral-500: #D1452A;
   --coral-600: #C24A33;
   --coral-700: #A03C2A;
   --green-500: #2E8540;
+  /* AA-safe step for status text drawn on its own `-soft` tint (light theme only —
+     `--green-400` already clears AA on the dark `-soft` tints). #2A7B3B on
+     --color-success-soft is 4.54:1; --green-500 was 3.99:1. */
+  --green-600: #2A7B3B;
   --green-400: #5FAE72;
   --amber-500: #B45309;
+  /* Same AA-on-soft-tint step as --green-600, see above. #B05109 on
+     --color-warning-soft is 4.54:1; --amber-500 was 4.37:1. */
+  --amber-600: #B05109;
   --amber-400: #D9A441;
   --red-500: #B91C1C;
   --red-400: #E5766B;
   --blue-500: #2563EB;
+  /* Same AA-on-soft-tint step as --green-600/--amber-600. Kept separate from --blue-500
+     because that primitive is also --color-focus-ring's source, which this fix must not
+     touch. #2160EB on --color-info-soft is 4.53:1; --blue-500 was 4.39:1. */
+  --blue-600: #2160EB;
   --blue-400: #7CA7F5;
 
   /* --- Family colors (8 slots, used by name: family-1..8) --- */

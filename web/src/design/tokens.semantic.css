@@ -32,10 +32,17 @@
   --color-accent-active: var(--coral-700);
   --color-accent-soft: #FBEAE5;
 
-  --color-success: var(--green-500);
-  --color-warning: var(--amber-500);
+  /* success/warning/info point at the AA-on-soft-tint step (tokens.primitives.css),
+     not the base 500 hue — that's what clears 4.5:1 for the text these tokens draw over
+     their own `-soft` background (chips, banners). --color-danger already passed
+     unchanged (5.35:1) so --red-500 stays as-is. --color-focus-ring stays on --blue-500,
+     not --blue-600: it's drawn as a 2px outline, not text-on-tint, and this fix is scoped
+     to the four AA failures the styleguide's contrast readout found, not a general
+     status-colour retune. */
+  --color-success: var(--green-600);
+  --color-warning: var(--amber-600);
   --color-danger: var(--red-500);
-  --color-info: var(--blue-500);
+  --color-info: var(--blue-600);
   --color-success-soft: #E4F2E7;
   --color-warning-soft: #F8EEDD;
   --color-danger-soft: #F9E5E5;

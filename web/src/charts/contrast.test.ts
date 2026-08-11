@@ -35,6 +35,40 @@ describe('contrastRatio', () => {
   })
 })
 
+// Regression guard for the four light-theme AA failures the styleguide's live readout
+// found (jsdom does not resolve chained CSS custom properties — see StyleguideTokens.tsx
+// — so this is the only place these specific token *values* can be locked in by an
+// automated test; the styleguide readout itself is still the source of truth in a real
+// browser). Every literal here is the current tokens.semantic.css / tokens.primitives.css
+// light-theme value it names — update both together if either changes.
+describe('light-theme token contrast (design-system contrast fixes)', () => {
+  it('white text on --color-accent (primary button labels, wordmark) clears AA', () => {
+    const ratio = contrastRatio('#FFFFFF', '#D1452A') // token-check-ignore
+    expect(ratio).not.toBeNull()
+    expect(ratio!).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('--color-success on --color-success-soft clears AA', () => {
+    const ratio = contrastRatio('#2A7B3B', '#E4F2E7') // token-check-ignore
+    expect(ratio!).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('--color-warning on --color-warning-soft clears AA', () => {
+    const ratio = contrastRatio('#B05109', '#F8EEDD') // token-check-ignore
+    expect(ratio!).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('--color-info on --color-info-soft clears AA', () => {
+    const ratio = contrastRatio('#2160EB', '#E4EDFC') // token-check-ignore
+    expect(ratio!).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('--color-danger on --color-danger-soft still clears AA, unchanged by this fix', () => {
+    const ratio = contrastRatio('#B91C1C', '#F9E5E5') // token-check-ignore
+    expect(ratio!).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
 describe('aaLevel', () => {
   it('passes AA at 4.5:1 or above', () => {
     expect(aaLevel(4.5)).toBe('AA')
