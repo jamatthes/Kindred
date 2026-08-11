@@ -53,7 +53,8 @@ inverted date range both raise `422`.
 
 ## Phase 4 — Trip and stage router
 
-- [ ] `routers/admin.py`, every route with `Depends(require_main_admin)`.
+- [ ] `routers/admin.py`, every route with `Depends(require_organiser)` (owner OR organiser),
+      except the Organisers routes added in Phase 6a, which use `Depends(require_owner)`.
 - [ ] `GET`/`PATCH /admin/trip`; the `PATCH` also carries
       `require_stage("planning", "holiday")`.
 - [ ] `POST /admin/trip/stage` — **no** `require_stage`, per the carve-out in
@@ -82,7 +83,8 @@ pair plus the concurrency case.
       returning, so the editor is never partially blank.
 
 **Verify:** in `/docs` — `GET /trip/category-settings` as an ordinary member returns five rows;
-`PUT /admin/category-settings` as that member returns `403`; as the main admin it succeeds.
+`PUT /admin/category-settings` as that member returns `403`; as the owner or an organiser it
+succeeds.
 Delete one row directly in psql, re-read, and confirm it is recreated with its default.
 
 ## Phase 6 — Overview, reset password, remove user
@@ -94,7 +96,7 @@ Delete one row directly in psql, re-read, and confirm it is recreated with its d
       that user's sessions, return the plaintext exactly once. Never log it.
 - [ ] `DELETE /admin/users/{id}` with `require_stage("planning", "holiday")` — delete the
       `family_members` row, revoke sessions, keep the `users` row and all authored content.
-- [ ] Guards: `cannot_target_self` on both routes; `last_family_admin` on removal, reusing the
+- [ ] Guards: `cannot_target_self` on both routes; `last_family_head` on removal, reusing the
       same check `families` uses so the two cannot diverge.
 - [ ] Send `session.revoked` to the target's own socket, then close it.
 
@@ -103,6 +105,30 @@ temporary password, then confirm that member's existing session returns `401` an
 in with the temporary password lands on the forced-change screen. Remove a member and confirm
 in psql that their `users` row and any authored rows still exist while `family_members` is
 gone. `pytest server/tests/test_admin_users.py`.
+
+## Phase 6a — Organiser management (AC-13)
+
+- [ ] `GET /admin/organisers` — `require_organiser`, lists `trip_organisers` joined to
+      `users`/`family_members` for `OrganiserOut` per `design.md`.
+- [ ] `POST /admin/organisers` — `require_owner`, `{user_id}`, inserts a `trip_organisers` row
+      with `granted_by = current_user`. Idempotent: appointing an existing organiser again
+      returns `200` with the existing row, not a new one or a `409`.
+- [ ] `DELETE /admin/organisers/{user_id}` — `require_owner`. Returns `409
+      cannot_demote_owner` if `user_id == trips.owner_user_id`; `404` if the user is not
+      currently an organiser; otherwise deletes the row. Does **not** touch
+      `family_members.role` and does **not** revoke sessions or emit `session.revoked` —
+      demotion is a permission change, not an access revocation.
+- [ ] Emit `organiser.appointed` / `organiser.demoted` to the whole trip room on each mutation
+      (**PROPOSED ADDITIONs**, add to `plan/architecture.md`'s event list in the same commit as
+      Phase 8).
+
+**Verify:** in `/docs` — as an organiser, `GET /admin/organisers` succeeds and `POST`/`DELETE`
+both return `403`. As the owner, appoint a member and confirm they appear in the list with the
+owner's name as `granted_by`; appoint them again and confirm `200` with no duplicate row in
+psql. Demote them and confirm `family_members.role` is unchanged and their existing session
+still passes `require_member` on an ordinary route. Attempt `DELETE
+/admin/organisers/{owner_user_id}` and confirm `409 cannot_demote_owner`.
+`pytest server/tests/test_admin_organisers.py`.
 
 ## Phase 7 — Instance settings, Google status, stats
 
@@ -135,8 +161,11 @@ container logs or a network capture). Press it twice inside a minute and get `42
       so one client handler serves both.
 - [ ] Emit `session.revoked` to the target user's own socket on reset and removal, then close
       it.
-- [ ] Add `trip.updated`, `category_settings.updated` and `session.revoked` to
-      `plan/architecture.md`'s event list as PROPOSED ADDITIONs.
+- [ ] Emit `organiser.appointed` / `organiser.demoted` to the whole trip room (see Phase 6a) —
+      **no** `session.revoked` on demotion.
+- [ ] Add `trip.updated`, `category_settings.updated`, `session.revoked`,
+      `organiser.appointed` and `organiser.demoted` to `plan/architecture.md`'s event list as
+      PROPOSED ADDITIONs.
 
 **Verify:** `pytest server/tests/test_admin_ws.py` — a transition delivers `stage.changed` to a
 connected member's socket; a password reset delivers `session.revoked` to that user only and
@@ -146,8 +175,8 @@ closes their connection.
 
 - [ ] `web/src/features/admin/` with the section layout from `design.md`: single readable
       column, sticky section index on desktop, collapsed jump menu on mobile.
-- [ ] Nav rail / tab bar entry rendered only for the main admin; a direct-URL access screen
-      for everyone else.
+- [ ] Nav rail / tab bar entry rendered for the owner and for organisers; a direct-URL access
+      screen for everyone else.
 - [ ] **Trip** section — the four fields with all six states, explicit `Save` disabled until
       dirty, inline date validation, the "not decided yet" placeholder while in Planning.
 - [ ] `/setup/trip` route (AC-0) outside the app shell, rendered only when foundation's
@@ -158,14 +187,15 @@ closes their connection.
       server-side and is the same predicate foundation's gate reads — exported from one place,
       not reimplemented in the gate.
 - [ ] Seed the trip with `name = ''` and `timezone` from the container's `TZ` (falling back to
-      `UTC`), so a fresh install gates the main admin instead of shipping a placeholder name
-      into the app header.
+      `UTC`), so a fresh install gates the owner instead of shipping a placeholder name into
+      the app header.
 
 **Verify (AC-0):** on a fresh stack, log in as `admin`/`admin`, change the password, and confirm
 you land on `/setup/trip` rather than home. Close the tab, log in again, and confirm you land
 there again with nothing half-written. Submit a name and confirm you arrive on home with that
-name in the header and `next_step: "app"`. Confirm a non-admin hitting `/setup/trip` directly
-renders their own `next_step` screen and that `PATCH /admin/trip` returns `403` for them.
+name in the header and `next_step: "app"`. Confirm someone who is neither owner nor organiser
+hitting `/setup/trip` directly renders their own `next_step` screen and that `PATCH
+/admin/trip` returns `403` for them.
 - [ ] **Stage** section — current stage with its description, the forward primary action, the
       visually separated backward correction, disabled state with the blocker reason in words,
       and the stage-history table.
@@ -177,7 +207,7 @@ renders their own `next_step` screen and that `PATCH /admin/trip` returns `403` 
       sort, sticky header and first column, tabular right-aligned numerics, full-row targets),
       one search box filtering both, status chips as icon plus text.
 - [ ] Row actions with real confirms; both actions disabled with an explanatory tooltip on the
-      main admin's own row.
+      owner's own row.
 - [ ] Reset-password result as a copy-once block with a copy toast and the "shown only once"
       line.
 - [ ] **Instance** section — name field, registration radio group with the disabled options
@@ -186,11 +216,17 @@ renders their own `next_step` screen and that `PATCH /admin/trip` returns `403` 
       the one-minute countdown, status chips as icon plus word, inline hints on failures, and
       the never-checked empty state.
 - [ ] **Stats** section — a grid of labelled tabular numbers, zeroes shown, no chart.
+- [ ] **Organisers** section (AC-13) — rendered for the owner only (organisers see every other
+      section but not this one); the list, the `Add organiser` search/select over the member
+      universe, and the `Remove` confirm naming the effect without session-revocation language.
 - [ ] Skeletons for each section while loading; spinners for inline saves.
 
-**Verify:** in the browser as the main admin — walk every section, save each, and confirm the
-values persist across a reload. Confirm a member signed in elsewhere cannot see the `Admin`
-entry and gets the access screen at the URL. Press `Run check` and confirm the countdown.
+**Verify:** in the browser as the owner — walk every section including Organisers, save each,
+and confirm the values persist across a reload. As an organiser, confirm every section but
+Organisers renders. Confirm a plain member signed in elsewhere cannot see the `Admin` entry and
+gets the access screen at the URL. Press `Run check` and confirm the countdown. Appoint a
+member as an organiser from the Organisers section and confirm their `Admin` nav entry appears
+live in a second open browser without a reload.
 
 ## Phase 10 — App-wide stage reception
 
@@ -209,27 +245,34 @@ confirm the controls return.
 
 ## Phase 11 — Tests
 
-- [ ] `test_admin_permissions.py` — every route in this feature returns `403` for a family
-      admin and for a member.
+- [ ] `test_admin_permissions.py` — every route in this feature returns `403` for a head/spouse
+      and for a member; every route except the Organisers routes succeeds for an organiser; the
+      Organisers `GET` succeeds for an organiser but its `POST`/`DELETE` return `403` for one.
 - [ ] `test_admin_stage.py` — all legal and illegal transitions, blockers, the concurrency
-      conditional update, history rows written with the correct direction.
+      conditional update, history rows written with the correct direction, both by the owner
+      and by an organiser.
 - [ ] `test_admin_stage_freeze.py` — with the trip in `end`, assert a representative mutating
       route from **each** completed feature returns `409 stage_forbidden`, and that
       `POST /admin/trip/stage` still succeeds. Extend this test as each later feature lands —
       it is the guard that keeps the freeze real.
 - [ ] `test_admin_users.py` — reset (session revocation, forced change, self-target refusal,
-      plaintext returned once), removal (content retained, `last_family_admin` refusal,
+      plaintext returned once), removal (content retained, `last_family_head` refusal,
       End-stage refusal).
+- [ ] `test_admin_organisers.py` — appointment (idempotent re-appoint), demotion (family role
+      untouched, session untouched, no `session.revoked`), owner cannot be demoted, non-owner
+      organiser gets `403` on `POST`/`DELETE` but `200` on `GET`, demoted organiser immediately
+      fails `require_organiser` on the next request.
 - [ ] `test_category_settings.py` — member read allowed, member write refused, self-healing
       read, `existing_vote_count`.
 - [ ] `test_google_status.py` — all five classifications with the fake, the rate limit, and an
       assertion that `GET /admin/google-status` performs no call.
 - [ ] Vitest: the stage confirm dialogs render the right consequence copy, the disabled
-      forward action shows its blocker, the console is not rendered for non-admins, and the
-      Google status table renders each status with text and not colour alone.
+      forward action shows its blocker, the console is not rendered for a non-owner/non-organiser,
+      the Organisers section is not rendered for an organiser, and the Google status table
+      renders each status with text and not colour alone.
 
 **Verify:** `cd server && pytest` green; `cd web && npm test` green. Requirements AC-1 to
-AC-12 each map to at least one test or a documented manual step above.
+AC-13 each map to at least one test or a documented manual step above.
 
 ## Hand-off notes
 
@@ -240,3 +283,7 @@ AC-12 each map to at least one test or a documented manual step above.
   feature that adds a mutating route adds a line to it.
 - Stats counts are stubbed at zero for unbuilt features; each later feature replaces its own
   stub as part of its tasks.
+- `require_owner` and `require_organiser` are `families`' dependencies (see that feature's
+  tasks); this feature is their first and primary consumer for trip-level gating. If those
+  dependency names land differently than assumed here, update Phase 4 onward and the guard
+  columns in `design.md` in the same commit.

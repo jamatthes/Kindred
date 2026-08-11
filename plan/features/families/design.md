@@ -111,9 +111,9 @@ that manage it belong to `admin-console` (FM-17).
 
 ### `invites` (created here — see NOTE)
 
-> NOTE (implementation, Phase 1): `invites` and `attachments` are **created** by migration
-> `0002`, not altered. `plan/architecture.md` lists both in the schema, but foundation's
-> `0001` created only the tables it actually used, so neither existed. Consequences: the
+> NOTE (implementation, Phase 1): `invites` and `attachments` are **created** by the schema
+> migration, not altered onto an existing table. `plan/architecture.md` lists both, but
+> foundation created only the tables it actually used, so neither existed. Consequences: the
 > columns `tasks.md` says to "add" to `invites` are part of the create, and there is no
 > plaintext `token` column to replace — the table is born storing only `token_hash`.
 > `attachments` is created with the columns `architecture.md` names plus `thumb_path` and
@@ -123,7 +123,7 @@ that manage it belong to `admin-console` (FM-17).
 > NOTE (implementation, Phase 1): `families.color` is **NOT NULL**. `0001` created it
 > nullable; a family with no colour slot cannot be drawn on the map or in any list, and the
 > `(trip_id, color)` unique index would not constrain nulls in any case. The table is empty
-> when `0002` runs — foundation seeds no family — so there is nothing to backfill.
+> when this ships — foundation seeds no family — so there is nothing to backfill.
 
 `family_id` (nullable — null means the invite creates a new family), `token`, `expires_at`,
 `created_by`, `used_by` (nullable).
@@ -141,7 +141,7 @@ The raw token is shown once at creation and never retrievable afterwards — the
 An invite is usable when `used_by is null and revoked_at is null and expires_at > now()`.
 
 **PROPOSED ADDITION — `invites.mode`** (text: `join` / `create_family`, not null, default
-`join`), added by migration `0003`. This section says a null `family_id` means "creates a new
+`join`). This section says a null `family_id` means "creates a new
 family", and the `invites` schema entry says `family_id` is `ON DELETE SET NULL` so a deleted
 family leaves the invite reportable as `invite_family_missing`. Those cannot both be true:
 deleting a family turns its outstanding join invites into family-founding ones, and accepting

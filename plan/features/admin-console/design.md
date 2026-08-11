@@ -4,12 +4,18 @@
 `plan/features/foundation/`, `plan/features/families/`, and `requirements.md` in this
 directory.
 
+> NOTE: role hierarchy updated 2026-08-11 — "main admin" split into **owner** (`trips.owner_user_id`,
+> the only role that manages organisers) and **organiser** (`trip_organisers`, every other
+> cross-family power). "Family admin" is now **head of family** / **spouse**
+> (`family_members.role`), which this feature reads but does not manage. See
+> `plan/overview.md`'s Roles section and decision log.
+
 ## Data model
 
 ### `trips` (exists in `plan/architecture.md`)
 
 `name`, `stage` (`planning` / `holiday` / `end`), `start_date`, `end_date` (nullable in
-planning), `owner_user_id` (the main admin), `timezone`. This feature owns writes to all of
+planning), `owner_user_id` (the owner), `timezone`. This feature owns writes to all of
 them.
 
 ### `trip_category_settings` (exists)
@@ -61,19 +67,27 @@ out-of-scope list).
 Read for the overview; `users.must_change_password` and `sessions.revoked_at` are written by
 the password reset. `family_members` rows are deleted by user removal.
 
+### `trip_organisers` (owned by `families`; this feature writes to it)
+
+`trip_id`, `user_id`, `granted_by` (the owner), `created_at`. One row per organiser. This
+feature is the only place that writes it — Section 8 (Organisers) appoints and demotes by
+inserting and deleting rows here. There is no `role` column: membership in this table *is* the
+organiser role, and removing the row is the entire demotion.
+
 ## REST endpoints
 
-All under `/api/v1`. Every route in this feature carries `Depends(require_main_admin)`.
+All under `/api/v1`. Every route in this feature carries `Depends(require_organiser)` (owner OR
+organiser) except the Organisers section's own routes, which carry `Depends(require_owner)`.
 Mutating routes additionally carry a stage guard as noted.
 
 ### Trip
 
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
-| GET | `/admin/trip` | — | `TripAdminOut` | main admin |
-| PATCH | `/admin/trip` | `{name?, start_date?, end_date?, timezone?}` | `TripAdminOut` | main admin + `require_stage("planning","holiday")` |
-| POST | `/admin/trip/stage` | `{to_stage, confirm: true}` | `TripAdminOut` | main admin only — **no stage guard**, by design |
-| GET | `/admin/trip/stage-history` | — | `[StageTransitionOut]` | main admin |
+| GET | `/admin/trip` | — | `TripAdminOut` | `require_organiser` |
+| PATCH | `/admin/trip` | `{name?, start_date?, end_date?, timezone?}` | `TripAdminOut` | `require_organiser` + `require_stage("planning","holiday")` |
+| POST | `/admin/trip/stage` | `{to_stage, confirm: true}` | `TripAdminOut` | `require_organiser` — **no stage guard**, by design |
+| GET | `/admin/trip/stage-history` | — | `[StageTransitionOut]` | `require_organiser` |
 
 `TripAdminOut`: `{id, name, stage, start_date, end_date, timezone, owner_user_id, can_advance_to, can_revert_to, blockers: [str], setup_complete: bool}`.
 
@@ -81,7 +95,7 @@ Mutating routes additionally carry a stage guard as noted.
 predicate foundation's `next_step` uses to decide `setup_trip` (F-13), computed in one place and
 exposed so the console and the gate cannot drift. It is deliberately **not** `start_date` and
 `end_date`: those are legitimately unknown during Planning, and requiring them to finish setup
-would block the main admin on a decision the trip has not made yet.
+would block the owner on a decision the trip has not made yet.
 
 ### Trip setup (AC-0)
 
@@ -92,8 +106,10 @@ screen that wrote through a different code path would be a second place for vali
 The only additions AC-0 needs:
 
 - The screen is reached solely through foundation's `next_step: "setup_trip"`. It is not a
-  route the main admin can navigate to afterwards; once `setup_complete` is true the gate
-  returns `app` and the same fields are edited in Section 1 of the console.
+  route the owner can navigate to afterwards; once `setup_complete` is true the gate
+  returns `app` and the same fields are edited in Section 1 of the console. The gate reaches
+  this screen for the owner only — organisers never see `next_step: "setup_trip"`, matching
+  `requirements.md`'s AC-0.
 - `PATCH /admin/trip` keeps `require_stage("planning","holiday")`. A trip that has never been
   set up is by definition in Planning, so the guard is satisfied and no exemption is needed.
 - The seeded trip is created with `name = ''` and `timezone` from the container's `TZ`. The
@@ -119,8 +135,8 @@ else is `409 illegal_transition`.
 
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
-| GET | `/admin/category-settings` | — | `[CategorySettingOut]` | main admin |
-| PUT | `/admin/category-settings` | `[{category, voting_mode}]` | `[CategorySettingOut]` | main admin + `require_stage("planning","holiday")` |
+| GET | `/admin/category-settings` | — | `[CategorySettingOut]` | `require_organiser` |
+| PUT | `/admin/category-settings` | `[{category, voting_mode}]` | `[CategorySettingOut]` | `require_organiser` + `require_stage("planning","holiday")` |
 
 `CategorySettingOut`: `{category, voting_mode, existing_vote_count}`. `existing_vote_count`
 drives the "votes already exist" warning in AC-5 and is computed from `poll_scores` for
@@ -138,18 +154,27 @@ served by a separate non-admin route owned by this feature:
 
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
-| GET | `/admin/overview` | `?q=` | `{families: [FamilyOut], members: [AdminMemberOut]}` | main admin |
-| POST | `/admin/users/{id}/reset-password` | `{confirm: true}` | `{temporary_password}` | main admin |
-| DELETE | `/admin/users/{id}` | — | `204` | main admin + `require_stage("planning","holiday")` |
+| GET | `/admin/overview` | `?q=` | `{families: [FamilyOut], members: [AdminMemberOut]}` | `require_organiser` |
+| POST | `/admin/users/{id}/reset-password` | `{confirm: true}` | `{temporary_password}` | `require_organiser` |
+| DELETE | `/admin/users/{id}` | — | `204` | `require_organiser` + `require_stage("planning","holiday")` |
 
-`AdminMemberOut`: `{user_id, username, first_name, last_name, display_name, initials, avatar_thumb_url, family: {id, name, color}|null, role, must_change_password, last_login_at, created_at, is_main_admin}`.
+`AdminMemberOut`: `{user_id, username, first_name, last_name, display_name, initials, avatar_thumb_url, family: {id, name, color}|null, family_role, is_owner, is_organiser, must_change_password, last_login_at, created_at}`.
+
+`family_role` is the `family_members.role` value (`head` / `spouse` / `member`) or `null` for
+someone with no family. `is_owner` and `is_organiser` are independent booleans, not a single
+enum, because the two kinds of role are independent (`plan/overview.md`'s Roles section) — a
+person can be `is_organiser: true` and `family_role: "head"` at once. The overview table
+renders these three fields into the single "Owner / Organiser / Head / Spouse / Member" role
+column described in `requirements.md` AC-6, showing every applicable label (e.g. an organiser
+who heads their family shows "Organiser · Head"). `is_main_admin` is retired along with the
+role it named.
 
 The identity fields come from `families`' shared serialiser, not from a second implementation
 here — the console must show the same badge and the same name as the map and the member list.
 
-`AdminMemberOut` deliberately carries **no** location-sharing fields. The main admin edits
-those through the family panel in `families` (FM-15), which is the same rule the rest of this
-console follows: family editing lives there and is linked to, not duplicated here.
+`AdminMemberOut` deliberately carries **no** location-sharing fields. The owner or an organiser
+edits those through the family panel in `families` (FM-15), which is the same rule the rest of
+this console follows: family editing lives there and is linked to, not duplicated here.
 
 **PROPOSED ADDITION — `users.last_login_at`** (timestamptz, nullable). AC-6 asks whether a
 member has ever logged in; nothing in the schema records it. Written by foundation's login
@@ -177,8 +202,8 @@ requires attribution to survive. The user record is retained with no family, whi
 
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
-| GET | `/admin/settings` | — | `{instance_name, registration_open, invite_only}` | main admin |
-| PATCH | `/admin/settings` | `{instance_name?, registration_open?, invite_only?}` | same | main admin |
+| GET | `/admin/settings` | — | `{instance_name, registration_open, invite_only}` | `require_organiser` |
+| PATCH | `/admin/settings` | `{instance_name?, registration_open?, invite_only?}` | same | `require_organiser` |
 
 No stage guard: instance settings are not trip data. `invite_only` accepts only `true` in v1;
 `false` is rejected with `422` and a message that open registration is not implemented. The
@@ -189,8 +214,8 @@ field exists so the policy can widen later without a migration (see the NOTE in
 
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
-| GET | `/admin/google-status` | — | `GoogleStatusOut` | main admin |
-| POST | `/admin/google-status/check` | — | `GoogleStatusOut` | main admin, rate-limited to 1/min |
+| GET | `/admin/google-status` | — | `GoogleStatusOut` | `require_organiser` |
+| POST | `/admin/google-status/check` | — | `GoogleStatusOut` | `require_organiser`, rate-limited to 1/min |
 
 `GET` reads the stored `settings` value and performs **no** external call. `POST` performs the
 probe and stores the result.
@@ -207,12 +232,43 @@ probe and stores the result.
 
 | Method | Path | Response | Guards |
 |---|---|---|---|
-| GET | `/admin/stats` | `StatsOut` | main admin |
+| GET | `/admin/stats` | `StatsOut` | `require_organiser` |
 
 `StatsOut`: `{families, members, invites_open, polls_open, polls_closed, suggestions_by_status: {...}, comments, itinerary_items, checkins, notifications_unread}`.
 
 Implemented as one query per count against tables that exist, with a hardcoded zero for tables
 that do not yet exist at the current milestone. Each count is trip-scoped through `trip_id`.
+
+### Organisers (AC-13)
+
+| Method | Path | Request | Response | Guards |
+|---|---|---|---|---|
+| GET | `/admin/organisers` | — | `[OrganiserOut]` | `require_organiser` |
+| POST | `/admin/organisers` | `{user_id}` | `201` `OrganiserOut` | `require_owner` |
+| DELETE | `/admin/organisers/{user_id}` | — | `204` | `require_owner` |
+
+`OrganiserOut`: `{user_id, display_name, initials, avatar_thumb_url, family: {id, name, color}|null, family_role, granted_by: {user_id, display_name}, created_at}`.
+
+`GET` is readable by any organiser (and the owner) so the console can show "who else can do
+what I can do" — that visibility is not itself a power. `POST` and `DELETE` are `require_owner`
+only; there is no organiser-facing path to either, matching the decision log
+(`plan/overview.md`): "Organisers ... Cannot promote or demote organisers, including each
+other."
+
+`POST /admin/organisers` targets a `user_id` that must already be a member of some family on
+the trip (the same universe `/admin/overview` lists) — appointing someone who has never been
+invited onto the trip is not possible, because there is nobody to search for. Appointing an
+existing organiser again is idempotent: `200` with the existing row, not a `409`.
+
+`DELETE /admin/organisers/{user_id}` on the trip's `owner_user_id` returns `409
+cannot_demote_owner` — the owner is never in `trip_organisers` and is not a valid target.
+Demoting a user who is not currently an organiser returns `404`.
+
+Demotion writes only the `trip_organisers` row. It does not touch `family_members.role`,
+`sessions`, or anything else — a demoted organiser keeps their session and their family role
+and simply stops passing `require_organiser` on their next request. There is no forced
+re-login, unlike the reset-password and remove-user flows in Section 4: this is a permission
+change, not an access revocation.
 
 ## Google status probe
 
@@ -251,13 +307,18 @@ Emitted:
 | `trip.updated` | name, dates or timezone change | `{trip: {id, name, start_date, end_date, timezone}}` | app header, itinerary, invite preview |
 | `category_settings.updated` | voting modes change | `[{category, voting_mode}]` | every voting UI |
 | `member.removed` | a user is removed from the trip | `{family_id, user_id}` | reuses the `families` event — same payload, same handlers |
+| `organiser.appointed` | `POST /admin/organisers` succeeds | `{user_id, granted_by}` | **every** client — nav rails re-evaluate whether to show `Admin` |
+| `organiser.demoted` | `DELETE /admin/organisers/{id}` succeeds | `{user_id}` | **every** client, and specifically the demoted user's own client, which drops the `Admin` nav entry and any open console tab live |
 
-`stage.changed` is the reserved name from `plan/architecture.md`. `trip.updated` and
-`category_settings.updated` are **PROPOSED ADDITIONs** to that list.
+`stage.changed` is the reserved name from `plan/architecture.md`. `trip.updated`,
+`category_settings.updated`, `organiser.appointed` and `organiser.demoted` are **PROPOSED
+ADDITIONs** to that list.
 
 The removed or reset user's own socket additionally receives `session.revoked`
 (**PROPOSED ADDITION**) via `send_user`, after which the server closes the socket. The client
-routes to the login screen with a plain message rather than showing a wall of `401`s.
+routes to the login screen with a plain message rather than showing a wall of `401`s. A demoted
+organiser does **not** receive `session.revoked` — demotion is a permission change, not an
+access revocation, and their session stays valid for everything a plain member can do.
 
 Consumed: nothing. This feature is the source of stage truth, not a consumer of it.
 
@@ -274,7 +335,7 @@ collapsed into a jump menu.
 
 ### Trip setup screen (AC-0)
 
-Rendered whenever `auth/me` returns `next_step: "setup_trip"` — the main admin's state between
+Rendered whenever `auth/me` returns `next_step: "setup_trip"` — the owner's state between
 changing the seeded password and naming the trip. A standalone route `/setup/trip`, outside the
 app shell: there is no trip to put in the header yet, and every nav destination would be empty.
 
@@ -289,9 +350,11 @@ app shell: there is no trip to put in the header yet, and every nav destination 
   because the gate is derived from `setup_complete` rather than from a one-shot redirect.
 - Log out is the only other action, and this screen carries it — the nav rail that normally
   holds one is not rendered.
-- The screen never appears for anyone else. A family admin's equivalent is the family setup
-  screen in `plan/features/families/` (FM-13); both are reached through foundation's one gate,
-  and neither feature reimplements the other's.
+- The screen never appears for anyone else — not even organisers, who inherit `setup_complete`
+  the same as everyone but never see `next_step: "setup_trip"`, because that step is keyed to
+  the owner's seeded-account password change. A new family head's equivalent is the family
+  setup screen in `plan/features/families/` (FM-13); both are reached through foundation's one
+  gate, and neither feature reimplements the other's.
 
 ### Section 1 — Trip
 
@@ -346,8 +409,9 @@ The status cell carries chips — `Must change password`, `Never logged in` — 
 never colour alone.
 
 Row actions: `Reset password`, `Remove from trip`. Both are admin-destructive and get real
-confirm dialogs. The row for the main admin shows both actions disabled with a tooltip
-explaining why.
+confirm dialogs. The row for the owner shows both actions disabled with a tooltip explaining
+why — the owner can never be reset or removed from here (see AC-8's out-of-scope note on
+transferring ownership).
 
 Family rows link into the `families` feature's detail panel rather than re-implementing
 editing here.
@@ -389,6 +453,23 @@ A grid of labelled numbers using tabular figures. No chart: these are unrelated 
 and `design-system.md`'s honesty rules say the chart type must match the question — there is
 no comparison or trend here, so plain numbers are the correct presentation. Zeroes are shown.
 
+### Section 8 — Organisers (owner only)
+
+Rendered only when `auth/me` reports the caller as the owner; an organiser's console simply
+omits this section rather than showing it disabled — there is nothing for an organiser to see
+here that isn't already covered by not seeing the card.
+
+- A card/table of current organisers: identity badge, name, family (colour swatch plus name and
+  family role if any), "granted by \<name\>", "since \<date\>".
+- `Add organiser` opens a search/select over the same member universe as Section 4 (display
+  name, username, family), excluding the owner and anyone already an organiser. Selecting a
+  person and confirming calls `POST /admin/organisers`.
+- Each row's `Remove` action opens a real confirm dialog naming the person and stating plainly
+  that they lose every organiser capability immediately, but keep their family role and their
+  session — not phrased like the reset/remove actions in Section 4, which do revoke sessions.
+- Empty state when there are no organisers yet: "No organisers yet — you're doing this alone,
+  or you haven't needed help." with the `Add organiser` action inline.
+
 ### Stage-change reception across the app
 
 Every client consumes `stage.changed`. On `end`, the shell shows a persistent archive banner
@@ -400,15 +481,16 @@ element, not a toast, because it is information that must stay visible.
 
 | Case | Behaviour |
 |---|---|
-| Non-admin opens `/admin` | Access screen in the UI; every endpoint returns `403 forbidden` |
-| Main admin abandons trip setup and logs back in | `next_step` is still `setup_trip`; the same screen renders. Nothing was written, so there is no partial trip to reconcile |
-| Non-admin reaches `/setup/trip` directly | The gate returns their own `next_step`, and the shell renders that instead. `PATCH /admin/trip` returns `403` regardless of what the client did |
-| Main admin clears the trip name after setup | `422` — name is required by the same validator the setup screen used. `setup_complete` can never go from true back to false |
-| Trip seeded with an empty name and `TZ` unset in the container | `timezone` falls back to `UTC` so the field is never blank; `setup_complete` is still false because the name is empty, so the admin is still gated |
-| A family admin finishes family setup before the main admin has named the trip | Allowed. The two gates are independent, and the family setup screen shows the trip's name as blank rather than blocking on someone else's task |
+| Neither owner nor organiser opens `/admin` | Access screen in the UI; every endpoint returns `403 forbidden` |
+| An organiser opens `/admin/organisers` (or calls its endpoints directly) | Section not rendered client-side; `GET` succeeds (organisers may read the list), `POST`/`DELETE` return `403` |
+| Owner abandons trip setup and logs back in | `next_step` is still `setup_trip`; the same screen renders. Nothing was written, so there is no partial trip to reconcile |
+| Neither owner nor organiser reaches `/setup/trip` directly | The gate returns their own `next_step`, and the shell renders that instead. `PATCH /admin/trip` returns `403` for a non-organiser; an organiser reaching it directly gets the screen rendered (nothing stops them technically) but their own `next_step` is never `setup_trip`, so the app never routes them there |
+| Owner clears the trip name after setup | `422` — name is required by the same validator the setup screen used. `setup_complete` can never go from true back to false |
+| Trip seeded with an empty name and `TZ` unset in the container | `timezone` falls back to `UTC` so the field is never blank; `setup_complete` is still false because the name is empty, so the owner is still gated |
+| A new family's head finishes family setup before the owner has named the trip | Allowed. The two gates are independent, and the family setup screen shows the trip's name as blank rather than blocking on someone else's task |
 | Forward transition without dates | `409 stage_blocked` with `blockers: ["missing_dates"]`; the control was already disabled |
 | Illegal transition (e.g. planning → end) | `409 illegal_transition` |
-| Two admins transition at once | Only one succeeds; the second gets `409 illegal_transition` because the from-stage no longer matches. Implemented as a conditional update on `stage = <expected>` |
+| Owner and an organiser transition at once (or two organisers) | Only one succeeds; the second gets `409 illegal_transition` because the from-stage no longer matches. Implemented as a conditional update on `stage = <expected>` |
 | `end_date` before `start_date` | `422 validation_error` on the field |
 | Timezone not a valid IANA name | `422 validation_error` |
 | Editing trip settings while in End | `409 stage_forbidden` |
@@ -416,10 +498,14 @@ element, not a toast, because it is information that must stay visible.
 | Category row missing (trip predates seeding) | `GET` seeds the missing row with its default on read, so the editor is never partially blank |
 | Reset own password via the admin route | `409 cannot_target_self`; the profile page is the route |
 | Remove self | `409 cannot_target_self` |
-| Remove the last admin of a family | `409 last_family_admin`, matching `families` |
+| Remove the last head of a family | `409 last_family_head`, matching `families` |
 | Remove a user in the End stage | `409 stage_forbidden` — the archived membership record must not change |
 | Reset a password for a user with no family | Allowed; account operations are not membership operations |
 | Removed user has the app open | `member.removed` and `session.revoked` on their socket; the client routes to login with a plain message |
+| Owner appoints an existing organiser again | `200` with the existing `OrganiserOut`, not a `409` — idempotent |
+| Owner attempts to demote themselves | Not reachable through this endpoint — the owner is never a row in `trip_organisers`. `DELETE /admin/organisers/{owner_user_id}` returns `409 cannot_demote_owner` |
+| Owner demotes an organiser who heads a family | Succeeds; `family_members.role` is untouched. They keep every family-level power, they lose every trip-level one |
+| Organiser calls `POST`/`DELETE /admin/organisers` directly | `403` — `require_owner`, not `require_organiser` |
 | Google check pressed twice inside a minute | `429 rate_limited` with `Retry-After`; the button shows the countdown |
 | Google check with no server key | Returns immediately with `unchecked` / `no_api_key` for the server APIs and makes no network call |
 | Google check partially fails | Each API is classified independently; one failure never masks another's success |
@@ -431,13 +517,15 @@ element, not a toast, because it is information that must stay visible.
 
 ## Dependencies and hand-offs
 
-- **Depends on `foundation`** for `require_main_admin`, `require_stage`, sessions and
-  revocation, the rate limiter, the error envelope, the WebSocket helpers, and the `next_step`
-  onboarding gate (F-13) that routes the main admin to the trip setup screen.
+- **Depends on `foundation`** for `require_stage`, sessions and revocation, the rate limiter,
+  the error envelope, the WebSocket helpers, and the `next_step` onboarding gate (F-13) that
+  routes the owner to the trip setup screen.
+- **Depends on `families`** for `require_owner` and `require_organiser` (the trip-level
+  permission dependencies), the `trip_organisers` table and model, the family and member
+  listing shapes, and the `last_family_head` rule which must behave identically in both
+  features.
 - **Provides to `foundation`** the `setup_complete` predicate that gate reads. Foundation
   defines the field and its precedence; this feature defines when a trip counts as set up.
-- **Depends on `families`** for the family and member listing shapes, and for the
-  `last_family_admin` rule which must behave identically in both features.
 - **Provides to every voting feature** the `GET /trip/category-settings` read, which decides
   whether the UI renders a 1–10 scale or thumbs. `polls` and `voting-comments` must read it
   rather than assuming a mode.

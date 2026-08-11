@@ -283,7 +283,8 @@ archived record of who was on the trip.
 - Audit logging beyond the stage-transition record. A general audit trail is not in v1.
 - Multi-trip management: creating, switching or archiving trips. The schema is multi-trip; the
   v1 console configures the single active trip.
-- Transferring the main-admin role to another user.
+- Transferring the owner role to another user. There is exactly one owner per trip
+  (`trips.owner_user_id`), set at creation; moving it is not built in v1.
 - Backup and restore controls. Backups are an ops task documented in `deploy/README.md`.
 - Editing another user's display name or theme.
 - A scheduled Google API health probe.

@@ -28,9 +28,25 @@ frontend, deployed via Docker Compose on a home server behind Cloudflare.
   `plan/architecture.md`. Places details are the one exception (ToS forbids persisting
   them) — fetched on card-open only.
 - **Permissions + stage guards in FastAPI dependencies**, not in frontend logic. End stage
-  is read-only. Main admin > family admin > member.
-- **Migrations:** any model change ships with an Alembic migration. Never edit an applied
-  migration.
+  is read-only. Two independent kinds of role (revised 2026-08-11): **owner > organiser** at
+  trip level, **head of family > spouse > member** inside one. Neither implies the other.
+  Dependencies: `require_organiser` (the old `require_main_admin`), `require_owner`
+  (organiser management only), `require_family_head_or_spouse`, `require_member`. Full
+  definition in `plan/overview.md` > Roles.
+- **Migrations — pre-launch: one file, edited in place.** There is exactly one Alembic
+  revision, `server/alembic/versions/0001_schema.py`, and **all schema work edits it**. Do
+  not create a second migration file. After editing, drop and recreate the dev database
+  (`kindred_test` rebuilds itself on the next pytest run). Nothing is deployed yet, so a
+  chain of incremental revisions would be an audit trail of decisions nobody ever made in
+  production — and reading four files to learn the shape of one table is a worse way to
+  onboard than reading one.
+  **From the first production deploy this reverses:** `0001_schema.py` freezes, `0002`
+  starts the real chain, and the never-edit-an-applied-migration rule takes over — at that
+  point an applied migration is a fact about somebody's data, not a draft.
+  The models are the other half of the contract: every constraint and index in the migration
+  is mirrored in `__table_args__`, because the test suite builds its schema with
+  `create_all` and a constraint living in only one of the two would be enforced in exactly
+  the place it is least tested.
 - **Charts:** use `web/src/charts/` widgets; do not add a chart library. Honesty rules
   (zero-baseline bars etc.) live in the widgets — don't work around them.
 - **Schema is multi-trip:** every trip-scoped table carries `trip_id` even though v1's UI

@@ -38,7 +38,7 @@ Kindred/
 │   │   ├── routers/     # one router per feature
 │   │   ├── services/    # google.py, weather.py, push.py, distances.py
 │   │   └── core/        # config, security, sessions
-│   ├── alembic/         # migrations
+│   ├── alembic/         # migrations — ONE file pre-launch (see below)
 │   └── tests/
 ├── web/                 # React + Vite PWA
 │   ├── Caddyfile        # serves dist/ and proxies /api + /ws; COPYed into the web image
@@ -63,12 +63,12 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 
 ### Identity
 - **users** — username, password_hash (argon2), first_name, last_name (may be empty), display_name (seeded "first last", separately editable), avatar_attachment_id (nullable), must_change_password (bool, seeds true for `admin`), theme_pref (`light`/`dark`/`system`), locale, is_platform_admin (bool)
-- **families** — trip_id, name, color (token slot, used for map pins/labels), home_address (text), home_lat/home_lng (nullable until geocoded), home_geocoded_at, home_locality (nullable coarse label), geocode_status (`pending`/`ok`/`not_found`/`error`, check-constrained, default `pending`), geocode_error (nullable), location_sharing_allowed (bool default true), member_location_default (bool default false). `color` is `smallint` **NOT NULL**, check-constrained `between 1 and 8`. Unique on `(trip_id, lower(name))` and on `(trip_id, color)`. *families, `0002`*
-- **family_members** — family_id, user_id, role (`head`/`spouse`/`member`, check-constrained), location_sharing_allowed (bool default true). **Unique on `user_id`**: a user belongs to exactly one family. One `head` per family; any number of `spouse`. A spouse has the head's powers over the family except over the head themselves (see `plan/features/families/`). *families, `0002`*
-- **trip_organisers** — trip_id, user_id, granted_by (nullable, FK → users `ON DELETE SET NULL`), created_at. **Unique on (trip_id, user_id).** No `updated_at` — the row's existence *is* the grant, so there is nothing to mutate; revoking is a delete. Appointed and removed **only by the trip owner** (`trips.owner_user_id`). Indexed on trip_id. The table is created by `families` because its permission dependencies need it; the endpoints and UI that manage it belong to `admin-console`. *families, `0002`*
-- **invites** — trip_id, **mode** (`join`/`create_family`, check-constrained, default `join`), family_id (nullable), token_hash (sha256; the raw token is shown once at creation and never stored), expires_at, created_by, used_by (nullable), used_at (nullable), revoked_at (nullable). Usable when `used_by is null and revoked_at is null and expires_at > now()`. `family_id` is `ON DELETE SET NULL`, so a deleted family leaves the invite reportable as `invite_family_missing` rather than vanishing with it. Indexed on family_id, trip_id and expires_at; token_hash unique. *families, `0002`; `mode` added in `0003`*
+- **families** — trip_id, name, color (token slot, used for map pins/labels), home_address (text), home_lat/home_lng (nullable until geocoded), home_geocoded_at, home_locality (nullable coarse label), geocode_status (`pending`/`ok`/`not_found`/`error`, check-constrained, default `pending`), geocode_error (nullable), location_sharing_allowed (bool default true), member_location_default (bool default false). `color` is `smallint` **NOT NULL**, check-constrained `between 1 and 8`. Unique on `(trip_id, lower(name))` and on `(trip_id, color)`. *families*
+- **family_members** — family_id, user_id, role (`head`/`spouse`/`member`, check-constrained), location_sharing_allowed (bool default true). **Unique on `user_id`**: a user belongs to exactly one family. One `head` per family; any number of `spouse`. A spouse has the head's powers over the family except over the head themselves (see `plan/features/families/`). *families*
+- **trip_organisers** — trip_id, user_id, granted_by (nullable, FK → users `ON DELETE SET NULL`), created_at. **Unique on (trip_id, user_id).** No `updated_at` — the row's existence *is* the grant, so there is nothing to mutate; revoking is a delete. Appointed and removed **only by the trip owner** (`trips.owner_user_id`). Indexed on trip_id. The table is created by `families` because its permission dependencies need it; the endpoints and UI that manage it belong to `admin-console`. *families*
+- **invites** — trip_id, **mode** (`join`/`create_family`, check-constrained, default `join`), family_id (nullable), token_hash (sha256; the raw token is shown once at creation and never stored), expires_at, created_by, used_by (nullable), used_at (nullable), revoked_at (nullable). Usable when `used_by is null and revoked_at is null and expires_at > now()`. `family_id` is `ON DELETE SET NULL`, so a deleted family leaves the invite reportable as `invite_family_missing` rather than vanishing with it. Indexed on family_id, trip_id and expires_at; token_hash unique. *families*
 
-  > `mode` replaces the original rule "family_id nullable = invite creates a new family", which could not coexist with `ON DELETE SET NULL`: deleting a family silently converted its outstanding join invites into family-founding ones, so accepting one would create an account and send the visitor to a family setup screen they were never invited to. With `mode` stated explicitly, `family_id is null` means one thing only — `mode = 'join'` plus a null family is the `invite_family_missing` condition, and `mode = 'create_family'` is FM-6. Caught by `tests/test_invites.py::test_accepting_into_a_deleted_family_is_a_distinct_failure`; migration `0003` carries the backfill.
+  > `mode` replaces the original rule "family_id nullable = invite creates a new family", which could not coexist with `ON DELETE SET NULL`: deleting a family silently converted its outstanding join invites into family-founding ones, so accepting one would create an account and send the visitor to a family setup screen they were never invited to. With `mode` stated explicitly, `family_id is null` means one thing only — `mode = 'join'` plus a null family is the `invite_family_missing` condition, and `mode = 'create_family'` is FM-6. Caught by `tests/test_invites.py::test_accepting_into_a_deleted_family_is_a_distinct_failure`.
 - **sessions** — user_id, token_hash (sha256 of the opaque cookie value; the raw value is never stored), csrf_token, expires_at, revoked_at (nullable), user_agent (nullable), ip (inet, nullable), last_seen_at, created_at. No `updated_at` — `last_seen_at` is the mutable column, touched at most once a minute. Valid when `revoked_at is null and expires_at > now()`. Indexed on user_id and expires_at; token_hash unique. Expired rows removed by a lazy sweep on login, not a scheduler. *foundation*
 - **login_attempts** — username (lowercased; recorded even when no such user exists), ip (inet, nullable), succeeded, created_at. No `updated_at` — rows are append-only. Indexed on created_at and on (username, created_at) / (ip, created_at). A login is refused when either the username or the IP has ≥ `RATE_LIMIT_LOGIN_PER_MINUTE` failures in the trailing 60 seconds; a success clears that username's recent failures; rows older than an hour are swept lazily on login. *foundation*
 
@@ -99,15 +99,15 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 ### Platform
 - **notifications** — recipient_user_id, type, payload_json (deep-link target), read_at (nullable)
 - **push_subscriptions** — user_id, endpoint (unique), p256dh, auth, user_agent, last_used_at, failure_count, created_at
-- **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive, and for profile pictures (`subject_type = 'user'`, referenced back from `users.avatar_attachment_id`). All uploads are re-encoded server-side and **stripped of EXIF, GPS included** — a location-privacy product must not republish coordinates hidden in a photo. Also carries `thumb_path` (nullable — avatars emit two renditions, 256px and 64px, and `MemberOut` exposes both) and `byte_size` (what was written after re-encoding, which is not the size of the upload). Created by migration `0002`, not `0001`: foundation created only the tables it used. *families, `0002`*
+- **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive, and for profile pictures (`subject_type = 'user'`, referenced back from `users.avatar_attachment_id`). All uploads are re-encoded server-side and **stripped of EXIF, GPS included** — a location-privacy product must not republish coordinates hidden in a photo. Also carries `thumb_path` (nullable — avatars emit two renditions, 256px and 64px, and `MemberOut` exposes both) and `byte_size` (what was written after re-encoding, which is not the size of the upload). *families*
 
 ### Approved additions (proposed in feature design docs, accepted 2026-08-10)
 
 These originated as PROPOSED ADDITION items in `plan/features/*/design.md` and are approved;
 the feature docs carry the rationale.
 
-- ~~**sessions** (new table) — server-side sessions (revocation on password reset). *foundation*~~ — **implemented** in migration `0001_foundation`; specified in full under Identity above.
-- ~~**login_attempts** (new table) — login rate limiting. *foundation*~~ — **implemented** in migration `0001_foundation`; specified in full under Identity above.
+- ~~**sessions** (new table) — server-side sessions (revocation on password reset). *foundation*~~ — **implemented**; specified in full under Identity above.
+- ~~**login_attempts** (new table) — login rate limiting. *foundation*~~ — **implemented**; specified in full under Identity above.
 - **trip_stage_transitions** (new table) — audit of who changed stage and when. *admin-console*
 - **notification_preferences** (new table) — user_id, category, enabled; absent row = enabled. *notifications*
 - **users.last_login_at** — admin console visibility. *admin-console*
@@ -172,6 +172,31 @@ Haversine straight-line distance is computed instantly in SQL as a fallback whil
 - Backups: nightly `pg_dump` to the host volume (documented in deploy README); attachments included.
 - **Data location (changed 2026-08-11):** Postgres and attachments are bind-mounted to `data/postgres` and `data/attachments`, relative to the compose file, at the owner's request so the data is visible in a file browser rather than sealed inside Docker's VM disk. `PGDATA` is a subdirectory of the mount because Postgres cannot `chmod` a bind mount's root. This trades durability guarantees for visibility — Postgres assumes POSIX permissions, file locking and honest `fsync`, and a Docker Desktop or SMB bind mount supplies none of them reliably. Caddy's certificate store stays a named volume. Failure modes and the revert are in `deploy/README.md` ("Where the data lives").
 - First-run: Alembic migrations auto-apply; seed creates `admin`/`admin` with `must_change_password=true` and one trip in `planning`.
+
+## Migration policy (set 2026-08-11)
+
+**Pre-launch there is exactly one Alembic revision — `server/alembic/versions/0001_schema.py`
+— and every schema change edits it in place.** No second migration file is created. After an
+edit, drop and recreate the dev database; `kindred_test` rebuilds itself on the next pytest
+run (`tests/conftest.py` drops and recreates the schema from the models each session).
+
+The reasoning: nothing is deployed, so an incremental chain would record a history of
+decisions that never happened to anyone's data, and a reader wanting to know the shape of one
+table would have to reconstruct it from four files. One file that says what the schema *is*
+beats four that say how it got here, when how it got here is a fiction.
+
+**This reverses at the first production deploy.** At that moment `0001_schema.py` freezes,
+`0002` begins the real chain, and the standard discipline applies: never edit an applied
+migration, because from then on an applied migration is a fact about somebody's data rather
+than a draft. Whoever ships that deploy is responsible for flipping this note and the
+matching rule in `CLAUDE.md`.
+
+The models are the other half of the contract. Every constraint and index in the migration is
+mirrored in the SQLAlchemy `__table_args__`, because the test suite builds its schema with
+`create_all` rather than by migrating: a constraint declared in only one of the two would be
+enforced in production and absent under pytest, which is precisely where it most needs to
+hold. The two are comparable down to constraint *names*, and were diffed when they were
+consolidated.
 
 ## Realtime & offline
 

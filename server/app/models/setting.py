@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import String
+from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,9 @@ SETTING_INVITE_ONLY = "invite_only"
 class Setting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "settings"
 
-    key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
     #: JSON so a value can be a string, a bool or a nested object (`google_api_status`).
     value: Mapped[Any] = mapped_column(JSONB, nullable=False)
+
+    # Named explicitly so `create_all` and the migration produce identical constraint names.
+    __table_args__ = (UniqueConstraint("key", name="uq_settings_key"),)

@@ -12,7 +12,7 @@ import uuid
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -95,7 +95,6 @@ class UserSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         PgUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
     )
     user: Mapped[User] = relationship(back_populates="settings")
     #: **Consent**, written only by the member themselves. `families` reads it and never
@@ -105,3 +104,6 @@ class UserSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Boolean, nullable=False, server_default="false"
     )
     push_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    # Exactly one settings row per user, named so `create_all` and the migration agree.
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_settings_user_id"),)
