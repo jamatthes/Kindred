@@ -182,6 +182,35 @@ knows the stage without a second call.
 > placeholder returning "there is no trip at all", which never fires on a seeded install;
 > `admin-console` (AC-0) replaces its body with its own condition and touches nothing else.
 >
+> NOTE (revised 2026-08-11, user ruling — the owner is not exempt from the gate): the first
+> implementation of `is_pending_family` returned `False` for the platform admin outright, with
+> the comment that sending them to a family setup screen "would lock them out of their own
+> instance on first boot". That was a true statement about a half-built gate — the setup route
+> refused the owner, so the screen was a dead end — and the wrong conclusion. The right fix is
+> the other half: admit the owner to `POST /families/mine`, and let them take the same step as
+> everyone else. The exemption is removed, and the owner's order is now
+> `change_password` → `setup_trip` → `setup_family` → `app`.
+>
+> `setup_trip` precedes `setup_family` for the owner and the ordering is asserted, not
+> incidental: a family is created *on* a trip, so the step that produces the trip has to come
+> first, and `POST /families/mine` returns `409 no_trip` if it does not.
+>
+> The rule the gate now enforces, and the reason the exemption was a bug rather than a
+> shortcut: **no account reaches `app` on its way in without a family.** Every account is
+> created through an invite, and both invite modes now terminate in a family — `join` writes
+> the membership at accept time, `create_family` at setup. The owner is the one account not
+> created through an invite, and was therefore the one account that could arrive at `app`
+> family-less. It did not stay theoretical: the owner, with no family and no legitimate way to
+> get one, used the admin UI's create-family form and was not placed in the family it made
+> (`families` FM-1).
+>
+> One family-less state still resolves to `app`, unchanged and deliberate: someone **removed**
+> from their family, or whose family was deleted. They are not sent to family setup — they were
+> never invited to found a family, and sending them there would let anyone removed from the
+> trip re-admit themselves, which is precisely what `is_pending_family`'s invite condition
+> exists to prevent. `require_member` refuses them every route, and the app renders the "you are
+> not on this trip" state. That is a family taken away, not an account let in without one.
+>
 > `UserOut` also gains `first_name`, `last_name`, `avatar_url`, `avatar_thumb_url` and
 > `initials` in the same commit. `families` adds those columns (FM-14) and every surface that
 > draws a person needs the badge; putting them on the record the shell already fetches avoids

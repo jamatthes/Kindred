@@ -207,8 +207,11 @@ client renders that answer rather than inferring it.**
   1. `must_change_password` is true → `change_password`.
   2. The user is the main admin and the trip is not yet configured (no `name`, or no
      `timezone`) → `setup_trip` (`admin-console` AC-0).
-  3. The user has no family row and holds a consumed new-family invite → `setup_family`
-     (`families` FM-13).
+  3. The user has no family row and either holds a consumed new-family invite **or is the
+     trip's owner** → `setup_family` (`families` FM-13). Revised 2026-08-11: the owner used to
+     be exempt from this step and reached `app` with no family; see the NOTE in
+     `plan/features/foundation/design.md`. The owner's full order is therefore
+     `change_password` → `setup_trip` → `setup_family` → `app`.
   4. Otherwise → `app`.
 - The web shell routes solely on `next_step`. It never computes the gate from the individual
   flags, so the client and the server cannot disagree about which screen is legal.
@@ -217,9 +220,12 @@ client renders that answer rather than inferring it.**
   makes "you come back to this screen until it is done" true rather than aspirational.
 - Every value except `app` is terminal for navigation: the shell renders that screen and no
   other, with logging out as the only escape.
-- A user with no family who does **not** hold a new-family invite (removed from the trip, or
-  their family was deleted) gets `app`, and the app shows the "you are not on this trip"
-  state. They are not sent to family setup — they were not invited to create a family.
+- A user with no family who does **not** hold a new-family invite **and is not the owner**
+  (removed from the trip, or their family was deleted) gets `app`, and the app shows the "you
+  are not on this trip" state. They are not sent to family setup — they were not invited to
+  create a family, and a setup screen there would let anyone removed from the trip re-admit
+  themselves. This is the one family-less `app`, and it is a family taken away rather than an
+  account admitted without one.
 
 > NOTE: foundation ships the field and the routing gate in M0, where only `change_password`
 > and `app` can ever be returned. `setup_trip` and `setup_family` become reachable when

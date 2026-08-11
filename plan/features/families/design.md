@@ -192,7 +192,6 @@ All under `/api/v1`. Every mutating route also carries
 | Method | Path | Request | Response | Permission |
 |---|---|---|---|---|
 | GET | `/families` | — | `[FamilyOut]` | `require_member` |
-| POST | `/families` | `{name, color?, home_address?}` | `FamilyOut` | `require_organiser` |
 | POST | `/families/mine` | `{name, home_address?}` | `FamilyDetailOut` | `require_pending_family` |
 | GET | `/families/{id}` | — | `FamilyDetailOut` | `require_member` |
 | PATCH | `/families/{id}` | `{name?, color?}` | `FamilyOut` | `require_family_head_or_spouse(id)` |
@@ -202,16 +201,46 @@ All under `/api/v1`. Every mutating route also carries
 | POST | `/families/{id}/home/geocode` | — | `FamilyDetailOut` | `require_family_head_or_spouse(id)` |
 | DELETE | `/families/{id}` | — | `204` | `require_organiser` |
 
-`POST /families/mine` is the family-setup screen's only write, and the one route in this
-feature that a user with no family may call. Its dependency `require_pending_family`
-(**PROPOSED ADDITION** to foundation's set, defined here because this is the only route that
-uses it) allows exactly one caller: an authenticated user who has no `family_members` row and
-whose `used_by` appears on a consumed invite with `family_id is null`. Anyone else gets
-`403 forbidden` — in particular an existing member cannot use it to acquire a second family,
-and someone removed from the trip cannot use it to re-admit themselves.
+> REMOVED 2026-08-11 (user ruling): **`POST /families`**, the bare create that took a name and
+> made a family with nobody in it. It was `require_organiser`-guarded and produced exactly one
+> artefact — a family shell whose creator was not a member — which is the state FM-1's
+> "no memberless families" invariant now forbids. The organiser's path to a new family is
+> `POST /invites` with `family_id: null` (FM-6), which already exists, and the family is born
+> with its head in the same transaction that creates it. The route is gone rather than
+> re-pointed: `GET /families` still answers on that path, so a client that has not been updated
+> gets `405`, which is a clearer answer than a silently repurposed `201`.
+>
+> Two things that were only ever exercised through it go with it: the request field `color` (no
+> other route sets a colour at creation — the lowest free slot is assigned and `PATCH
+> /families/{id}` changes it afterwards, with the taken slots visible), and `FamilyCreateIn`.
 
-In one transaction it: creates the family on the invite's `trip_id` with the lowest free
-colour slot, writes the `family_members` row with `role = 'head'`, seeds that user's
+`POST /families/mine` is now the **only** route in the product that creates a family, and the
+one route in this feature that a user with no family may call. That is the enforcement point
+for the invariant: there is no second code path that could forget to write a membership row.
+
+Its dependency `require_pending_family` (**PROPOSED ADDITION** to foundation's set, defined
+here because this is the only route that uses it) allows a caller with **no `family_members`
+row** who is either:
+
+* **an invited founder** — their `used_by` appears on a consumed invite with
+  `mode = 'create_family'`; or
+* **the trip's owner** — `trips.owner_user_id`, or the seeded platform admin before a trip
+  exists (added 2026-08-11; see FM-13 "The owner takes this step too"). Nobody invites the
+  owner to their own instance, so ownership is the evidence that stands in for the invite.
+
+Anyone else gets `403 forbidden` — in particular an existing member cannot use it to acquire a
+second family, and someone removed from the trip cannot use it to re-admit themselves.
+
+> The invite half of the predicate keys on `invites.mode`, not on `family_id is null`. Those
+> two stopped being the same question when `family_id` became `ON DELETE SET NULL`
+> (`plan/architecture.md`): deleting a family turns its consumed join invites into rows with a
+> null `family_id`, which under the old predicate would have made every member of that family
+> "pending" — a licence to found a family, handed out by an unrelated deletion. `mode` is the
+> column that was added to say what an invite is *for*, and this is one of the places that has
+> to ask.
+
+In one transaction it: creates the family on the active trip with the lowest free colour slot,
+writes the `family_members` row with `role = 'head'`, seeds that user's
 `user_settings.live_location_enabled = true` (FM-15), and geocodes the home address if one was
 supplied. It is idempotent on a retry that arrives after the first succeeded: the second call
 sees the caller now has a family and returns `409 already_has_family`, which the client treats
@@ -488,8 +517,9 @@ Rules, following `plan/architecture.md` and `CLAUDE.md`:
 
 > NOTE (implementation, Phase 5): there are **four** call sites, not two, and all four are
 > mutating routes. `PUT /families/{id}/home` and `POST /families/{id}/home/geocode` are the
-> two this section names; the other two are `POST /families` and `POST /families/mine`, both
-> of which accept an optional `home_address` because FM-1 and FM-13 say they do — an address
+> two this section names; the third is `POST /families/mine`, which accepts an optional
+> `home_address` because FM-13 says it does (a fourth, `POST /families`, went with the bare
+> create on 2026-08-11) — an address
 > supplied at creation has to be geocoded by something, and deferring it would mean a family
 > created with an address sits unplaced until someone re-saves it. All four funnel through a
 > single private helper, so the rule that actually matters is mechanically checkable: grep
@@ -705,6 +735,11 @@ The owner's and organisers' family view also offers `Invite a new family`, which
 `family_id: null` variant. It sits visually apart from the per-family invite so the two are
 not confused.
 
+> REVISED 2026-08-11: this card previously carried a second action, `Or add one myself`, which
+> opened a create-family dialog over the bare `POST /families`. Both are gone with the route
+> (FM-1). The card is now the single answer to "how do I add a family", which is also the true
+> one — a family arrives when its head accepts the link.
+
 ### Join / registration screen
 
 A standalone route `/join/<token>` outside the app shell — no nav rail, no tabs, because the
@@ -727,12 +762,21 @@ visitor is not yet a member.
 ### Family setup screen
 
 Rendered whenever `auth/me` returns `next_step: "setup_family"` (foundation F-13) — which is
-the state a new family's admin is in from the moment they accept a `create_family` invite
-until they have named their family. A standalone route `/setup/family`, outside the app shell
-for the same reason the join screen is: they are not on the trip yet.
+the state a new family's head is in from the moment they accept a `create_family` invite until
+they have named their family, **and the state the owner is in between naming the trip and
+entering the app** (added 2026-08-11). A standalone route `/setup/family`, outside the app
+shell for the same reason the join screen is: they are not on the trip yet.
 
 - Heading and one line of context: "Name your family — you can invite the rest of them next."
   The trip name is shown so it is obvious which trip this is for.
+- The copy is written to be true for both callers and is therefore not branched on role. It
+  never says "you were invited": the invited founder reads "Name your family / You can invite
+  the rest of them next / This is for <trip>" and so does the owner, who has just named that
+  trip on the previous screen. The one line that would have read oddly for the owner is the
+  reassurance about who the family belongs to — "You will be this family's head. You can rename
+  the family and hand that role on later" — and it reads correctly for both, because the owner
+  is a head of their own family like anyone else. That is the point of the two role kinds being
+  independent, so the screen that makes them one is the wrong place to start explaining it.
 - One required field, family name, validated on blur. `409 name_taken` renders on that field
   with the message from the edge-case table, not as a toast.
 - Optionally, the home address field from the side panel, presented as skippable with a plain
@@ -772,8 +816,11 @@ One page reached from the nav rail. Available in every stage, including End.
 
 ### Empty states
 
-- No families: "No families yet — create the first one" with the action inline (owner or organiser);
-  members see "The trip organiser hasn't added any families yet."
+- No families: "No families yet — invite the first one" with the new-family invite action
+  inline (owner or organiser); members see "The trip organiser hasn't added any families yet."
+  On a fresh install the owner never sees this state, because their own family setup (FM-13)
+  happens before they can reach the screen — so the empty state is genuinely about *other*
+  families, which is what the invite action offers.
 - Family with one member: no special state, but the invite action is given prominence.
 - No outstanding invites: "No open invites."
 
@@ -814,6 +861,9 @@ request fails.
 | `create_family` acceptor calls any other route before finishing setup | `403 not_on_trip` from `require_member`. The shell never routes them anywhere that would issue such a call |
 | `POST /families/mine` submitted twice (double-tap, retry after timeout) | The second gets `409 already_has_family`; the client treats it as success and re-reads `auth/me` |
 | `POST /families/mine` by a user who already has a family | `403 forbidden` from `require_pending_family`; there is no path to a second family |
+| The owner, with no family, on a fresh install | `next_step` is `setup_trip` until the trip is named, then `setup_family`. They finish on the same screen an invited founder uses and become the head of their own family (2026-08-11) |
+| The owner calls `POST /families/mine` a second time | `403 forbidden` — they now have a family, and the owner's admission to the route is conditional on not having one. Ownership is not a standing licence to found families |
+| Anything calls `POST /families` | `405 method_not_allowed` — the route is gone (2026-08-11). `GET /families` still answers there, so the path is not free for a new meaning |
 | `POST /families/mine` when all eight colour slots are taken | `409 no_color_slots`. The user is stuck through no fault of their own, so the message tells them to contact the trip organiser, and the organiser console shows the same condition |
 | A head or spouse turns the family switch off while a member is actively sharing | `family.updated` removes every marker for that family immediately. The member's own toggle stays on and their persistent "Sharing your location" indicator changes to say the family's setting is currently hiding them — the indicator must never claim they are visible when they are not |
 | A head or spouse turns the per-member switch off for someone actively sharing | Same, for that one marker |
