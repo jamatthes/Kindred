@@ -16,6 +16,63 @@ conventions, Google cost rules) and `plan/design-system.md` (layout, tokens, pat
 > `server/tests/test_link_preview.py`, `server/tests/test_boundaries.py`, fixtures under
 > `server/tests/fixtures/`.
 
+> **NOTE (pre-build, branch `feat/m3-map-shell`):** the provider-agnostic map shell —
+> components only, no screen/route — is pre-built on that branch, ahead of this feature's own
+> UI phases: `web/src/features/map/`. It gives the M3 implementer tested UI to inherit rather
+> than building it inline. Contents:
+> - `MapProvider.ts` — the provider interface (`mount`/`unmount`, `setCenter`/`panTo`/
+>   `setZoom`/`fitBounds`/`getViewState`, `addMarker`/`updateMarker`/`removeMarker`,
+>   `addPolygon`/`updatePolygon`/`removePolygon`, and a typed `on(event, handler)` for
+>   `markerClick` / `markerHover` / `polygonClick` / `mapClick`). Imperative by design —
+>   matching how every real map SDK (Google included) actually works — with `MapCanvas` as
+>   the declarative React layer on top that diffs `markers`/`polygons` props against calls.
+> - `FakeMapProvider.ts` — deterministic, DOM-based, used by every test and the styleguide.
+>   Positions come from a genuine linear lat/lng→pixel projection (`projection.ts`, not a
+>   real Mercator basemap — it says so in its own doc comment), and markers/polygons are
+>   real DOM/SVG nodes, not mocked calls.
+> - `GoogleMapProvider.ts` — a STUB. Every method throws "not wired yet" — no script tag, no
+>   dependency added, no network call. **The M3 implementer's job is to replace this one
+>   file** with the real Google Maps JS integration (needs the user's browser-restricted API
+>   key, not yet configured); nothing else in the feature should need to change, because
+>   `MapCanvas` and every pin/polygon/popover component only ever talk to `MapProvider`.
+> - `SuggestionPin.tsx` / `LiveMarker.tsx` / `RegionPolygon.tsx` / `PopoverCard.tsx` — the
+>   three progressive-disclosure level-1/2 components from "Map layer specifics" /
+>   "Progressive disclosure" above. `LiveMarker` reuses `IdentityBadge`
+>   (`plan/features/families/design.md`) rather than reinventing a person marker.
+>   `PopoverCard`'s vote-summary and distance-chip areas are slots (`ReactNode`), not
+>   hardcoded shapes — their real content belongs to `voting-comments` and `distances`.
+> - `prefTint.ts` reuses `charts/scales.ts`'s `prefRampStep` so a region's map tint and its
+>   `HeatMatrix` cell agree on which ramp step a given score rounds to.
+> - Styleguide: a "Map shell" section in `/styleguide` (`web/src/charts/StyleguideMap.tsx`)
+>   showing `FakeMapProvider` with sample pins of every category/status, the preference
+>   ramp across region tints, and the popover card, in both themes.
+> - Tests: 149 Vitest cases across the feature (`web/src/features/map/*.test.{ts,tsx}`) —
+>   projection math (including a round-trip property), provider interface conformance,
+>   marker/polygon lifecycle and event dispatch, `MapCanvas`'s prop-diffing, and every
+>   component's render/interaction states.
+>
+> **Deviations from this doc, and why:**
+> - **Clustering is not built.** "Map layer specifics" above specifies pin clustering; this
+>   pre-build is components-only with no live suggestion list to cluster against, and
+>   cluster composition logic (count + "mixed cluster" hint) is presentation logic over real
+>   data the M3 screen owns, not a provider-shell concern. `MapProvider` does not need to
+>   change to add it — a cluster is just another marker-like DOM node the screen computes.
+> - **"Open in Google Maps" deep-link construction is not built.** `PopoverCard` exposes an
+>   `onOpenInMaps` slot (renders the button only when supplied) rather than building the
+>   `https://www.google.com/maps/...` URL itself, because that needs `place_id`/region-vs-
+>   point branching that belongs to the screen wiring the card to real suggestion data.
+> - **OSM attribution text is not baked into `RegionPolygon`.** The component exposes
+>   `boundarySource` as a `data-boundary-source` attribute so a consumer can render the
+>   required "boundary © OpenStreetMap contributors" line appropriately positioned for its
+>   own layout (the styleguide demo does this as a single map-level caption, not per-region,
+>   which is also the expected real-screen pattern per the reference mockup).
+> - **Sequence numbers for `scheduled` pins are not implemented.** The design doc says a
+>   scheduled pin "carries a sequence affordance"; `SuggestionMarkerSpec` has no itinerary
+>   day-order field to draw one from (that belongs to `itinerary-timeline`), so
+>   `SuggestionPin` currently renders scheduled status with a distinct glyph (▸) and colour,
+>   satisfying "never colour alone" without inventing itinerary data it doesn't have. The M3
+>   implementer can extend the glyph to a numbered badge once a sequence value exists.
+
 ---
 
 ## HARD INVARIANT — Google Places and the Terms of Service

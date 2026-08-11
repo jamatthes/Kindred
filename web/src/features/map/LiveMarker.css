@@ -1,0 +1,18 @@
+.k-live-marker {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  line-height: 0;
+}
+
+.k-live-marker:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.k-live-marker.is-selected {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 1px;
+}

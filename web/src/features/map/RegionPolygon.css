@@ -1,0 +1,34 @@
+.k-region-svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.k-region {
+  stroke-width: var(--region-stroke-width);
+  stroke-dasharray: var(--region-dash);
+  fill-opacity: var(--region-fill-opacity);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.k-region.is-selected {
+  stroke-width: calc(var(--region-stroke-width) + 1px);
+}
+
+.k-region--neutral {
+  fill: var(--color-text-muted);
+  stroke: var(--color-border-strong);
+}
+
+.k-region--pref-0 { fill: var(--scale-pref-0); stroke: var(--scale-pref-0); }
+.k-region--pref-1 { fill: var(--scale-pref-1); stroke: var(--scale-pref-1); }
+.k-region--pref-2 { fill: var(--scale-pref-2); stroke: var(--scale-pref-2); }
+.k-region--pref-3 { fill: var(--scale-pref-3); stroke: var(--scale-pref-3); }
+.k-region--pref-4 { fill: var(--scale-pref-4); stroke: var(--scale-pref-4); }
+.k-region--pref-5 { fill: var(--scale-pref-5); stroke: var(--scale-pref-5); }
+.k-region--pref-6 { fill: var(--scale-pref-6); stroke: var(--scale-pref-6); }
+.k-region--pref-7 { fill: var(--scale-pref-7); stroke: var(--scale-pref-7); }
+.k-region--pref-8 { fill: var(--scale-pref-8); stroke: var(--scale-pref-8); }
+.k-region--pref-9 { fill: var(--scale-pref-9); stroke: var(--scale-pref-9); }
+.k-region--pref-10 { fill: var(--scale-pref-10); stroke: var(--scale-pref-10); }

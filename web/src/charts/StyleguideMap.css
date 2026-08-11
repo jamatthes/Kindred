@@ -1,0 +1,104 @@
+.k-sg-map__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: var(--reading-measure);
+  margin-bottom: var(--space-3);
+}
+
+.k-sg-map__canvas {
+  position: relative;
+  width: var(--sg-map-canvas-w);
+  height: var(--sg-map-canvas-h);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.k-sg-map__attr {
+  position: absolute;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-1);
+}
+
+.k-sg-map__tints {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.k-sg-map__tint-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.k-sg-map__tint-cell svg {
+  position: static;
+}
+
+.k-sg-map__tint-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.k-sg-map__popovers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.k-sg-map__vote-demo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.k-sg-map__vote-avg {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.k-sg-map__vote-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+
+.k-sg-map__vote-bar i {
+  display: block;
+  height: 100%;
+  background: var(--scale-pref-8);
+  border-radius: var(--radius-full);
+}
+
+.k-sg-map__vote-count {
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+.k-sg-map__dist-demo {
+  display: flex;
+  gap: 6px;
+}
+
+.k-sg-map__dchip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-1);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}

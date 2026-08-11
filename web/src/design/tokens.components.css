@@ -73,4 +73,29 @@
      below this it starts wrapping names, which is the point it stops being glanceable. */
   --family-card-min: 300px;
   --panel-min-width: 340px;
+
+  /* --- Map shell (features/map) --------------------------------------------
+     Provider-agnostic pins, region polygons, and the popover card. See
+     `plan/features/map-suggestions/design.md` > "Map layer specifics" / "Styling". */
+  --pin-border-width: 2px;
+  --pin-icon-size: 15px;
+  --pin-glyph-size: 16px;
+  /* Live-location marker: sized to match the identity badge's map-marker size (40px),
+     per `plan/features/families/design.md` — the badge is reused, not reinvented. */
+  --pin-live-size: 40px;
+  --region-stroke-width: 2px;
+  --region-dash: 7 5;
+  /* Fill opacity when a region carries no preference score yet (neutral tint). Scored
+     regions use the tint recipe (`--mix-tint-strong`) instead, so this only applies to
+     the neutral case. */
+  --region-fill-opacity: 0.22;
+  --popover-width: 300px;
+  --popover-radius: var(--card-radius);
+  /* Smaller than --button-height: the popover is a compact card (level 2 of progressive
+     disclosure) and its actions must not dominate it. */
+  --popover-btn-height: 36px;
+  /* `/styleguide`'s map demo canvas — a fixed box, not the app's real 62% split, so the
+     gallery card stays a predictable size next to the chart/picker cards around it. */
+  --sg-map-canvas-w: 360px;
+  --sg-map-canvas-h: 260px;
 }
