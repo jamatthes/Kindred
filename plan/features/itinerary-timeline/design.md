@@ -293,13 +293,20 @@ reference: the legacy TimelineBoard scrubber; visual reference:
 - **Bars:** each timed item is a rounded bar positioned/sized by start/end, filled with
   its category colour (`--cat-*`), title + time inside when width allows (truncate
   gracefully; minimum render width for near-instant items). Bar height ≥ `--hit-target`.
-- **Lane packing:** overlapping items stack into auto-assigned lanes — deterministic
-  interval packing (sort by start, then duration; first free lane wins). A pure,
-  unit-tested function.
-- **Gaps are the point:** empty track is visibly empty. Drive legs render as thin
-  connector segments between consecutive located bars; when
-  `route duration > gap between bars`, the connector tints `--color-warning` — an
-  impossible transition flags itself without any validation dialog.
+- **Fixed category lanes (structure adopted from the legacy TimelineBoard,
+  2026-08-11):** the track is horizontal bands with a left label gutter — one lane per
+  category present that day (e.g. Meals, Activities, Stay) plus a dedicated **Travel
+  lane** — so items of different kinds can never collide. Floating labels (drag bubble,
+  now-chip) live in a thin **headroom band above the lanes**, and the hour ruler is its
+  own strip below — nothing ever overlays a bar. Lanes for categories with no items that
+  day are omitted. *Within* one lane, overlapping items still pack into sub-lanes —
+  deterministic interval packing (sort by start, then duration; first free lane wins),
+  a pure, unit-tested function.
+- **Gaps are the point:** empty track is visibly empty. Drive legs render as compact
+  chips in the Travel lane, positioned in their actual time window; when
+  `route duration > gap between bars`, the chip tints `--color-warning` with the
+  shortfall stated ("! 22 min — gap 10") — an impossible transition flags itself
+  without any validation dialog.
 - **Untimed shelf:** "sometime today" items sit in a thin shelf below the track;
   dragging one onto the track gives it a time.
 - **Now-cursor:** a vertical accent line drifts across the track — Holiday stage,

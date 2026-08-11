@@ -739,85 +739,108 @@ body {
 }
 .seg button.on { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-card); }
 
-/* ---------- day timeline track (video-editor style) ----------
-   Component tokens per design.md */
-:root { --daytrack-h: 210px; --daytrack-bar-h: 44px; --daytrack-snap: 15; }
+/* ---------- day timeline track ----------
+   Structure copied from the legacy TimelineBoard (left label gutter, one row per
+   kind so items never collide, headroom band for cursor chips, separate hour
+   ruler strip) — restyled to Kindred tokens. */
+:root { --daytrack-h: 248px; --daytrack-lane-h: 46px; --daytrack-snap: 15; }
 .dt-panel {
   height: var(--daytrack-h); flex: none; background: var(--color-surface);
   border-top: 1px solid var(--color-border); display: flex; flex-direction: column;
-  padding: 0 var(--space-4) var(--space-2);
+  padding: 0 var(--space-4);
 }
 .dt-head {
-  display: flex; align-items: center; gap: var(--space-3); height: 34px;
+  display: flex; align-items: center; gap: var(--space-3); height: 32px; flex: none;
   font-size: 12px; color: var(--color-text-faint);
 }
 .dt-head b { color: var(--color-text); font-size: var(--text-sm); }
-.dt-axis { position: relative; height: 18px; display: flex; }
-.dt-hour {
-  flex: 1; border-left: 1px solid var(--color-border);
-  font-family: var(--font-mono); font-size: 10px; color: var(--color-text-faint);
-  padding-left: 4px; user-select: none;
+.dt-body { flex: 1; display: flex; min-height: 0; }
+.dt-gutter {
+  width: 92px; flex: none; border-right: 1px solid var(--color-border);
+  padding-top: 18px; /* headroom band */
 }
-.dt-track {
-  position: relative; height: 76px;
-  background: repeating-linear-gradient(to right,
-    var(--color-border) 0, var(--color-border) 1px,
-    transparent 1px, transparent calc(100% / 14));
-  border-radius: var(--radius-1); background-color: var(--color-surface-raised);
+.lane-label {
+  height: var(--daytrack-lane-h); display: flex; align-items: center;
+  font-size: 11px; font-weight: 700; color: var(--color-text-faint);
+  border-bottom: 1px solid var(--color-border); padding-right: var(--space-2);
 }
+.lane-label:last-child { border-bottom: none; }
+.dt-stage { position: relative; flex: 1; min-width: 0; }
+/* hour grid behind everything: 14 columns, faint */
+.dt-grid { position: absolute; left: 0; right: 0; top: 0; bottom: 20px; display: flex; pointer-events: none; }
+.dt-grid i { flex: 1; border-left: 1px solid var(--color-border); opacity: 0.55; }
+.dt-grid i:first-child { border-left: none; }
+/* lanes: fixed bands below the 18px headroom */
+.dt-lane { position: absolute; left: 0; right: 0; height: var(--daytrack-lane-h); border-bottom: 1px solid var(--color-border); }
+.dt-lane.meals { top: 18px; }
+.dt-lane.activities { top: 64px; }
+.dt-lane.travel { top: 110px; border-bottom: none; }
 .dt-bar {
-  position: absolute; top: 14px; height: var(--daytrack-bar-h);
+  position: absolute; top: 5px; height: 36px;
   border-radius: var(--radius-1); display: flex; flex-direction: column;
-  justify-content: center; padding: 0 10px; overflow: hidden; cursor: grab;
+  justify-content: center; padding: 0 9px; overflow: hidden; cursor: grab;
   border-left-width: 4px; border-left-style: solid;
 }
-.dt-bar .t { font-size: 12px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-.dt-bar .w { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-muted); white-space: nowrap; }
+.dt-bar .t { font-size: 12px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; line-height: 1.3; }
+.dt-bar .w { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-muted); white-space: nowrap; line-height: 1.2; }
 .dt-bar.activity { background: color-mix(in srgb, var(--cat-activity) var(--mix-tint-strong), var(--color-surface)); border-left-color: var(--cat-activity); }
 .dt-bar.meal     { background: color-mix(in srgb, var(--cat-meal)     var(--mix-tint-strong), var(--color-surface)); border-left-color: var(--cat-meal); }
-.dt-bar.travel   { background: color-mix(in srgb, var(--cat-travel)   var(--mix-tint-strong), var(--color-surface)); border-left-color: var(--cat-travel); }
 .dt-bar.dragging { box-shadow: var(--shadow-popover); cursor: grabbing; z-index: 4; }
 .dt-bar.ghost {
   background: transparent; border: 1.5px dashed var(--color-border-strong);
-  border-left: 4px solid var(--color-border-strong); opacity: 0.7; z-index: 1;
+  border-left: 4px solid var(--color-border-strong); opacity: 0.65; z-index: 1;
 }
 .dt-bar.ghost .t, .dt-bar.ghost .w { color: var(--color-text-faint); }
 .dt-bar.selected { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .dt-bar.selected::before, .dt-bar.selected::after {
   content: ""; position: absolute; top: 50%; transform: translateY(-50%);
-  width: 6px; height: 22px; border-radius: 3px; background: var(--color-accent);
+  width: 6px; height: 20px; border-radius: 3px; background: var(--color-accent);
   cursor: ew-resize;
 }
 .dt-bar.selected::before { left: -3px; }
 .dt-bar.selected::after { right: -3px; }
+/* drives live in their own lane, like the legacy transit row */
+.travel-chip {
+  position: absolute; top: 11px; height: 24px; min-width: 46px;
+  display: inline-flex; align-items: center; gap: 4px; padding: 0 7px;
+  border-radius: var(--radius-1); font-family: var(--font-mono);
+  font-size: 10px; font-weight: 700; color: var(--color-text-muted); white-space: nowrap;
+  background: color-mix(in srgb, var(--cat-travel) var(--mix-tint-strong), var(--color-surface));
+  border-left: 3px solid var(--cat-travel);
+}
+.travel-chip.warn {
+  background: color-mix(in srgb, var(--color-warning) var(--mix-tint-strong), var(--color-surface));
+  border-left-color: var(--color-warning); color: var(--color-warning);
+}
+/* headroom band owns every floating label — nothing overlays the lanes */
 .drag-bubble {
-  position: absolute; transform: translateX(-50%);
+  position: absolute; top: 0; height: 16px; display: inline-flex; align-items: center;
   background: var(--color-text); color: var(--color-surface);
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-  border-radius: var(--radius-1); padding: 2px 8px; z-index: 5; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  border-radius: var(--radius-1); padding: 0 7px; z-index: 5; white-space: nowrap;
 }
-.dt-connector {
-  position: absolute; top: 34px; height: 4px; border-radius: 2px;
-  background: var(--color-border-strong); z-index: 0;
-}
-.dt-connector .lbl {
-  position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
-  font-size: 10px; font-family: var(--font-mono); color: var(--color-text-faint); white-space: nowrap;
-}
-.dt-connector.warn { background: var(--color-warning); }
-.dt-connector.warn .lbl { color: var(--color-warning); font-weight: 700; }
-.dt-now { position: absolute; top: -18px; bottom: 0; width: 2px; background: var(--color-accent); z-index: 3; }
-.dt-now::after {
-  content: "now 14:20"; position: absolute; top: 0; left: 4px;
+.dt-now { position: absolute; top: 0; bottom: 20px; width: 2px; background: var(--color-accent); z-index: 3; }
+.dt-now .chip {
+  position: absolute; top: 0; left: 4px; height: 16px; display: inline-flex; align-items: center;
   font-size: 10px; font-weight: 700; color: var(--color-text-on-accent);
-  background: var(--color-accent); border-radius: 3px; padding: 0 5px; white-space: nowrap;
+  background: var(--color-accent); border-radius: var(--radius-1); padding: 0 6px; white-space: nowrap;
 }
+/* hour ruler: its own strip, like the legacy scrub row */
+.dt-ruler {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 20px; display: flex;
+  border-top: 1px solid var(--color-border); background: var(--color-surface-raised);
+}
+.dt-ruler span {
+  flex: 1; font-family: var(--font-mono); font-size: 10px; color: var(--color-text-faint);
+  display: flex; align-items: center; padding-left: 5px; border-left: 1px solid var(--color-border);
+}
+.dt-ruler span:first-child { border-left: none; }
 .dt-shelf {
-  display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2);
-  font-size: 11px; color: var(--color-text-faint);
+  flex: none; height: 34px; display: flex; align-items: center; gap: var(--space-2);
+  font-size: 11px; color: var(--color-text-faint); border-top: 1px solid var(--color-border);
 }
 .dt-chip {
-  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px;
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
   border: 1.5px dashed var(--color-border-strong); border-radius: var(--chip-radius);
   background: var(--color-surface-raised); font-size: 12px; font-weight: 700;
   color: var(--color-text-muted); cursor: grab;
@@ -971,53 +994,66 @@ body {
     <footer class="dt-panel">
       <div class="dt-head">
         <b>Wed 21 Jul - day timeline</b>
-        <span>drag bars to move - drag edges to resize - snaps to 15 min</span>
+        <span>drag bars to move - drag edges to resize - snaps to 15 min - main admin only</span>
         <div class="grow"></div>
-        <span class="legend"><i style="background: var(--cat-meal);"></i>Meal</span>
-        <span class="legend"><i style="background: var(--cat-activity);"></i>Activity</span>
+        <span class="legend"><i style="background: var(--cat-meal);"></i>Meals</span>
+        <span class="legend"><i style="background: var(--cat-activity);"></i>Activities</span>
         <span class="legend"><i style="background: var(--cat-travel);"></i>Travel</span>
-        <span>08:00 - 22:00 - scroll for more</span>
+        <span>08:00 - 22:00</span>
       </div>
-      <div class="dt-axis">
-        <span class="dt-hour">08</span><span class="dt-hour">09</span><span class="dt-hour">10</span><span class="dt-hour">11</span><span class="dt-hour">12</span><span class="dt-hour">13</span><span class="dt-hour">14</span><span class="dt-hour">15</span><span class="dt-hour">16</span><span class="dt-hour">17</span><span class="dt-hour">18</span><span class="dt-hour">19</span><span class="dt-hour">20</span><span class="dt-hour">21</span>
-      </div>
-      <div class="dt-track">
-        <!-- connectors: drive legs from route_cache; warning when drive > gap -->
-        <div class="dt-connector" style="left: 28.571%; width: 7.143%;"><span class="lbl">18 min drive</span></div>
-        <div class="dt-connector" style="left: 46.429%; width: 3.571%;"><span class="lbl">12 min</span></div>
-        <div class="dt-connector warn" style="left: 67.857%; width: 1.19%;"><span class="lbl">22 min drive - 10 min gap</span></div>
-
-        <!-- bars -->
-        <div class="dt-bar activity" style="left: 14.286%; width: 14.286%;">
-          <span class="t">Beach morning</span><span class="w">10:00 - 12:00</span>
+      <div class="dt-body">
+        <div class="dt-gutter">
+          <div class="lane-label">Meals</div>
+          <div class="lane-label">Activities</div>
+          <div class="lane-label">Travel</div>
         </div>
+        <div class="dt-stage">
+          <div class="dt-grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
 
-        <!-- mid-drag: ghost at the original slot, live bar following the pointer -->
-        <div class="dt-bar meal ghost" style="left: 32.143%; width: 10.714%;">
-          <span class="t">The Hidden Hut</span><span class="w">12:30 - 14:00</span>
-        </div>
-        <div class="dt-bar meal dragging" style="left: 35.714%; width: 10.714%;">
-          <span class="t">The Hidden Hut</span><span class="w">13:00 - 14:30</span>
-        </div>
-        <div class="drag-bubble" style="left: 41%; top: -12px;">12:30 &rarr; 13:00</div>
+          <div class="dt-lane meals">
+            <!-- mid-drag: ghost at the original slot, live bar following the pointer -->
+            <div class="dt-bar meal ghost" style="left: 32.143%; width: 10.714%;">
+              <span class="t">The Hidden Hut</span><span class="w">12:30 - 14:00</span>
+            </div>
+            <div class="dt-bar meal dragging" style="left: 35.714%; width: 10.714%;">
+              <span class="t">The Hidden Hut</span><span class="w">13:00 - 14:30</span>
+            </div>
+            <div class="dt-bar meal" style="left: 69.048%; width: 5.952%;">
+              <span class="t">Fish &amp; chips</span><span class="w">17:40</span>
+            </div>
+          </div>
 
-        <!-- selected: resize handles on both edges -->
-        <div class="dt-bar activity selected" style="left: 50%; width: 17.857%;">
-          <span class="t">Coasteering, Praa Sands</span><span class="w">15:00 - 17:30</span>
-        </div>
+          <div class="dt-lane activities">
+            <div class="dt-bar activity" style="left: 14.286%; width: 14.286%;">
+              <span class="t">Beach morning</span><span class="w">10:00 - 12:00</span>
+            </div>
+            <!-- selected: resize handles on both edges -->
+            <div class="dt-bar activity selected" style="left: 50%; width: 17.857%;">
+              <span class="t">Coasteering, Praa Sands</span><span class="w">15:00 - 17:30</span>
+            </div>
+          </div>
 
-        <div class="dt-bar meal" style="left: 69.048%; width: 5.952%;">
-          <span class="t">Fish &amp; chips</span><span class="w">17:40</span>
-        </div>
+          <div class="dt-lane travel">
+            <!-- drives from route_cache in their own lane; amber = drive longer than the gap -->
+            <span class="travel-chip" style="left: 28.571%;">18 min</span>
+            <span class="travel-chip" style="left: 47.857%;">12 min</span>
+            <span class="travel-chip warn" style="left: 67.857%;">! 22 min - gap 10</span>
+          </div>
 
-        <!-- now-cursor: Holiday stage, today only -->
-        <div class="dt-now" style="left: 45.238%;"></div>
+          <!-- headroom band: bubbles and cursor chips live above the lanes, never on them -->
+          <div class="drag-bubble" style="left: 35.714%;">12:30 &rarr; 13:00</div>
+          <div class="dt-now" style="left: 45.238%;"><span class="chip">now 14:20</span></div>
+
+          <div class="dt-ruler">
+            <span>08</span><span>09</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span>
+          </div>
+        </div>
       </div>
       <div class="dt-shelf">
         <span>SOMETIME TODAY - drag onto the track to give it a time:</span>
         <span class="dt-chip"><i></i>Pick up the hire kayaks</span>
         <div class="grow"></div>
-        <span>Main admin can edit - members see this read-only</span>
+        <span>Members see this read-only</span>
       </div>
     </footer>
   </div>
