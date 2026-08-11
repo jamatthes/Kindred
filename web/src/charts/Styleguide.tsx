@@ -4,11 +4,13 @@
  * authenticated route (DS-13). No Storybook dependency; a page-scoped theme toggle so
  * both themes can be compared without touching the account preference.
  *
- * Three sections:
+ * Four sections:
  *  - Tokens (`StyleguideTokens.tsx`) — colour scales in both themes at once, with a live
  *    contrast readout, the preference ramp shown three ways, type and spacing scales.
  *  - Primitives (`StyleguidePrimitives.tsx`) — every primitive that actually exists in
  *    `web/src/app/ui/` and `web/src/design/` today, in its documented states.
+ *  - Dates and times (`StyleguidePickers.tsx`) — the three pickers of Phase 11, live in both
+ *    themes, with their error, disabled and mid-range-hover states.
  *  - Charts — every widget in `web/src/charts/` with realistic sample data (a
  *    York/Cornwall poll, matching `design-preview/charts.html` and
  *    `design-preview/screen-polls.html`), plus each widget's empty and single-point
@@ -24,6 +26,7 @@ import { DistributionStrip } from './DistributionStrip'
 import { MiniBar, Sparkline } from './MiniBar'
 import { StyleguideTokens } from './StyleguideTokens'
 import { StyleguidePrimitives } from './StyleguidePrimitives'
+import { StyleguidePickers } from './StyleguidePickers'
 import type { ChartMember, ChartOption } from './types'
 import './Styleguide.css'
 
@@ -94,6 +97,8 @@ export function Styleguide() {
 
       <p className="k-styleguide__section-title">Primitives</p>
       <StyleguidePrimitives />
+
+      <StyleguidePickers />
 
       <p className="k-styleguide__section-title">Charts — realistic data (York/Cornwall poll)</p>
       <div className="k-styleguide__grid">

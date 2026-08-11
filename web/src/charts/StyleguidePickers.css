@@ -1,0 +1,21 @@
+/* The pickers' styleguide section. Layout only — every picker inside brings its own
+   tokens, and nothing here may restyle one. */
+
+.k-sg-pickers__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: var(--reading-measure);
+  margin-bottom: var(--space-3);
+}
+
+.k-sg-pickers__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Each demo owns a popover that is positioned against it, so the demos may not be allowed
+   to overlap: the stack gives every one its own row rather than a shared grid cell. */
+.k-sg-pickers__stack > * {
+  min-width: 0;
+}
