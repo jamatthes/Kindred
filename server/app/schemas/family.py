@@ -34,9 +34,17 @@ from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from app.models import FAMILY_MANAGER_ROLES, Attachment, Family, FamilyMember, User
+from app.models import (
+    FAMILY_MANAGER_ROLES,
+    HEX_COLOR_RE,
+    MAX_COLOR_SLOTS,
+    Attachment,
+    Family,
+    FamilyMember,
+    User,
+)
 
 GeocodeStatus = Literal["pending", "ok", "not_found", "error"]
 #: Family-level roles (revised 2026-08-11). Independent of the trip-level owner/organiser
@@ -214,7 +222,10 @@ class FamilyOut(BaseModel):
 
     id: uuid.UUID
     name: str
-    color: int
+    #: Exactly one of `color` / `color_custom` is ever set (`ck_families_color_xor`). Clients
+    #: resolve either through `familyColor(family)` and never branch on which is set.
+    color: int | None
+    color_custom: str | None = None
     member_count: int
     #: The town from the geocode. This is what members of other families are shown, so the
     #: street address never has to leave the server for them.
@@ -256,28 +267,54 @@ FAMILY_DETAIL_RESPONSE = {
 
 
 # REMOVED 2026-08-11 with `POST /families` itself: `FamilyCreateIn`, the only body that ever
-# carried a `color` at creation. Nothing sets a slot when a family is made any more — the
-# lowest free one is assigned and `PATCH /families/{id}` changes it afterwards, from a screen
-# that can show which slots are taken. See `plan/features/families/requirements.md` FM-1.
+# carried a `color` at creation. See `plan/features/families/requirements.md` FM-1.
+#
+# REVISED 2026-08-11 (24-colour palette ruling): `POST /families/mine` and `PATCH
+# /families/{id}` both gained `color` / `color_custom` fields below. This does not reopen the
+# withdrawn "create a family for someone else" capability — `FamilyMineIn` is still only ever
+# submitted by the caller founding their *own* family, on the one screen that shows them the
+# taken-slot grid.
+
+
+class ColorAvailabilityOut(BaseModel):
+    """`GET /families/palette` — the taken-set the picker greys swatches out with.
+
+    Deliberately reachable without `require_member`: a founder mid-setup has no
+    `family_members` row yet and cannot call `GET /families`, but needs this to render the
+    picker before they can submit `POST /families/mine`. The payload is not sensitive — which
+    of 24 numbered slots are in use, and whether the palette is full — so it costs nothing to
+    hand to anyone authenticated on the instance.
+    """
+
+    taken_colors: list[int]
+    exhausted: bool
 
 
 class FamilyMineIn(BaseModel):
     """`POST /families/mine` — the family setup screen's only write (FM-13), and the only
     route in the product that creates a family.
 
-    No colour: it is assigned automatically, because someone naming their family on their
-    first login has no idea which slots are free and should not be asked.
+    `color` / `color_custom`: the founder picks their colour on the setup screen (revised
+    2026-08-11); both are optional so a client that has not been updated still gets a colour
+    (the lowest free slot, as before). Exactly one may be given — never both — and
+    `color_custom` is accepted only once the palette is exhausted for this trip; the router
+    enforces both.
     """
 
     name: str = Field(min_length=1, max_length=120)
     home_address: str | None = Field(default=None, max_length=500)
+    color: int | None = Field(default=None, ge=1, le=MAX_COLOR_SLOTS)
+    color_custom: str | None = Field(default=None, pattern=HEX_COLOR_RE)
 
 
 class FamilyPatchIn(BaseModel):
     """PATCH semantics: an omitted field is left alone, which is not the same as null."""
 
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    color: int | None = Field(default=None, ge=1, le=8)
+    color: int | None = Field(default=None, ge=1, le=MAX_COLOR_SLOTS)
+    #: The overflow colour wheel value (revised 2026-08-11). Accepted only once the palette is
+    #: exhausted for the trip — see `_claim_color` in `routers/families.py`.
+    color_custom: str | None = Field(default=None, pattern=HEX_COLOR_RE)
 
 
 class LocationPolicyIn(BaseModel):
@@ -357,6 +394,7 @@ def family_out(family: Family) -> FamilyOut:
         id=family.id,
         name=family.name,
         color=family.color,
+        color_custom=family.color_custom,
         member_count=len(family.members),
         home_locality=family.home_locality,
         home_placed=family.home_placed,
@@ -394,6 +432,7 @@ def family_detail_out(
         id=family.id,
         name=family.name,
         color=family.color,
+        color_custom=family.color_custom,
         member_count=len(family.members),
         home_locality=family.home_locality,
         home_placed=family.home_placed,

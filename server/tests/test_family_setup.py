@@ -381,17 +381,72 @@ async def test_a_duplicate_name_is_refused_on_the_field(
     assert code(response) == "name_taken"
 
 
-async def test_all_eight_colours_taken_leaves_a_clear_message(
+async def test_all_24_colours_taken_leaves_a_clear_message(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, pending: User
 ) -> None:
-    """The user is stuck through no fault of their own, so the message points at the
-    organiser rather than blaming them."""
-    for slot in range(1, 9):
+    """A caller who submits no colour and no custom colour when the palette is exhausted is
+    stuck through no fault of their own — the API's own backstop, since the client is
+    expected to have switched to the colour wheel once `GET /families/palette` reported
+    `exhausted: true` (2026-08-11 palette ruling)."""
+    for slot in range(1, 25):
         await make_family(db, trip, f"Family {slot}", color=slot)
     await login_as(client, db, pending)
-    response = await client.post(MINE, json={"name": "The Ninth"})
+    response = await client.post(MINE, json={"name": "The 25th"})
     assert response.status_code == 409
     assert code(response) == "no_color_slots"
+
+
+async def test_palette_exhaustion_opens_the_custom_colour_gate(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, pending: User
+) -> None:
+    """The 25th family on a trip may submit `color_custom` once every one of the 24 palette
+    slots is taken (2026-08-11 palette ruling) — actually creating 24 families to prove the
+    gate opens on the 25th, per `plan/features/families/tasks.md`."""
+    for slot in range(1, 25):
+        await make_family(db, trip, f"Family {slot}", color=slot)
+    await login_as(client, db, pending)
+    availability = await client.get("/api/v1/families/palette")
+    assert availability.json()["exhausted"] is True
+
+    response = await client.post(
+        MINE, json={"name": "The 25th", "color_custom": "#123ABC"}
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["color"] is None
+    assert body["color_custom"] == "#123ABC"
+
+
+async def test_custom_colour_refused_while_the_palette_has_room(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, pending: User
+) -> None:
+    await login_as(client, db, pending)
+    response = await client.post(
+        MINE, json={"name": "Too Early", "color_custom": "#123ABC"}
+    )
+    assert response.status_code == 422
+    assert code(response) == "custom_color_not_allowed"
+
+
+async def test_both_color_and_custom_colour_is_refused(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, pending: User
+) -> None:
+    await login_as(client, db, pending)
+    response = await client.post(
+        MINE, json={"name": "Both", "color": 1, "color_custom": "#123ABC"}
+    )
+    assert response.status_code == 422
+    assert code(response) == "invalid_color_choice"
+
+
+async def test_a_requested_slot_already_taken_is_still_a_409(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, pending: User
+) -> None:
+    await make_family(db, trip, "The Holders", color=3)
+    await login_as(client, db, pending)
+    response = await client.post(MINE, json={"name": "The Askers", "color": 3})
+    assert response.status_code == 409
+    assert code(response) == "color_taken"
 
 
 async def test_setup_is_refused_once_the_trip_has_ended(

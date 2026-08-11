@@ -109,6 +109,29 @@ async def test_the_family_payload_contains_no_address_field(
         await socket.disconnect()
 
 
+async def test_recolouring_a_family_reaches_a_connected_client(
+    client: httpx.AsyncClient,
+    db: AsyncSession,
+    family_admin: tuple[User, Family],
+    watcher: tuple[User, Family],
+) -> None:
+    """2026-08-11 palette ruling: `family.updated` fires on a colour change too, so pins,
+    badges and cards recolor live everywhere without a reload."""
+    admin, family = family_admin
+    observer, _ = watcher
+    socket = await _socket(db, observer)
+    try:
+        await login_as(client, db, admin)
+        new_slot = 9 if family.color != 9 else 10
+        response = await client.patch(f"{FAMILIES}/{family.id}", json={"color": new_slot})
+        assert response.status_code == 200
+        frame = await _next(socket, "family.updated")
+        assert frame["payload"]["family"]["color"] == new_slot
+        assert frame["payload"]["family"]["color_custom"] is None
+    finally:
+        await socket.disconnect()
+
+
 async def test_creating_a_family_is_announced(
     client: httpx.AsyncClient,
     db: AsyncSession,

@@ -61,11 +61,13 @@ from app.models import (
     is_owner_of,
     next_free_color,
     spouse_may_act_on,
+    taken_colors,
 )
 from app.schemas.common import ApiError, forbidden
 from app.schemas.family import (
     FAMILY_DETAIL_RESPONSE,
     FAMILY_RESPONSE,
+    ColorAvailabilityOut,
     FamilyDetailOut,
     FamilyMineIn,
     FamilyOut,
@@ -208,6 +210,45 @@ async def _claim_color(
     return slot
 
 
+async def _resolve_color(
+    db: AsyncSession,
+    trip_id: uuid.UUID,
+    *,
+    requested_slot: int | None,
+    requested_custom: str | None,
+    excluding: uuid.UUID | None = None,
+) -> tuple[int | None, str | None]:
+    """`(color, color_custom)` for a create or a colour change (2026-08-11 palette ruling).
+
+    Exactly one of the pair comes back non-``None``, matching `ck_families_color_xor`:
+
+    * both given — `422 invalid_color_choice`, mirroring the DB's XOR constraint;
+    * `color_custom` given — allowed only once the palette is exhausted for this trip
+      (`next_free_color` returns ``None``); otherwise `422 custom_color_not_allowed`, because
+      the wheel is the 25th-family-on escape hatch, not a shortcut around picking a slot;
+    * `color` given — the ordinary slot claim, via `_claim_color` (`409 color_taken` /
+      `409 no_color_slots`);
+    * neither given — the lowest free slot, exactly as before this ruling, so an un-updated
+      caller (or the e2e suite's bare "just fill in a name" flow) still gets a valid colour.
+    """
+    if requested_slot is not None and requested_custom is not None:
+        raise ApiError(
+            422,
+            "invalid_color_choice",
+            "Choose a palette colour or a custom one, not both.",
+        )
+    if requested_custom is not None:
+        if await next_free_color(db, trip_id) is not None:
+            raise ApiError(
+                422,
+                "custom_color_not_allowed",
+                "The colour wheel opens once every palette colour is taken.",
+            )
+        return None, requested_custom.upper()
+    slot = await _claim_color(db, trip_id, requested_slot, excluding=excluding)
+    return slot, None
+
+
 def reject_touching_the_owner(member: FamilyMember, trip: Trip | None) -> None:
     """FM-9/FM-10: the trip's owner cannot be removed or demoted through this feature.
 
@@ -317,6 +358,29 @@ async def list_families(db: DbDep, trip: ActiveTrip) -> list[FamilyOut]:
 
 
 @router.get(
+    "/palette",
+    response_model=ColorAvailabilityOut,
+    summary="Which of the 24 palette colours are taken on this trip",
+)
+async def color_availability(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> ColorAvailabilityOut:
+    """Backs the colour picker (2026-08-11 palette ruling), on both the family-setup screen
+    and `FamilyPanel`'s recolour control.
+
+    Deliberately **not** `require_member`-gated: a founder mid-setup — the exact caller who
+    most needs this, to render the grid before `POST /families/mine` — has no
+    `family_members` row yet. `CurrentUser` (any authenticated, password-changed account) is
+    enough, because the payload carries nothing sensitive: which of 24 numbered slots are
+    claimed, and whether the palette is full.
+    """
+    if trip is None:
+        return ColorAvailabilityOut(taken_colors=[], exhausted=False)
+    taken = await taken_colors(db, trip.id)
+    return ColorAvailabilityOut(
+        taken_colors=sorted(taken), exhausted=len(taken) >= MAX_COLOR_SLOTS
+    )
+
+
+@router.get(
     "/{family_id}",
     **FAMILY_DETAIL_RESPONSE,
     dependencies=[Depends(require_member)],
@@ -404,9 +468,16 @@ async def create_my_family(
         raise ApiError(409, "already_has_family", "You are already in a family.")
 
     await _reject_duplicate_name(db, trip.id, payload.name)
-    color = await _claim_color(db, trip.id, None)
+    color, color_custom = await _resolve_color(
+        db,
+        trip.id,
+        requested_slot=payload.color,
+        requested_custom=payload.color_custom,
+    )
 
-    family = Family(trip_id=trip.id, name=payload.name.strip(), color=color)
+    family = Family(
+        trip_id=trip.id, name=payload.name.strip(), color=color, color_custom=color_custom
+    )
     db.add(family)
     await db.flush()
     db.add(FamilyMember(family_id=family.id, user_id=user.id, role=ROLE_HEAD))
@@ -460,9 +531,13 @@ async def update_family(
     if "name" in changes:
         await _reject_duplicate_name(db, family.trip_id, changes["name"], excluding=family.id)
         family.name = changes["name"].strip()
-    if "color" in changes:
-        family.color = await _claim_color(
-            db, family.trip_id, changes["color"], excluding=family.id
+    if "color" in changes or "color_custom" in changes:
+        family.color, family.color_custom = await _resolve_color(
+            db,
+            family.trip_id,
+            requested_slot=changes.get("color"),
+            requested_custom=changes.get("color_custom"),
+            excluding=family.id,
         )
 
     await db.commit()

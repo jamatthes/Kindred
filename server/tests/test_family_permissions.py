@@ -379,3 +379,56 @@ async def test_an_unknown_role_is_refused_by_the_database(
     with pytest.raises(IntegrityError):
         await db.commit()
     await db.rollback()
+
+
+# --- 2026-08-11 palette ruling: colour-change permission matrix ---------------------------
+# Recolouring a family goes through the same `require_family_manager` dependency as every
+# other family-manager action, but the ruling is new enough — and important enough to the
+# "no two families share a slot" invariant — to enumerate on its own rather than trust that
+# `test_a_spouse_manages_the_family_like_the_head_does`'s generic PATCH covers it.
+
+
+async def test_head_can_recolour_their_family(
+    client: httpx.AsyncClient, db: AsyncSession, family_admin: tuple[User, Family]
+) -> None:
+    user, family = family_admin
+    await login_as(client, db, user)
+    new_slot = 9 if family.color != 9 else 10
+    response = await client.patch(f"{FAMILIES}/{family.id}", json={"color": new_slot})
+    assert response.status_code == 200
+    assert response.json()["color"] == new_slot
+
+
+async def test_spouse_can_recolour_their_family(
+    client: httpx.AsyncClient,
+    db: AsyncSession,
+    spouse_household: tuple[Family, User, User, User],
+) -> None:
+    family, _, spouse, _ = spouse_household
+    await login_as(client, db, spouse)
+    new_slot = 9 if family.color != 9 else 10
+    response = await client.patch(f"{FAMILIES}/{family.id}", json={"color": new_slot})
+    assert response.status_code == 200
+    assert response.json()["color"] == new_slot
+
+
+async def test_plain_member_cannot_recolour_their_family(
+    client: httpx.AsyncClient, db: AsyncSession, member: tuple[User, Family]
+) -> None:
+    user, family = member
+    await login_as(client, db, user)
+    response = await client.patch(f"{FAMILIES}/{family.id}", json={"color": 9})
+    assert response.status_code == 403
+
+
+async def test_another_familys_head_cannot_recolour_this_family(
+    client: httpx.AsyncClient,
+    db: AsyncSession,
+    trip: Trip,
+    family_admin: tuple[User, Family],
+) -> None:
+    user, _ = family_admin
+    other = await make_family(db, trip, "Someone Else's", color=11)
+    await login_as(client, db, user)
+    response = await client.patch(f"{FAMILIES}/{other.id}", json={"color": 12})
+    assert response.status_code == 403
