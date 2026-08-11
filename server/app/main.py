@@ -19,9 +19,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
+from app.core.csrf import CSRFMiddleware
 from app.core.migrations import run_migrations
 from app.core.seed import run_seed
-from app.routers import auth, health, me, settings as settings_router
+from app.routers import auth, health, me, probe, settings as settings_router
 from app.schemas.common import CODE_VALIDATION_ERROR
 
 logger = logging.getLogger(__name__)
@@ -108,10 +109,16 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
+    # Added last so it runs outermost (Starlette applies middleware in reverse), ahead of
+    # CORS's preflight short-circuit for the requests that reach the app.
+    app.add_middleware(CSRFMiddleware)
+
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(settings_router.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(me.router, prefix=API_PREFIX)
+    # TEMPORARY — remove with app/routers/probe.py at the end of Phase 8.
+    app.include_router(probe.router, prefix=API_PREFIX)
 
     return app
 
