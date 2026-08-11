@@ -135,6 +135,17 @@ stage stepper (Section 2) calls that endpoint; the previously sketched
 `TripAdminOut` remain this feature's — the console computes the affordances, holiday-stage
 executes the change.
 
+> NOTE (implementation, 2026-08-11): `holiday-stage` had not shipped when this console did,
+> and a stepper that cannot move a stage is not a stepper. `admin-console` therefore
+> implemented that endpoint — `server/app/routers/trips.py`, to `holiday-stage`'s spec and no
+> further: the transition machine, the `reason: "revert"` requirement, the conditional update,
+> the history row and the `stage.changed` broadcast. The **side effects of entering `end`**
+> that `holiday-stage` specifies (deleting `live_locations` rows and emitting
+> `location.cleared` for each) are deliberately absent, because that table does not exist yet.
+> The file's docstring says all of this and names `holiday-stage` as its owner: that feature
+> adds the side effects, `GET /trips/{trip_id}` and the now/next route beside them, and takes
+> the file over.
+
 ### Category voting modes
 
 | Method | Path | Request | Response | Guards |
@@ -161,6 +172,12 @@ served by a separate non-admin route owned by this feature:
 | GET | `/admin/overview` | `?q=` | `{families: [FamilyOut], members: [AdminMemberOut]}` | `require_organiser` |
 | POST | `/admin/users/{id}/reset-password` | `{confirm: true}` | `{temporary_password}` | `require_organiser` + **protected-target rule** |
 | DELETE | `/admin/users/{id}` | — | `204` | `require_organiser` + `require_stage("planning","holiday")` + **protected-target rule** |
+
+> NOTE (implementation): the last-head refusal reuses `families`' own check rather than
+> restating it — `reject_leaving_the_family_headless` and `reject_touching_the_owner` lost
+> their leading underscore and are imported by this router. The code it raises is therefore
+> `head_required` (families' name), not the `last_family_head` this document's tasks file
+> sketched. One implementation was the point of the requirement; the name follows it.
 
 **Protected-target rule** (ruling 2026-08-11): when the target of a reset or removal is the
 **owner or another organiser**, `require_organiser` is not enough — the caller must be the
@@ -280,6 +297,15 @@ existing organiser again is idempotent: `200` with the existing row, not a `409`
 cannot_demote_owner` — the owner is never in `trip_organisers` and is not a valid target.
 Demoting a user who is not currently an organiser returns `404`.
 
+Two refusals this section did not previously name, added with the implementation:
+`POST /admin/organisers` targeting the owner returns `409 cannot_appoint_owner` (they already
+hold every organiser power, and a row would imply it could be taken away), and targeting
+someone with no membership on the trip returns `422 not_on_trip` (the appointment list is
+drawn from the trip's members; there is nobody to search for otherwise).
+
+Both mutations carry `require_stage("planning", "holiday")`, per the stage-availability table
+in `requirements.md`.
+
 Demotion writes only the `trip_organisers` row. It does not touch `family_members.role`,
 `sessions`, or anything else — a demoted organiser keeps their session and their family role
 and simply stops passing `require_organiser` on their next request. There is no forced
@@ -348,6 +374,15 @@ Desktop: a single scrolling column at readable measure with a sticky section ind
 left, inside the standard app shell. This is the one place the 62/38 map split does not apply,
 because there is no map dataset here. Mobile: the same sections stacked, with the index
 collapsed into a jump menu.
+
+> NOTE (implementation): three pieces of this section are **shared primitives**, not console
+> code — `web/src/app/ui/DataTable.tsx` (the tri-state sort, sticky header and sticky first
+> column `plan/design-system.md` describes), `ConfirmDialog.tsx` (action-labelled buttons and
+> the at-most-three consequence list), and `useStage.ts`. The poll matrix, the suggestion list
+> and every later admin-destructive action need the same three, and the third implementation
+> of "click a header to sort" is the one that starts behaving differently from the other two.
+> `useStage().canMutate` is presentation only, and its docstring says so: `require_stage` is
+> the enforcement, and a feature that used the hook *instead* would have no guard at all.
 
 ### Trip setup screen (AC-0)
 
