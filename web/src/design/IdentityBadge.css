@@ -1,0 +1,68 @@
+/* The identity badge. Sizes are component tokens, because four fixed sizes with names
+   ("comment author", "map marker") are a component's own vocabulary, not the spacing scale's.
+   `src/design/**` is where literal values are supposed to live (see scripts/check-tokens.mjs),
+   which is the other reason the badge is defined here rather than inside the feature. */
+
+:root {
+  --badge-24: 24px;
+  --badge-32: 32px;
+  --badge-40: 40px;
+  --badge-64: 64px;
+  --badge-ring: 2px;
+}
+
+.k-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--radius-full);
+  /* Neutral fill, never the family colour: contrast must not depend on which of the eight
+     slots a family holds. */
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  border: var(--badge-ring) solid var(--color-border-strong);
+  overflow: hidden;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.k-badge__initials {
+  /* Sits under the image, so a failed or pending load reveals it rather than a gap. */
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.k-badge__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.k-badge.is-offline {
+  filter: grayscale(1) opacity(0.55);
+}
+
+.k-badge--24 {
+  width: var(--badge-24);
+  height: var(--badge-24);
+  font-size: 10px;
+}
+.k-badge--32 {
+  width: var(--badge-32);
+  height: var(--badge-32);
+  font-size: 13px;
+}
+.k-badge--40 {
+  width: var(--badge-40);
+  height: var(--badge-40);
+  font-size: 16px;
+}
+.k-badge--64 {
+  width: var(--badge-64);
+  height: var(--badge-64);
+  font-size: 26px;
+}

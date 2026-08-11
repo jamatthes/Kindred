@@ -562,6 +562,20 @@ same dataset as a table and as a map overlay.
 - **Table:** columns — colour swatch, name, members, home locality, status. Tri-state sort
   (asc → desc → original), sticky header, full-row click target, tabular figures on the member
   count, right-aligned numerics. Density from spacing tokens.
+
+> NOTE (implementation, Phase 9): shipped as a **card grid**, not a table, following the agreed
+> mockup `design-preview/screen-families.html` and `plan/overview.md`'s UI-first rule ("feature
+> UI work starts from the agreed mockup"). The mockup is right here: a trip has at most eight
+> families of a few people each, so what is worth seeing at a glance is *who is in each
+> family* — which a card holds and a row cannot. Tri-state sort over eight rows solves a
+> problem this screen does not have. What survived from this paragraph is what mattered: the
+> colour swatch is always paired with the name, the member count is tabular, density comes
+> from spacing tokens, and the whole card is one click target.
+>
+> The **map half** of the map/table pair is deferred with the map shell (M2): there is no map
+> component in the app yet, and `plan/architecture.md` reserves the browser Maps SDK for
+> `map-suggestions`. The rule that mattered — "families without coordinates are not silently
+> invisible" — is kept: every card states its home town, or "No home set", or "Not placed".
 - **Selection:** clicking a row or a pin opens that family in the side panel. The panel holds
   the family header (colour swatch, name), the home block, the member list, the location
   block, and the invite block. Admin controls appear only for callers who are entitled to
@@ -661,6 +675,15 @@ text beneath the name, which is the only place the three inputs are visible toge
 The fourth and fifth rows are worded in the second person deliberately: the head or spouse is
 looking at a consequence of their own action, and the copy should say so rather than reporting
 a neutral state.
+
+> NOTE (implementation, Phase 9): the first row is unreachable until `holiday-stage` ships —
+> "sharing now" needs a fresh `live_locations` row, which that feature owns. Until then a
+> member whose three permission terms all pass gets the second string, which is true either
+> way and errs towards *not* claiming somebody is visible when the app cannot know. An
+> indicator that over-promises here is worse than one that under-promises. A sixth string was
+> needed and added: when the viewer is not entitled to a member's consent state at all
+> (`location_sharing_enabled` is null), the row reads "Only they can see this setting" rather
+> than inventing one of the five.
 
 Turning the family switch off shows an undo toast rather than a confirm — it is instantly
 reversible and restores exactly the previous set of sharers, so a confirm dialog would be

@@ -64,6 +64,12 @@ class UserOut(BaseModel):
     #: for a mononym. Computed server-side so every surface renders the same badge.
     initials: str = ""
     is_platform_admin: bool
+    #: Trip-level roles (revised 2026-08-11), carried here because the shell has to decide
+    #: which controls to *render* and cannot derive them: the viewer may have no family at
+    #: all, so there is no `MemberOut` of themselves to read it from. What they may *do* is
+    #: still the server's decision — this only governs what is drawn.
+    is_owner: bool = False
+    is_organiser: bool = False
     must_change_password: bool
     #: **The onboarding gate.** Which top-level screen this session may see. The client routes
     #: on this and nothing else, so the forced password change and both first-login setup

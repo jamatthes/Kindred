@@ -5,9 +5,17 @@ import type { User } from './types'
 const user = (overrides: Partial<User> = {}): User => ({
   id: 'u1',
   username: 'admin',
+  first_name: 'Admin',
+  last_name: '',
+  avatar_url: null,
+  avatar_thumb_url: null,
+  initials: 'A',
   display_name: 'Admin',
   is_platform_admin: true,
+  is_owner: true,
+  is_organiser: true,
   must_change_password: false,
+  next_step: 'app',
   theme_pref: 'system',
   locale: 'en-GB',
   family: null,
@@ -32,9 +40,27 @@ describe('routeFor — the gate the whole shell hangs on', () => {
   })
 
   it('pins a must-change-password user to the change screen', () => {
-    expect(routeFor('authenticated', user({ must_change_password: true }))).toBe(
-      'password-change',
+    // The *server* decides this, and says so in `next_step`. The client used to derive it
+    // from `must_change_password`; it no longer does, because there are four gates now and a
+    // client-side precedence is a second place for the order to be wrong. `families` moved
+    // it (foundation F-13, `app/core/onboarding.py`).
+    expect(
+      routeFor('authenticated', user({ must_change_password: true, next_step: 'change_password' })),
+    ).toBe('password-change')
+  })
+
+  it('routes on next_step alone, not on the flags behind it', () => {
+    // The proof that the precedence really did move: a user whose flag says one thing and
+    // whose `next_step` says another follows `next_step`. Only the server can be right here,
+    // because only the server can see all four conditions.
+    expect(routeFor('authenticated', user({ must_change_password: true, next_step: 'app' }))).toBe(
+      'app',
     )
+  })
+
+  it('knows the two first-login setup screens', () => {
+    expect(routeFor('authenticated', user({ next_step: 'setup_family' }))).toBe('setup-family')
+    expect(routeFor('authenticated', user({ next_step: 'setup_trip' }))).toBe('setup-trip')
   })
 
   it('treats a missing user as anonymous even if the status disagrees', () => {

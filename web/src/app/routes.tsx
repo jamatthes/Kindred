@@ -1,84 +1,31 @@
 /**
  * Top-level routing.
  *
- * There is no route table yet because M0 has one destination. What matters here is the
- * *gate*: which of the three top-level screens the session allows. `routeFor` in
- * `session.ts` owns that decision, and this file only renders its answer — which is why
- * the forced password change cannot be navigated around. It is not a route the user is
- * sent to; it is the only thing that renders until the server says otherwise.
+ * Two things happen here, and keeping them apart is the point:
  *
- * Feature routing arrives with the first feature that has more than one screen.
+ * 1. **The gate.** `routeFor` in `session.ts` turns the server's `next_step` into one of five
+ *    top-level screens. The client is told the answer, never the precedence, so the forced
+ *    password change and both setup screens cannot be navigated around — they are not routes
+ *    the user is *sent to*, they are the only thing that renders until the server says
+ *    otherwise.
+ * 2. **The route.** Within the app, `router.ts` says which screen the URL asks for.
+ *
+ * The URL never overrides the gate. `/join/<token>` is the one exception and it is not one
+ * really: it is a public screen for someone with no session at all, so there is no gate to
+ * override.
  */
 
-import { useState } from 'react'
 import { useSession } from './session'
+import { useRoute } from './router'
 import { Shell } from './shell'
-import { BottomSheet } from './BottomSheet'
 import { Button, Skeleton } from './ui/primitives'
 import LoginScreen from '../features/auth/LoginScreen'
 import ChangePasswordScreen from '../features/auth/ChangePasswordScreen'
-
-const STAGE_BLURB: Record<string, string> = {
-  planning: 'Suggest places, vote, and settle the plan.',
-  holiday: "You're away — check in and see what's next.",
-  end: 'This trip has finished — everything is read-only.',
-}
-
-function Home() {
-  const { user } = useSession()
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const trip = user?.trip ?? null
-
-  const details = (
-    <>
-      <div className="home__row">
-        <span className="label">Stage</span>
-        <span>{trip ? STAGE_BLURB[trip.stage] : '—'}</span>
-      </div>
-      <div className="home__row">
-        <span className="label">Dates</span>
-        <span>
-          {trip?.start_date && trip?.end_date
-            ? `${trip.start_date} to ${trip.end_date}`
-            : 'Not decided yet'}
-        </span>
-      </div>
-      <div className="home__row">
-        <span className="label">Timezone</span>
-        <span>{trip?.timezone ?? '—'}</span>
-      </div>
-      <div className="home__row">
-        <span className="label">Your family</span>
-        <span>{user?.family?.name ?? 'Not on a family yet — an invite adds you to one.'}</span>
-      </div>
-    </>
-  )
-
-  return (
-    <div className="home">
-      <h1 className="home__title">{trip?.name ?? 'Your trip'}</h1>
-      <p className="home__sub">
-        {trip
-          ? STAGE_BLURB[trip.stage]
-          : 'No trip has been created yet. The organiser sets one up in the admin console.'}
-      </p>
-
-      <div className="home__card">{details}</div>
-
-      {/* The sheet is the mobile side panel. Kept reachable in M0 so the pattern is
-          verifiable before a feature depends on it. */}
-      <div className="home__card">
-        <Button variant="secondary" onClick={() => setSheetOpen(true)}>
-          Open trip details
-        </Button>
-      </div>
-
-      <BottomSheet open={sheetOpen} title="Trip details" onClose={() => setSheetOpen(false)}>
-        {details}
-      </BottomSheet>
-    </div>
-  )
-}
+import { FamiliesScreen } from '../features/families/FamiliesScreen'
+import { FamilySetupScreen } from '../features/families/FamilySetupScreen'
+import { JoinScreen } from '../features/families/JoinScreen'
+import { ProfileScreen } from '../features/families/ProfileScreen'
+import { Home } from '../features/home/Home'
 
 /** Structural load: the shell's shape, not a spinner. */
 function ShellSkeleton() {
@@ -93,21 +40,98 @@ function ShellSkeleton() {
   )
 }
 
-export function Routes() {
-  const { route } = useSession()
+/**
+ * `next_step: "setup_trip"` — the owner has not set the trip up. The screen belongs to
+ * `admin-console` (AC-0), which owns every write to `trips`; the gate that leads here is
+ * foundation's and already works. Until that feature lands this says so plainly, because a
+ * blank screen would look like a bug and a redirect would put someone somewhere the server
+ * will not let them act.
+ */
+function TripSetupPlaceholder() {
+  const { logout } = useSession()
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        <div className="auth-wordmark">Kindred</div>
+        <h1 className="auth-title">Set up your trip</h1>
+        <p className="auth-sub">
+          This screen arrives with the admin console. Everything else is ready and waiting for
+          it.
+        </p>
+        <Button block variant="secondary" onClick={() => void logout()}>
+          Log out
+        </Button>
+      </div>
+    </div>
+  )
+}
 
-  switch (route) {
+function NotFound({ path }: { path: string }) {
+  return (
+    <div className="home">
+      <h1 className="home__title">Nothing here</h1>
+      <p className="home__sub">
+        <code>{path}</code> is not a page in Kindred.
+      </p>
+    </div>
+  )
+}
+
+/** Inside the shell: the destinations a member can actually reach. */
+function AppRoutes() {
+  const route = useRoute()
+
+  switch (route.name) {
+    case 'families':
+      return (
+        <Shell activeNav="families">
+          <FamiliesScreen selectedId={route.familyId} />
+        </Shell>
+      )
+    case 'profile':
+      return (
+        <Shell activeNav="profile">
+          <ProfileScreen />
+        </Shell>
+      )
+    case 'not-found':
+      return (
+        <Shell>
+          <NotFound path={route.path} />
+        </Shell>
+      )
+    // `join` and `setup-family` are handled above the gate; reaching them here means the
+    // session moved on (they finished, or logged in), so home is the honest answer.
+    default:
+      return (
+        <Shell activeNav="home">
+          <Home />
+        </Shell>
+      )
+  }
+}
+
+export function Routes() {
+  const { route: gate } = useSession()
+  const url = useRoute()
+
+  // Public, and deliberately checked before the gate: a visitor holding an invite link has
+  // no session, and sending them to the login screen would strand them with a link they
+  // cannot use and no way to register.
+  if (url.name === 'join') return <JoinScreen token={url.token} />
+
+  switch (gate) {
     case 'loading':
       return <ShellSkeleton />
     case 'login':
       return <LoginScreen />
     case 'password-change':
       return <ChangePasswordScreen />
+    case 'setup-trip':
+      return <TripSetupPlaceholder />
+    case 'setup-family':
+      return <FamilySetupScreen />
     case 'app':
-      return (
-        <Shell>
-          <Home />
-        </Shell>
-      )
+      return <AppRoutes />
   }
 }

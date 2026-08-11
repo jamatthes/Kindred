@@ -28,7 +28,16 @@ from app.core.sessions import (
     revoke_user_sessions,
     sweep_expired_sessions,
 )
-from app.deps import ActiveTrip, CurrentUser, DbDep, SessionDep, client_ip, load_membership
+from app.deps import (
+    ActiveTrip,
+    CurrentUser,
+    DbDep,
+    SessionDep,
+    client_ip,
+    is_organiser,
+    is_owner,
+    load_membership,
+)
 from app.models import Trip, User
 from app.schemas.auth import LoginIn, LoginOut, PasswordChangeIn
 from app.schemas.common import (
@@ -75,6 +84,8 @@ async def build_user_out(db: AsyncSession, user: User, trip: Trip | None) -> Use
         avatar_thumb_url=avatar_url(user.avatar, thumb=True),
         initials=initials(user),
         is_platform_admin=user.is_platform_admin,
+        is_owner=await is_owner(user, trip),
+        is_organiser=await is_organiser(db, user, trip),
         must_change_password=user.must_change_password,
         next_step=await resolve_next_step(db, user, trip),
         theme_pref=user.theme_pref,
