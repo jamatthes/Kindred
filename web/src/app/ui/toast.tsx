@@ -4,21 +4,14 @@
  * rules in `plan/design-system.md`.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { ToastContext } from './toastContext'
 import './ui.css'
 
 type Toast = { id: number; message: string }
 
-const ToastContext = createContext<((message: string) => void) | null>(null)
-
 const TOAST_MS = 4000
-
-export function useToast(): (message: string) => void {
-  const show = useContext(ToastContext)
-  if (show === null) throw new Error('useToast must be used inside <ToastProvider>')
-  return show
-}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])

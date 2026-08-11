@@ -27,8 +27,8 @@
   gap: var(--space-2);
 }
 .rail__logo {
-  width: 36px;
-  height: 36px;
+  width: var(--space-5);
+  height: var(--space-5);
   border-radius: var(--radius-2);
   background: var(--color-accent);
   color: var(--color-text-on-accent);
@@ -120,8 +120,8 @@
 }
 .stage-chip::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: var(--space-1);
+  height: var(--space-1);
   border-radius: var(--radius-full);
   background: currentColor;
 }
@@ -129,7 +129,7 @@
 .stage-chip--end { background: var(--color-surface-sunken); color: var(--color-text-muted); }
 
 .topbar__search {
-  width: 320px;
+  width: var(--topbar-search-width);
   height: var(--button-height);
   border-radius: var(--chip-radius);
   border: 1px solid var(--color-border-strong);
@@ -189,8 +189,8 @@
   background: var(--color-surface);
   color: var(--color-text-muted);
   padding: 0 var(--space-2);
-  height: 32px;
-  min-width: 32px;
+  height: var(--space-5);
+  min-width: var(--space-5);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -228,7 +228,7 @@
 /* ------------------------------ home region ------------------------------ */
 .home {
   padding: var(--space-5) var(--space-4);
-  max-width: 720px;
+  max-width: var(--reading-measure);
   margin: 0 auto;
 }
 .home__title {
@@ -252,7 +252,7 @@
   font-size: var(--text-sm);
 }
 .home__row + .home__row { border-top: 1px solid var(--color-border); }
-.home__row .label { color: var(--color-text-muted); width: 140px; flex: none; }
+.home__row .label { color: var(--color-text-muted); width: var(--label-column-width); flex: none; }
 
 /* --------------------------- reconnecting chip ---------------------------
    Only rendered after the second consecutive failure, so a one-second blip is
@@ -304,7 +304,9 @@
 .tabbar__tab:disabled { color: var(--color-text-faint); opacity: 0.6; cursor: not-allowed; }
 
 /* --------------------------------- mobile -------------------------------- */
-@media (max-width: 767px) {
+/* A media query cannot read a custom property, so the mobile breakpoint
+   (--breakpoint-mobile, minus one) is written out here and only here. */
+@media (max-width: 767px) { /* token-check-ignore */
   .rail { display: none; }
   .tabbar { display: flex; }
   .side-panel { display: none; }  /* the bottom sheet takes its place */

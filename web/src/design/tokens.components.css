@@ -34,4 +34,9 @@
   --panel-max-width: 460px;
   --tabbar-height: 64px;
   --breakpoint-mobile: 768px;
+  --topbar-search-width: 320px;
+  /* Comfortable measures: one column of prose, and one column of card. */
+  --reading-measure: 720px;
+  --card-measure-sm: 420px;
+  --label-column-width: 140px;
 }

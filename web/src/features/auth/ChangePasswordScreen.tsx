@@ -14,7 +14,7 @@ import type { FormEvent } from 'react'
 import { ApiError } from '../../app/apiClient'
 import { useSession } from '../../app/session'
 import { Banner, Button, TextField } from '../../app/ui/primitives'
-import { useToast } from '../../app/ui/toast'
+import { useToast } from '../../app/ui/toastContext'
 import { useValidatedField } from '../../app/ui/useValidatedField'
 import './auth.css'
 

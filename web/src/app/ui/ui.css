@@ -43,7 +43,9 @@
 .k-btn--ghost:hover:not([disabled]) { background: var(--color-surface-sunken); }
 
 /* Touch targets are never below 44px on a phone. */
-@media (max-width: 767px) {
+/* A media query cannot read a custom property, so the mobile breakpoint
+   (--breakpoint-mobile, minus one) is written out here and only here. */
+@media (max-width: 767px) { /* token-check-ignore */
   .k-btn { height: var(--button-height-mobile); }
 }
 
