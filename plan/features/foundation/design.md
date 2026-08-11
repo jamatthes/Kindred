@@ -343,6 +343,18 @@ scale in `web/src/features/**` and `web/src/app/**`.
 
 Every key, with a placeholder and a one-line comment. `deploy/.env` is never committed.
 
+> NOTE (implementation, Phase 8): two corrections this section's original form required.
+> **1. Comments go on their own line, never trailing a value.** Docker Compose's `env_file`
+> parser strips a trailing comment only when the value is non-empty: `KEY=      # note`
+> yields the literal string `"# note"`, not `""`. That silently broke the four keys this
+> table says must ship blank — the app would have believed a Google/VAPID key was
+> configured. Verified against Compose v5 before and after the change.
+> **2. `DATABASE_URL` means two different things** depending on who reads it. Host-side
+> tooling (`alembic`, `pytest`) needs `localhost`; the `api` container needs the compose
+> service name `postgres`. `deploy/docker-compose.yml` derives the container's value from
+> `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` and overrides the file's, so one `.env`
+> serves both and a stale host in `.env` cannot quietly break the container.
+
 | Key | Example | Purpose |
 |---|---|---|
 | `POSTGRES_USER` | `kindred` | Postgres role |
@@ -357,6 +369,9 @@ Every key, with a placeholder and a one-line comment. `deploy/.env` is never com
 | `SEED_ADMIN_PASSWORD` | `admin` | Seeded password; forced change on first login |
 | `PUBLIC_BASE_URL` | `https://kindred.example.org` | Used for invite links and push payloads |
 | `CORS_ORIGINS` | `http://localhost:5173` | Dev only; empty in production (same origin behind Caddy) |
+| `KINDRED_SITE_ADDRESS` | `:8080` | Caddy site address; a hostname here makes Caddy provision TLS |
+| `KINDRED_HTTP_PORT` | `8080` | Host port published for Caddy |
+| `KINDRED_POSTGRES_PORT` | `5432` | Host port for Postgres, for host-side alembic/pytest |
 | `GOOGLE_MAPS_BROWSER_KEY` | `` | Maps JS + Places, restricted by HTTP referrer |
 | `GOOGLE_MAPS_SERVER_KEY` | `` | Geocoding, Distance Matrix, Directions, restricted by IP |
 | `VAPID_PUBLIC_KEY` | `` | Web Push (`pwa-push`) |

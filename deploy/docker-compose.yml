@@ -1,10 +1,12 @@
-# Kindred — deployment stack.
+# Kindred — deployment stack (F-1).
 #
-# PARTIAL: foundation Phase 2 needs a database to run migrations against, so only `postgres`
-# is defined so far. Phase 8 (`plan/features/foundation/tasks.md`) adds the `api` and `caddy`
-# services, the healthcheck-gated dependency and the restart policies.
+#   docker compose -f deploy/docker-compose.yml up --build
 #
-# Config comes from `deploy/.env` (copy `deploy/.env.example`). Never commit `.env`.
+# Three services: `postgres` (volume-backed), `api` (uvicorn), `caddy` (serves the built web
+# bundle and reverse-proxies /api and /ws). Config comes from `deploy/.env` — copy
+# `deploy/.env.example`. Never commit `.env`. See deploy/README.md for first-run steps.
+
+name: kindred
 
 services:
   postgres:
@@ -16,8 +18,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-kindred}
       TZ: ${TZ:-Europe/London}
     ports:
-      # Exposed for local development (alembic, pytest) against the container.
-      - "5432:5432"
+      # Published for host-side development tooling (alembic, pytest). Remove this on a
+      # server that does not need it — the api container reaches Postgres over the compose
+      # network either way.
+      - "${KINDRED_POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,5 +30,60 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Overrides whatever DATABASE_URL says in .env. Host-side tools need `localhost` and
+      # this container needs the `postgres` service name; deriving it here means one .env
+      # serves both and a stale host in .env cannot silently break the container.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kindred}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-kindred}
+    depends_on:
+      postgres:
+        # Waits for pg_isready, not merely for the container to exist. The app also retries
+        # the connection for up to 60s on its own (app/core/migrations.py), so an unhealthy
+        # database delays startup rather than crash-looping it.
+        condition: service_healthy
+    expose:
+      - "8000"
+    volumes:
+      - attachments:${ATTACHMENTS_DIR:-/data/attachments}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # Generous: the first boot runs migrations and the seed before it answers at all.
+      start_period: 60s
+
+  caddy:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      KINDRED_SITE_ADDRESS: ${KINDRED_SITE_ADDRESS:-:8080}
+    depends_on:
+      - api
+    ports:
+      - "${KINDRED_HTTP_PORT:-8080}:8080"
+      # Uncomment both when KINDRED_SITE_ADDRESS is a real hostname, so Caddy can serve
+      # HTTPS and answer the ACME HTTP-01 challenge.
+      # - "80:80"
+      # - "443:443"
+    volumes:
+      # Bind-mounted, not baked in, so the proxy can be adjusted without a rebuild.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and OCSP staples survive a recreate; without this Caddy re-requests a
+      # certificate on every deploy and will hit Let's Encrypt rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
+  attachments:
+  caddy_data:
+  caddy_config:

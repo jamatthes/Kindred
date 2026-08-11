@@ -1,0 +1,69 @@
+# Kindred — reverse proxy and static file server.
+#
+# One origin for everything: the SPA, `/api` and `/ws`. That is what makes the session
+# cookie same-origin, which is why the API needs no CORS configuration in production.
+#
+# The site address comes from KINDRED_SITE_ADDRESS in deploy/.env:
+#   * a hostname (`kindred.example.org`) — Caddy provisions and renews TLS automatically,
+#     which is what production must use: geolocation, PWA install, service workers and Web
+#     Push all require a secure context (plan/architecture.md).
+#   * `:8080` — plain HTTP, for local testing only. Browsers treat http://localhost as a
+#     secure context, so the `Secure` session cookie is still accepted there.
+
+{
+	# No admin API surface: nothing in this deployment drives Caddy at runtime.
+	admin off
+	persist_config off
+}
+
+{$KINDRED_SITE_ADDRESS::8080} {
+	encode zstd gzip
+
+	header {
+		# Do not advertise the server software.
+		-Server
+
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Cross-Origin-Opener-Policy "same-origin"
+
+		# Geolocation is granted to our own origin because check-ins and live location need
+		# it (holiday-stage); everything else is denied outright.
+		Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=(), interest-cohort=()"
+
+		# Only meaningful over HTTPS; harmless on the plain-HTTP local address.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	# --- API ---------------------------------------------------------------------------
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# --- WebSocket ---------------------------------------------------------------------
+	# Caddy v2 proxies WebSockets natively: it detects the `Upgrade: websocket` request and
+	# switches to streaming, preserving Connection/Upgrade end to end. The explicit
+	# `header_up` lines older guides show are for v1 and would be redundant here.
+	handle /ws {
+		reverse_proxy api:8000
+	}
+
+	# --- SPA ---------------------------------------------------------------------------
+	handle {
+		root * /srv
+
+		# The service worker and the manifest must never be served stale, or an install can
+		# pin an old shell indefinitely.
+		@no-store path /sw.js /manifest.webmanifest /index.html
+		header @no-store Cache-Control "no-cache"
+
+		# Fingerprinted assets are immutable by construction.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		# Client-side routing: any unknown path is a route, not a 404.
+		try_files {path} /index.html
+		file_server
+	}
+}

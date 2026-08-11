@@ -147,8 +147,22 @@ async def db() -> AsyncIterator[AsyncSession]:
 
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
-    """An ASGI client. `https` so the `Secure` cookies are actually stored."""
+    """An ASGI client against the real app. `https` so `Secure` cookies are stored."""
     transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="https://test") as c:
+        yield c
+
+
+@pytest.fixture
+async def probe_client() -> AsyncIterator[httpx.AsyncClient]:
+    """A client against the real app **plus** the test-only probe routes.
+
+    See `tests/probeapp.py`: the served app no longer carries `/_probe`, but the permission
+    dependencies still need a route to be tested through.
+    """
+    from tests.probeapp import build_probe_app  # noqa: PLC0415 — avoids an import cycle
+
+    transport = httpx.ASGITransport(app=build_probe_app())
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as c:
         yield c
 

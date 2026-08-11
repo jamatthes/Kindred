@@ -1,6 +1,9 @@
 # Environment / secrets
 .env
 deploy/.env
+# ...and any variant (.env.verify, .env.staging). The example is the one exception.
+deploy/.env.*
+!deploy/.env.example
 
 # Python
 __pycache__/
