@@ -32,7 +32,7 @@ from typing import Literal
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FamilyMember, Invite, Trip, User
+from app.models import FamilyMember, Invite, Trip, User, is_owner_of
 
 NextStep = Literal["change_password", "setup_trip", "setup_family", "app"]
 
@@ -77,19 +77,28 @@ async def is_pending_family(db: AsyncSession, user: User) -> bool:
 
 
 async def needs_trip_setup(db: AsyncSession, user: User, trip: Trip | None) -> bool:
-    """Whether the main admin still has to set the trip up (`admin-console` AC-0).
+    """Whether the **owner** still has to set the trip up (`admin-console` AC-0).
+
+    Two conditions, and both matter:
+
+    * the trip is not set up — `Trip.setup_complete`, which is `admin-console`'s predicate
+      and lives on the model so this gate and `TripAdminOut.setup_complete` cannot disagree
+      about what "set up" means;
+    * the caller is the owner. Organisers never see this screen, per AC-0: they inherit a
+      trip somebody else is expected to name, and sending them to a form the owner owns
+      would hand them a decision that is not theirs.
+
+    A missing trip is the fresh-install case, where only the seeded platform admin can do
+    anything about it.
 
     .. note::
-       The *condition* belongs to `admin-console`, which owns every write to `trips`; only
-       the slot in the precedence belongs here. Until that feature ships, the condition is
-       the honest minimum — there is no trip at all — which never fires on a seeded install,
-       because the seed creates one. `admin-console` replaces the body of this function with
-       its own rule (a trip that has not been named and dated by its owner) and changes
-       nothing else, in this module or in the client.
+       The *slot in the precedence* is foundation's; the *condition* is `admin-console`'s.
+       Only the body of this function changed when that feature landed — the client, the
+       ordering, and `resolve_next_step` are all untouched, which is what the split was for.
     """
-    if trip is not None:
-        return False
-    return user.is_platform_admin
+    if trip is None:
+        return bool(user.is_platform_admin)
+    return is_owner_of(trip, user) and not trip.setup_complete
 
 
 async def resolve_next_step(

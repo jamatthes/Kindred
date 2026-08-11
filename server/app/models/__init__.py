@@ -43,6 +43,7 @@ from app.models.trip import (
     Trip,
     TripCategorySetting,
     TripStageTransition,
+    is_owner_of,
 )
 from app.models.trip_organiser import TripOrganiser
 from app.models.user import THEME_PREFS, User, UserSettings
@@ -86,6 +87,7 @@ __all__ = [
     "User",
     "UserSettings",
     "invite_status",
+    "is_owner_of",
     "is_invite_usable",
     "location_block_reason",
     "next_free_color",

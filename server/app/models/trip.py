@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
@@ -27,6 +28,9 @@ from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from app.models.user import User
 
 #: Trip lifecycle. `end` is a frozen archive: every `require_stage`-guarded route rejects it.
 STAGES = ("planning", "holiday", "end")
@@ -46,6 +50,35 @@ class Trip(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Europe/London")
+
+    @property
+    def setup_complete(self) -> bool:
+        """Has the owner finished setting this trip up? (`admin-console` AC-0.)
+
+        Defined once, here, because two things read it and must not drift: the console's
+        `TripAdminOut.setup_complete`, and foundation's `next_step` gate, which sends the
+        owner to the setup screen while it is false.
+
+        Deliberately **not** the dates. They are legitimately unknown during Planning —
+        deciding them is what Planning is for — and requiring them to finish setup would
+        block the owner on a decision the trip has not made yet. The timezone has a
+        defensible default (the container's `TZ`); the name does not, which is why an empty
+        name is what keeps the gate closed.
+        """
+        return bool(self.name and self.name.strip()) and bool(self.timezone)
+
+
+def is_owner_of(trip: Trip | None, user: User) -> bool:
+    """The trip's owner, or the bootstrap platform admin.
+
+    Here rather than in `deps.py` because `core/onboarding.py` needs the same answer and
+    cannot import `deps` — `deps` imports *it*. Two implementations of "is this the owner"
+    is exactly the kind of drift that ends with one screen shown to someone another screen
+    would refuse.
+    """
+    return bool(user.is_platform_admin) or (
+        trip is not None and trip.owner_user_id == user.id
+    )
 
 
 #: `trip_category_settings.category`. Five fixed kinds of thing a group votes on. `poll`
