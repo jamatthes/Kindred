@@ -8,6 +8,7 @@ guard at router level.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, Response, status
 from sqlalchemy import func, select
@@ -173,6 +174,12 @@ async def login(
 
     await ratelimit.record_attempt(db, username=username, ip=ip, succeeded=True)
     await ratelimit.clear_failures(db, username)
+
+    # `admin-console` AC-6: the overview shows who has never logged in, which needs a fact
+    # nothing else records. Written here rather than in a dependency because *this* is the
+    # moment a login happens; touching it on every authenticated request would make it a
+    # last-seen timestamp, which is a different (and noisier) thing.
+    user.last_login_at = datetime.now(UTC)
 
     # Session fixation: any session the caller already held dies here, so a cookie planted
     # before login cannot survive it.
