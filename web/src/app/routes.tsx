@@ -17,6 +17,7 @@ import { BottomSheet } from './BottomSheet'
 import { Button, Skeleton } from './ui/primitives'
 import LoginScreen from '../features/auth/LoginScreen'
 import ChangePasswordScreen from '../features/auth/ChangePasswordScreen'
+import { Styleguide } from '../charts/Styleguide'
 
 const STAGE_BLURB: Record<string, string> = {
   planning: 'Suggest places, vote, and settle the plan.',
@@ -104,6 +105,11 @@ export function Routes() {
     case 'password-change':
       return <ChangePasswordScreen />
     case 'app':
+      // Internal, unlinked gallery (DS-13) — behind the authenticated branch, gated by
+      // path rather than a route table (none exists yet; see the file header).
+      if (window.location.pathname === '/styleguide') {
+        return <Styleguide />
+      }
       return (
         <Shell>
           <Home />
