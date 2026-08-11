@@ -244,6 +244,40 @@ def invite_status(invite: Invite, *, now: datetime | None = None) -> str:
     return "active" if is_invite_usable(invite, now=now) else "expired"
 
 
+#: Why a member is not on the map, in the order the terms are checked. `None` means the three
+#: terms all pass — which is *permission*, not a marker: a marker also needs a fresh
+#: `live_locations` row, and that is `holiday-stage`'s to know about.
+LOCATION_BLOCKED_FAMILY = "family_off"
+LOCATION_BLOCKED_MEMBER = "member_off"
+LOCATION_BLOCKED_CONSENT = "no_consent"
+
+
+def location_block_reason(
+    family: Family, member: FamilyMember, *, consented: bool
+) -> str | None:
+    """Which of the three terms stops this member appearing on the map, if any.
+
+    ``visible(user)`` in `plan/features/families/design.md` is a conjunction of four facts;
+    this evaluates the three that `families` owns and leaves the fourth — a fresh
+    `live_locations` row — to `holiday-stage`, which owns the location data.
+
+    Provided rather than left to the consumer because the hand-off note is explicit: that
+    feature "must compute visibility from those terms rather than from `user_settings`
+    alone". A rule re-derived at the point of use is a rule that will be derived differently.
+
+    The order is fixed so the API can answer "why is nobody from this family on the map" with
+    a single reason rather than a set. The boolean result is identical either way; the
+    ordering exists for the explanation, not for correctness.
+    """
+    if not family.location_sharing_allowed:
+        return LOCATION_BLOCKED_FAMILY
+    if not member.location_sharing_allowed:
+        return LOCATION_BLOCKED_MEMBER
+    if not consented:
+        return LOCATION_BLOCKED_CONSENT
+    return None
+
+
 async def next_free_color(db: AsyncSession, trip_id: uuid.UUID) -> int | None:
     """The lowest colour slot 1-8 not in use on this trip, or ``None`` when all are taken.
 

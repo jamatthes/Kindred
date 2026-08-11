@@ -70,7 +70,11 @@ async def test_require_member_denies_a_user_with_no_family(
     await login_as(probe_client, db, outsider)
     response = await probe_client.get(MEMBER)
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "forbidden"
+    # A distinct code from the generic `forbidden`, added by `families`: the client has to
+    # tell "you are not on this trip" (show the not-on-the-trip screen) apart from "you are
+    # on it but may not do that" (show nothing — the control should not have been there).
+    # `plan/features/families/design.md` names it in the edge-case table.
+    assert response.json()["detail"]["code"] == "not_on_trip"
 
 
 # --- require_main_admin ------------------------------------------------------------------

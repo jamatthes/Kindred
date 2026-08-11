@@ -421,6 +421,16 @@ Rules, following `plan/architecture.md` and `CLAUDE.md`:
 - Called **only** from the home-set and home-retry endpoints. Never from a list or render
   path. A `GET /families` request must never be able to trigger an external call, no matter
   what state the row is in.
+
+> NOTE (implementation, Phase 5): there are **four** call sites, not two, and all four are
+> mutating routes. `PUT /families/{id}/home` and `POST /families/{id}/home/geocode` are the
+> two this section names; the other two are `POST /families` and `POST /families/mine`, both
+> of which accept an optional `home_address` because FM-1 and FM-13 say they do — an address
+> supplied at creation has to be geocoded by something, and deferring it would mean a family
+> created with an address sits unplaced until someone re-saves it. All four funnel through a
+> single private helper, so the rule that actually matters is mechanically checkable: grep
+> for `geocoder.geocode(` and there is exactly one hit, inside that helper, and no read route
+> can reach it.
 - Uses `GOOGLE_MAPS_SERVER_KEY` (the IP-restricted key), never the browser key.
 - The result is written to `families` and kept forever, per the cost table ("Geocoding — once
   per family home address — cached forever in `families`").
