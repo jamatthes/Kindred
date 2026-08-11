@@ -3,6 +3,19 @@
 Implements `requirements.md` in this directory. Read `plan/architecture.md` (schema, API
 conventions, Google cost rules) and `plan/design-system.md` (layout, tokens, patterns) first.
 
+> **NOTE (pre-build, branch `feat/m3-services`):** the two standalone external-service modules
+> this feature needs — `server/app/services/link_preview.py` (SSRF-guarded fetch, OG +
+> Airbnb-aware parsing, in-memory LRU/TTL cache) and `server/app/services/boundaries.py`
+> (Nominatim boundary lookup, hand-implemented Douglas-Peucker simplification, ellipse
+> fallback) — are already implemented and unit-tested on that branch, ahead of this feature's
+> own Phase 4/5 work. Both are route-free: no router, no schema change, nothing wired into
+> `app.main`. The M3 implementer should merge/cherry-pick that branch (or re-review and adapt
+> its two files) rather than writing these from scratch, then wire
+> `get_link_preview_service()` and `get_boundary_service()` into the `POST /link-preview` and
+> region-creation routes per the contracts documented inline in each module. Tests:
+> `server/tests/test_link_preview.py`, `server/tests/test_boundaries.py`, fixtures under
+> `server/tests/fixtures/`.
+
 ---
 
 ## HARD INVARIANT — Google Places and the Terms of Service
