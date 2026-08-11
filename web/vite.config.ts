@@ -82,5 +82,9 @@ export default defineConfig({
     globals: true,
     css: true,
     setupFiles: ['./src/test/setup.ts'],
+    // Playwright owns e2e/ (`npm run e2e`); its *.spec.ts files match vitest's default
+    // glob but cannot be collected by it, and every vitest run would report them as
+    // failed files — noise that would eventually hide a real failure.
+    exclude: ['node_modules/**', 'e2e/**'],
   },
 })
