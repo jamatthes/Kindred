@@ -1,2 +1,107 @@
 @import 'tailwindcss';
-@import './design/tokens.css';
+
+/* Brand wordmark face, self-hosted from node_modules (@fontsource) and emitted into
+   `dist/assets` by Vite. No runtime Google Fonts request: the wordmark is the first
+   thing painted and must not depend on a third-party host. Latin subset, weight 700
+   only — the wordmark is the only place this family is ever used. */
+@import '@fontsource/bricolage-grotesque/latin-700.css';
+
+/* The three token layers, in dependency order, then base element styling. */
+@import './design/tokens.primitives.css';
+@import './design/tokens.semantic.css';
+@import './design/tokens.components.css';
+@import './design/base.css';
+
+/* ============================================================================
+   Tailwind 4 theme binding
+   ----------------------------------------------------------------------------
+   `reference` means: make these names available to the utility generator, but do
+   NOT emit them again — they are already declared by the token layers above, and
+   a second declaration would either shadow the [data-theme] override or, since
+   the names are identical, resolve to itself.
+
+   Each namespace is cleared with `initial` first, so Tailwind's own palette and
+   its 0.25rem spacing base cannot be reached from a utility class. `bg-red-500`
+   and `p-7` do not exist in this app: if a utility resolves, it resolves to a
+   token. That is the token-only rule enforced by the build rather than by review.
+   ========================================================================== */
+@theme reference {
+  --color-*: initial;
+  --spacing-*: initial;
+  --spacing: initial;
+  --text-*: initial;
+  --font-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --leading-*: initial;
+  --ease-*: initial;
+
+  /* colours — semantic layer */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-sunken: var(--color-surface-sunken);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-faint: var(--color-text-faint);
+  --color-text-on-accent: var(--color-text-on-accent);
+  --color-text-on-status: var(--color-text-on-status);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-active: var(--color-accent-active);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-success: var(--color-success);
+  --color-success-soft: var(--color-success-soft);
+  --color-warning: var(--color-warning);
+  --color-warning-soft: var(--color-warning-soft);
+  --color-danger: var(--color-danger);
+  --color-danger-soft: var(--color-danger-soft);
+  --color-info: var(--color-info);
+  --color-info-soft: var(--color-info-soft);
+  --color-focus-ring: var(--color-focus-ring);
+  --color-overlay: var(--color-overlay);
+  --color-skeleton: var(--color-skeleton);
+  --color-family-1: var(--family-1);
+  --color-family-2: var(--family-2);
+  --color-family-3: var(--family-3);
+  --color-family-4: var(--family-4);
+  --color-family-5: var(--family-5);
+  --color-family-6: var(--family-6);
+  --color-family-7: var(--family-7);
+  --color-family-8: var(--family-8);
+
+  /* spacing — the 5/8/13/21/34/55 scale, and nothing between */
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-5: var(--space-5);
+  --spacing-6: var(--space-6);
+
+  /* type */
+  --text-sm: var(--text-sm);
+  --text-body: var(--text-body);
+  --text-lg: var(--text-lg);
+  --text-sub: var(--text-sub);
+  --text-heading: var(--text-heading);
+  --text-display: var(--text-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-brand: var(--font-brand);
+  --leading-tight: var(--leading-tight);
+  --leading-body: var(--leading-body);
+
+  /* radii, elevation, motion */
+  --radius-1: var(--radius-1);
+  --radius-2: var(--radius-2);
+  --radius-3: var(--radius-3);
+  --radius-full: var(--radius-full);
+  --shadow-card: var(--shadow-card);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-sheet: var(--shadow-sheet);
+  --ease-standard: var(--ease-standard);
+}

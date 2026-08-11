@@ -1,0 +1,37 @@
+/* ============================================================================
+   Kindred design tokens — LAYER 3: COMPONENT (shared knobs)
+   ----------------------------------------------------------------------------
+   Only cross-cutting component tokens live here. A knob used by exactly one
+   component is declared next to that component instead (see the `.css` files
+   beside each `.tsx`), which keeps this file from becoming a second, unstructured
+   semantic layer.
+   ========================================================================== */
+
+:root {
+  --button-radius: var(--radius-2);
+  --button-height: 40px;
+  --button-height-mobile: var(--hit-target);
+  --card-radius: var(--radius-3);
+  --card-padding: var(--space-4);
+  --chip-radius: var(--radius-full);
+  --field-radius: var(--radius-2);
+  --field-height: 44px;
+  --table-row-height: 40px;
+  --pin-size: 32px;
+  --timeline-track-h: 56px;
+
+  /* Tint recipe — the ONLY sanctioned way to derive a wash from a token:
+     color-mix(in srgb, <semantic token> var(--mix-tint-weak|strong), var(--color-surface))
+     Components must use these percentages, never invent their own. */
+  --mix-tint-weak: 12%;
+  --mix-tint-strong: 24%;
+
+  /* --- Shell geometry (app/shell.tsx) ------------------------------------
+     The 62/38 desktop split from plan/design-system.md, expressed once. */
+  --rail-width: 64px;
+  --topbar-height: 60px;
+  --panel-width: 38%;
+  --panel-max-width: 460px;
+  --tabbar-height: 64px;
+  --breakpoint-mobile: 768px;
+}

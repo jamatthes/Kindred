@@ -1,0 +1,109 @@
+/* ============================================================================
+   Kindred design tokens — LAYER 1: PRIMITIVES
+   ----------------------------------------------------------------------------
+   Raw scales. **Never referenced by components** — only by the semantic layer in
+   `tokens.semantic.css`. Renaming a primitive must never require touching a
+   component; that is the whole point of the split (plan/design-system.md).
+
+   Non-colour values (spacing, type, radii, motion) are theme-invariant and live
+   here in full; the semantic layer re-exports the colour meanings only.
+   ========================================================================== */
+
+:root {
+  /* --- Warm neutral scale (stone) --- */
+  --stone-0: #FFFFFF;
+  --stone-25: #FCFAF7;
+  --stone-50: #FAF7F2;
+  --stone-100: #F1ECE4;
+  --stone-200: #E7E0D6;
+  --stone-300: #D6CCBE;
+  --stone-400: #A69C8F;
+  --stone-500: #85796B;
+  --stone-600: #6E675E;
+  --stone-700: #4A443D;
+  --stone-800: #332E29;
+  --stone-850: #2A2622;
+  --stone-900: #201D1A;
+  --stone-950: #171412;
+
+  /* --- Brand + status hues --- */
+  --coral-300: #F2A08B;
+  --coral-500: #D95940;   /* brand accent (sunset coral) */
+  --coral-600: #C24A33;
+  --coral-700: #A03C2A;
+  --green-500: #2E8540;
+  --green-400: #5FAE72;
+  --amber-500: #B45309;
+  --amber-400: #D9A441;
+  --red-500: #B91C1C;
+  --red-400: #E5766B;
+  --blue-500: #2563EB;
+  --blue-400: #7CA7F5;
+
+  /* --- Family colors (8 slots, used by name: family-1..8) --- */
+  --family-rose: #C0426B;
+  --family-orange: #D96C2F;
+  --family-gold: #C9A227;
+  --family-moss: #6F8F3B;
+  --family-teal: #2E8C7F;
+  --family-sky: #4C8FD1;
+  --family-indigo: #5B5FC7;
+  --family-plum: #9A4F9E;
+
+  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
+         Data never lives in hue alone: always pair with the numeric value. --- */
+  --scale-pref-0: #B3362B;
+  --scale-pref-1: #BC4A2A;
+  --scale-pref-2: #C55E29;
+  --scale-pref-3: #CD7228;
+  --scale-pref-4: #D48627;
+  --scale-pref-5: #D99A2B;
+  --scale-pref-6: #B79A33;
+  --scale-pref-7: #93973E;
+  --scale-pref-8: #5E9468;
+  --scale-pref-9: #3A8E74;
+  --scale-pref-10: #128778;
+
+  /* --- Spacing (golden-ratio-derived, px) --- */
+  --space-1: 5px;
+  --space-2: 8px;
+  --space-3: 13px;
+  --space-4: 21px;
+  --space-5: 34px;
+  --space-6: 55px;
+
+  /* --- Type scale --- */
+  --text-sm: 13px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-sub: 26px;
+  --text-heading: 42px;
+  --text-display: 68px;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  /* Brand wordmark only — never body copy. Self-hosted via @fontsource, no runtime CDN. */
+  --font-brand: "Bricolage Grotesque", "Inter", "Segoe UI", system-ui, sans-serif;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.55;
+
+  /* --- Radii (soft, not bubbly) --- */
+  --radius-1: 6px;
+  --radius-2: 10px;
+  --radius-3: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (single-layer, subtle) --- */
+  --shadow-1: 0 1px 3px rgba(32, 29, 26, 0.08);
+  --shadow-2: 0 4px 16px rgba(32, 29, 26, 0.10);
+  --shadow-3: 0 8px 32px rgba(32, 29, 26, 0.14);
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+
+  /* --- Touch --- */
+  --hit-target: 44px;
+}

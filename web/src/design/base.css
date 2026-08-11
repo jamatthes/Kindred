@@ -1,0 +1,51 @@
+/* ============================================================================
+   Base element styling. Tokens only — this file is the one place bare element
+   selectors are allowed; everything else styles classes.
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+  /* Theme swaps are a deliberate, visible change of state, not a flash. */
+  transition: background-color var(--duration-base) var(--ease-standard);
+}
+
+h1, h2, h3, h4, h5, h6, p, figure {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Nothing decorative: motion communicates state change, and users who ask for
+   less get none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

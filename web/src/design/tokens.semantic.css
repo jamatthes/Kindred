@@ -1,0 +1,113 @@
+/* ============================================================================
+   Kindred design tokens — LAYER 2: SEMANTIC
+   ----------------------------------------------------------------------------
+   Meaning, not appearance. **The only layer components may reference.**
+   Theming = swapping this layer: light is the default, dark is a separately
+   tuned block (raised surfaces get lighter, accents desaturate, shadows give
+   way to borders) — never a filter inversion.
+
+   `data-theme` is set on <html>, which is also :root, so the overrides below
+   land on the same element as the defaults and resolve correctly for every
+   descendant (including variables that reference other variables).
+   ========================================================================== */
+
+/* ------------------------------- LIGHT ----------------------------------- */
+:root,
+[data-theme="light"] {
+  --color-bg: var(--stone-50);
+  --color-surface: var(--stone-0);
+  --color-surface-raised: var(--stone-25);
+  --color-surface-sunken: var(--stone-100);
+  --color-border: var(--stone-200);
+  --color-border-strong: var(--stone-300);
+
+  --color-text: #2D2A26;
+  --color-text-muted: var(--stone-600);
+  --color-text-faint: var(--stone-400);
+  --color-text-on-accent: #FFFFFF;
+  --color-text-on-status: #FFFFFF;
+
+  --color-accent: var(--coral-500);
+  --color-accent-hover: var(--coral-600);
+  --color-accent-active: var(--coral-700);
+  --color-accent-soft: #FBEAE5;
+
+  --color-success: var(--green-500);
+  --color-warning: var(--amber-500);
+  --color-danger: var(--red-500);
+  --color-info: var(--blue-500);
+  --color-success-soft: #E4F2E7;
+  --color-warning-soft: #F8EEDD;
+  --color-danger-soft: #F9E5E5;
+  --color-info-soft: #E4EDFC;
+
+  --color-focus-ring: var(--blue-500);
+  --color-overlay: rgba(32, 29, 26, 0.4);
+  --color-skeleton: var(--stone-100);
+  --color-skeleton-sheen: var(--stone-200);
+
+  --family-1: var(--family-rose);
+  --family-2: var(--family-orange);
+  --family-3: var(--family-gold);
+  --family-4: var(--family-moss);
+  --family-5: var(--family-teal);
+  --family-6: var(--family-sky);
+  --family-7: var(--family-indigo);
+  --family-8: var(--family-plum);
+
+  --shadow-card: var(--shadow-1);
+  --shadow-popover: var(--shadow-2);
+  --shadow-sheet: var(--shadow-3);
+}
+
+/* -------------------------------- DARK -----------------------------------
+   Tuned set, not an inversion: raised surfaces get lighter, accents
+   desaturate, shadows give way to borders. */
+[data-theme="dark"] {
+  --color-bg: var(--stone-900);
+  --color-surface: var(--stone-850);
+  --color-surface-raised: var(--stone-800);
+  --color-surface-sunken: var(--stone-950);
+  --color-border: #453E37;
+  --color-border-strong: #5A5148;
+
+  --color-text: #F0EAE2;
+  --color-text-muted: var(--stone-400);
+  --color-text-faint: var(--stone-500);
+  /* Dark ink on the lifted dark-theme accents — white fails AA on them */
+  --color-text-on-accent: #201D1A;
+  --color-text-on-status: #201D1A;
+
+  --color-accent: #E06A50;
+  --color-accent-hover: #E87F68;
+  --color-accent-active: #C85A42;
+  --color-accent-soft: #43302B;
+
+  --color-success: var(--green-400);
+  --color-warning: var(--amber-400);
+  --color-danger: var(--red-400);
+  --color-info: var(--blue-400);
+  --color-success-soft: #263A2B;
+  --color-warning-soft: #3D3323;
+  --color-danger-soft: #422A28;
+  --color-info-soft: #263349;
+
+  --color-focus-ring: var(--blue-400);
+  --color-overlay: rgba(23, 20, 18, 0.6);
+  --color-skeleton: #332E29;
+  --color-skeleton-sheen: #453E37;
+
+  /* Family colors: lifted for dark surfaces */
+  --family-1: #D66A8C;
+  --family-2: #E68A55;
+  --family-3: #D9B84E;
+  --family-4: #93AD5F;
+  --family-5: #55A79A;
+  --family-6: #74A9DE;
+  --family-7: #8286D9;
+  --family-8: #B573B8;
+
+  --shadow-card: none;
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
