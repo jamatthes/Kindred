@@ -87,17 +87,34 @@
   color: var(--color-text-faint);
 }
 
+/* The locality and privacy notes are each pinned to exactly one line (truncating, never
+   wrapping) so every card's member list starts at the same height no matter how long a
+   place name or note is. */
 .fcard__locality {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin: var(--space-1) 0 var(--space-3);
+  margin-top: var(--space-1);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
 
+.fcard__locality svg {
+  flex: none;
+}
+
+.fcard__locality-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .fcard__privacy {
-  margin-left: auto;
+  display: block;
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: var(--text-sm);
   color: var(--color-text-faint);
 }

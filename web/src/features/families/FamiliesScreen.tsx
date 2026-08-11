@@ -84,12 +84,15 @@ function FamilyCard({
           <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z" />
           <circle cx="12" cy="10" r="2.6" />
         </svg>
-        {family.home_locality ?? (family.geocode_status === 'pending' ? 'No home set' : 'Not placed')}
-        <span className="fcard__privacy">
-          {/* Family names usually already carry an article ("The Parkers"), so the copy
-              must not add a second one. */}
-          {isMine ? 'your family' : 'home address visible to them only'}
+        <span className="fcard__locality-text">
+          {family.home_locality ?? (family.geocode_status === 'pending' ? 'No home set' : 'Not placed')}
         </span>
+      </span>
+
+      <span className="fcard__privacy">
+        {/* Family names usually already carry an article ("The Parkers"), so the copy
+            must not add a second one. */}
+        {isMine ? 'your family' : 'home address visible to them only'}
       </span>
 
       {detail.family ? <MemberLine family={detail.family} /> : null}
