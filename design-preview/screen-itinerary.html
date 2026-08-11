@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" name="Planning — map view" subtitle="Desktop 1440 · map + side panel + timeline, light theme" -->
+<!-- @dsCard group="Screens" name="Itinerary — timeline" subtitle="Desktop 1440 · map + day view + full timeline panel, light theme" -->
 <meta charset="utf-8">
 <!-- Brand font; self-hosted in production. Falls back to --font-brand's stack when blocked. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
@@ -588,37 +588,175 @@ body {
 }
 .tl-day.hint { border-style: dashed; color: var(--color-text-faint); background: transparent; }
 .tl-cta { font-size: var(--text-sm); }
+
+/* ---------- component tokens: itinerary categories ----------
+   Defined next to their component (layer 3), each one layered on an existing
+   primitive — no new raw values are introduced. */
+:root {
+  --cat-stay: var(--family-indigo);
+  --cat-meal: var(--family-orange);
+  --cat-activity: var(--family-teal);
+  --cat-travel: var(--family-gold);
+  --timeline-panel-h: 136px;
+  --timeline-day-w: 1fr;
+}
+.stage-chip.holiday { background: var(--color-success-soft); color: var(--color-success); }
+.stage-chip.holiday::before { background: var(--color-success); }
+
+/* map: smaller than the planning screen — the day view is doing the work here */
+.panel { flex: none; width: 600px; max-width: 600px; }
+/* map base tints, derived from tokens rather than raw values */
+/* Match the canonical planning-map palette: cool pale sea, warm pale land */
+.map-svg .sea { fill: color-mix(in srgb, var(--color-info) 9%, var(--color-surface-sunken)); }
+.map-svg .land { fill: color-mix(in srgb, var(--color-surface-raised) 60%, var(--color-surface-sunken)); }
+.map-svg .road { stroke: var(--color-surface); }
+.map-svg .road-edge { stroke: var(--color-border-strong); }
+.route-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pin.num {
+  font-family: var(--font-mono); font-weight: 700; font-size: var(--text-sm);
+  border-radius: 50% 50% 50% 4px;
+}
+
+/* ---------- day view ---------- */
+.day-head {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border);
+}
+.day-head h2 { font-size: var(--text-lg); font-weight: 700; }
+.day-head .sub { font-size: 12px; color: var(--color-text-faint); }
+.day-head .grow { flex: 1; }
+.step {
+  width: 30px; height: 30px; border-radius: var(--radius-1); border: 1px solid var(--color-border-strong);
+  background: var(--color-surface); color: var(--color-text-muted); cursor: pointer;
+  display: grid; place-items: center; font-size: var(--text-sm);
+}
+.day-scroll { flex: 1; overflow: hidden; padding: var(--space-3) var(--space-4); }
+
+.item {
+  display: flex; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border); border-radius: var(--radius-2);
+  background: var(--color-surface); position: relative; overflow: hidden;
+}
+/* family colour accent of whoever suggested the place */
+.item::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--acc, var(--color-border)); }
+.item .when {
+  width: 58px; flex: none; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm); font-weight: 700; line-height: 1.35;
+}
+.item .when small { display: block; font-weight: 400; color: var(--color-text-faint); font-size: 12px; }
+.item .body { flex: 1; min-width: 0; }
+.item .title { font-size: var(--text-body); font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.type-ico {
+  width: 22px; height: 22px; border-radius: var(--radius-1); flex: none;
+  display: grid; place-items: center; color: var(--color-text-on-accent);
+}
+.type-ico svg { width: 13px; height: 13px; }
+.item .where { font-size: var(--text-sm); color: var(--color-text-muted); margin: 1px 0 6px; }
+.item-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gmaps {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px;
+  border-radius: var(--chip-radius); border: 1px solid var(--color-border-strong);
+  background: var(--color-surface); color: var(--color-text); font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.admin-ctl { display: flex; gap: 3px; margin-left: auto; }
+.actl {
+  width: 28px; height: 28px; border-radius: var(--radius-1); border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-text-faint); cursor: pointer;
+  display: grid; place-items: center; font-size: 12px;
+}
+.actl.wide { width: auto; padding: 0 9px; font-size: 11px; font-weight: 700; color: var(--color-text-muted); }
+
+/* leg between two items — from the route cache, never fetched on render */
+.leg {
+  display: flex; align-items: center; gap: var(--space-2); margin-left: 26px;
+  padding: 3px 0; font-size: 12px; color: var(--color-text-faint);
+}
+.leg .rail-line { width: 2px; height: 20px; background: var(--color-border-strong); border-radius: 1px; }
+.leg .val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text-muted); font-weight: 700; }
+
+.band {
+  margin-top: var(--space-2); border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-2); padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+}
+.band-label { font-size: 11px; font-weight: 700; color: var(--color-text-faint); margin-bottom: 6px; }
+.band .item { border: none; padding: 0; background: transparent; }
+.band .item::before { display: none; }
+
+/* ---------- full timeline panel (the real one, not the collapsed strip) ---------- */
+.tlpanel {
+  height: var(--timeline-panel-h); flex: none; background: var(--color-surface);
+  border-top: 1px solid var(--color-border); display: flex; flex-direction: column;
+  padding: 0 var(--space-4) var(--space-2);
+}
+.tlp-head {
+  display: flex; align-items: center; gap: var(--space-3); height: 28px;
+  font-size: 12px; color: var(--color-text-faint);
+}
+.tlp-head b { color: var(--color-text-muted); font-size: var(--text-sm); }
+.tlp-head .grow { flex: 1; }
+.legend { display: flex; align-items: center; gap: 4px; }
+.legend i { width: 9px; height: 9px; border-radius: 2px; }
+.tlp-grid { flex: 1; display: grid; grid-template-columns: repeat(8, var(--timeline-day-w)); gap: 4px; position: relative; }
+.tlp-day {
+  border: 1px solid var(--color-border); border-radius: var(--radius-1);
+  background: var(--color-surface-raised); display: flex; flex-direction: column; overflow: hidden;
+}
+.tlp-day.sel { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.tlp-day.hint { border-style: dashed; background: transparent; }
+.tlp-wx {
+  display: flex; align-items: center; gap: 5px; padding: 3px 7px;
+  border-bottom: 1px solid var(--color-border); font-size: 11px; color: var(--color-text-muted);
+}
+.tlp-wx .t { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; color: var(--color-text); }
+.tlp-date { font-size: 11px; font-weight: 700; color: var(--color-text-muted); padding: 3px 7px 1px; }
+.tlp-blocks { flex: 1; padding: 0 5px 5px; display: flex; flex-direction: column; gap: 2px; }
+.blk {
+  font-size: 10px; line-height: 1.5; border-radius: 3px; padding: 0 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-text);
+}
+.blk.stay     { background: color-mix(in srgb, var(--cat-stay)     var(--mix-tint-strong), var(--color-surface)); border-left: 3px solid var(--cat-stay); }
+.blk.meal     { background: color-mix(in srgb, var(--cat-meal)     var(--mix-tint-strong), var(--color-surface)); border-left: 3px solid var(--cat-meal); }
+.blk.activity { background: color-mix(in srgb, var(--cat-activity) var(--mix-tint-strong), var(--color-surface)); border-left: 3px solid var(--cat-activity); }
+.blk.travel   { background: color-mix(in srgb, var(--cat-travel)   var(--mix-tint-strong), var(--color-surface)); border-left: 3px solid var(--cat-travel); }
+.tlp-empty { font-size: 10px; color: var(--color-text-faint); padding: 0 5px; }
+.now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--color-accent); z-index: 3; }
+.now-line::after {
+  content: "now"; position: absolute; top: -1px; left: 3px;
+  font-size: 10px; font-weight: 700; color: var(--color-text-on-accent);
+  background: var(--color-accent); border-radius: 3px; padding: 0 5px;
+}
 </style>
 
 <div class="screen" data-theme="light">
   <!-- nav rail -->
   <nav class="rail">
     <div class="logo">K</div>
-    <button class="rail-btn active" title="Map">
+    <button class="rail-btn " title="Map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></svg>
     </button>
-    <button class="rail-btn" title="Polls">
+    <button class="rail-btn " title="Polls">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
     </button>
-    <button class="rail-btn" title="Itinerary">
+    <button class="rail-btn active" title="Itinerary">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>
     </button>
-    <button class="rail-btn" title="Families">
+    <button class="rail-btn " title="Families">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><circle cx="17.5" cy="9.5" r="2.7"/><path d="M16 15.2c2.6.2 4.7 1.8 5.5 4.3"/></svg>
     </button>
     <div class="spacer"></div>
-    <button class="rail-btn" title="Admin">
+    <button class="rail-btn " title="Admin">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.5-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.5 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
     </button>
     <div class="avatar" style="background: var(--family-2);">J</div>
   </nav>
 
   <div class="main">
-    <!-- top bar -->
+    <!-- top bar: canonical composition — wordmark · trip · stage · search · bell · presence · primary action -->
     <header class="topbar">
       <span class="wordmark">Kindred</span>
       <span class="trip-name">Cornwall · July 2027</span>
-      <span class="stage-chip">Planning</span>
+      <span class="stage-chip holiday">Holiday</span>
       <div class="grow"></div>
       <input class="search" placeholder="Search places or people" />
       <div class="grow"></div>
@@ -626,18 +764,11 @@ body {
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="badge">3</span>
       </button>
-      <!-- family avatar stack: colored = family has someone active; grey = all offline.
-           Jiangs hovered → tooltip open (static demo of the hover state) -->
+      <!-- family presence stack: full colour = someone online, grey = family all offline -->
       <div class="fam-stack">
         <div class="fam-av" style="background: var(--family-1);" title="The Parkers">P</div>
-        <div class="fam-av" style="background: var(--family-5);">J</div>
+        <div class="fam-av" style="background: var(--family-5);" title="The Jiangs">J</div>
         <div class="fam-av offline" style="background: var(--family-6);" title="The Riveras">R</div>
-        <div class="fam-tip">
-          <div class="tip-head">THE JIANGS</div>
-          <div class="member"><span class="presence"></span>Jibby<span class="you">you</span></div>
-          <div class="member"><span class="presence"></span>Jas</div>
-          <div class="member off"><span class="presence"></span>Alicia</div>
-        </div>
       </div>
       <button class="suggest-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
@@ -646,164 +777,255 @@ body {
     </header>
 
     <div class="workspace">
-      <!-- map -->
+      <!-- ---------- map: selected day only, numbered pins joined by the cached route ---------- -->
       <div class="map-wrap">
-        <!-- Map illustration: stand-in for Google Maps tiles. Its raw fills are exempt
-             from the token rule (the real map is Google-rendered, not ours to token);
-             everything OVERLAID on the map uses tokens. -->
         <svg class="map-svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice">
-          <!-- sea -->
-          <rect width="900" height="620" fill="#DCE7E4"/>
-          <!-- land -->
-          <path d="M120 620 C 90 520 150 470 220 430 C 300 380 330 300 420 280 C 520 255 560 180 660 150 C 760 122 830 60 900 40 L 900 620 Z" fill="#EFEAE0"/>
-          <path d="M60 620 C 80 560 60 540 30 520 L 0 540 L 0 620 Z" fill="#EFEAE0"/>
-          <!-- roads -->
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#FFFFFF" stroke-width="7"/>
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#D9D2C4" stroke-width="2"/>
-          <path d="M340 620 C 380 540 460 520 520 400" fill="none" stroke="#FFFFFF" stroke-width="5"/>
-          <!-- region tints: organic outlined areas (Google-style locality boundary),
-               preference-ramp fill; numbers shown in labels -->
-          <path id="region-cornwall" d="M 205 561
-            C 180 540 172 505 190 478
-            C 205 452 235 440 262 428
-            C 292 415 322 402 355 408
-            C 390 414 415 436 420 468
-            C 425 498 410 528 384 546
-            C 355 566 318 574 282 578
-            C 252 581 224 578 205 561 Z"
-            fill="#5E9468" opacity="0.30"/>
-          <use href="#region-cornwall" fill="none" stroke="#3A8E74" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-          <path id="region-lakes" d="M 640 265
-            C 615 250 605 220 615 192
-            C 624 166 648 150 675 140
-            C 703 130 733 128 757 143
-            C 780 157 792 183 788 210
-            C 784 238 765 260 738 271
-            C 706 284 668 282 640 265 Z"
-            fill="#D99A2B" opacity="0.28"/>
-          <use href="#region-lakes" fill="none" stroke="#CD7228" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
+          <rect width="900" height="620" class="sea"/>
+          <path d="M120 620 C 90 520 150 470 220 430 C 300 380 330 300 420 280 C 520 255 560 180 660 150 C 760 122 830 60 900 40 L 900 620 Z" class="land"/>
+          <path d="M60 620 C 80 560 60 540 30 520 L 0 540 L 0 620 Z" class="land"/>
+          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" class="road" stroke-width="7"/>
+          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" class="road-edge" stroke-width="2"/>
+          <path d="M340 620 C 380 540 460 520 520 400" fill="none" class="road" stroke-width="5"/>
         </svg>
 
-        <!-- region labels -->
-        <div class="region-label" style="left: 33%; top: 62%;">
-          <span class="region-score">8.0</span><span class="region-name">Cornwall</span>
-        </div>
-        <div class="region-label" style="left: 76.6%; top: 22%;">
-          <span class="region-score">5.0</span><span class="region-name">Lake District</span>
-        </div>
+        <!-- route polyline decoded from route_cache; percentage space matches the pins -->
+        <svg class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path d="M26 62 Q 34 55 44 52 Q 54 49 62 40" fill="none" stroke="var(--color-accent)"
+                stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.85"/>
+        </svg>
 
-        <!-- pins: family-colored, type icons -->
-        <div class="pin selected" style="left: 31%; top: 70%; background: var(--family-1);" title="Harbour House Cottages — Parkers">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
-        </div>
-        <div class="pin" style="left: 38%; top: 64%; background: var(--family-5);" title="The Hidden Hut — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/></svg>
-        </div>
-        <div class="pin" style="left: 27%; top: 58%; background: var(--family-6);" title="Coasteering — Riveras">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-        <div class="cluster" style="left: 43%; top: 74%;">4</div>
-        <div class="pin" style="left: 74%; top: 30%; background: var(--family-5);" title="Windermere boat hire — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
+        <div class="pin num" style="left: 26%; top: 62%; background: var(--family-1);" title="1 · Porthcurno Beach">1</div>
+        <div class="pin num" style="left: 44%; top: 52%; background: var(--family-5);" title="2 · The Hidden Hut">2</div>
+        <div class="pin num selected" style="left: 62%; top: 40%; background: var(--family-6);" title="3 · Coasteering, Praa Sands">3</div>
 
-        <!-- popover for selected pin -->
-        <div class="popover" style="left: calc(31% + 26px); top: 46%;">
-          <h4>Harbour House Cottages</h4>
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
-          </div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 votes</span>
-          </div>
-          <div class="dist-row">
-            <span class="dchip"><b style="background: var(--family-1);"></b>4h 05</span>
-            <span class="dchip"><b style="background: var(--family-5);"></b>4h 50</span>
-            <span class="dchip"><b style="background: var(--family-6);"></b>5h 20</span>
-          </div>
-          <div class="pop-actions">
-            <button class="btn btn-primary">Details</button>
-            <button class="btn btn-secondary">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
-              Open in Maps
-            </button>
-          </div>
-        </div>
-
-        <!-- overlays -->
         <div class="map-filters">
-          <button class="fchip on">All</button>
-          <button class="fchip">🏠 Stays</button>
-          <button class="fchip">🍴 Meals</button>
-          <button class="fchip">⛰ Activities</button>
-          <button class="fchip">◌ Regions</button>
+          <button class="fchip on">Wed 21 Jul</button>
+          <button class="fchip">Show whole trip</button>
         </div>
         <div class="map-controls"><div class="mc">+</div><div class="mc">−</div></div>
-        <div class="map-attr">Map data ©2027 Google</div>
+        <div class="map-attr">Map data ©2027 Google · route from cache</div>
       </div>
 
-      <!-- side panel -->
+      <!-- ---------- day view ---------- -->
       <aside class="panel">
-        <div class="panel-tabs">
-          <button class="ptab">List <span class="count">12</span></button>
-          <button class="ptab on">Details</button>
-          <button class="ptab">Comments <span class="count">3</span></button>
+        <div class="day-head">
+          <button class="step">‹</button>
+          <div>
+            <h2>Wed 21 Jul</h2>
+            <div class="sub">Day 5 of 8 · 3 scheduled · 1 untimed</div>
+          </div>
+          <div class="grow"></div>
+          <button class="btn btn-secondary">⤓ Export .ics</button>
+          <button class="step">›</button>
         </div>
-        <div class="panel-scroll">
-          <div class="photo-strip"><div class="photo"></div><div class="photo"></div><div class="photo"></div></div>
-          <div class="rec-title">Harbour House Cottages</div>
-          <div class="rec-sub">Portloe, Cornwall · sleeps 14 · £2,340 for the week · suggested by <b style="color: var(--family-1);">Laurabel</b></div>
 
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
-            <span class="minichip">↗ airbnb.co.uk</span>
+        <div class="day-scroll">
+          <!-- item 1 -->
+          <div class="item" style="--acc: var(--family-1);">
+            <span class="when">10:00<small>12:00</small></span>
+            <div class="body">
+              <div class="title">
+                <span class="type-ico" style="background: var(--cat-activity);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 17c2-2 4 2 6 0s4 2 6 0 4 2 6 0"/><path d="M6 13l6-8 6 8"/></svg>
+                </span>
+                Beach morning — Porthcurno
+              </div>
+              <div class="where">Porthcurno Beach, TR19 · suggested by <b style="color: var(--family-1);">Laurabel</b> · 8.4 avg · 3 comments</div>
+              <div class="item-actions">
+                <button class="gmaps">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
+                  Open in Google Maps
+                </button>
+                <span class="admin-ctl">
+                  <button class="actl" title="Move up">↑</button>
+                  <button class="actl" title="Move down">↓</button>
+                  <button class="actl wide">Edit times</button>
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div class="section-label">GROUP SCORE</div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 of 9 voted</span>
+          <div class="leg">
+            <span class="rail-line"></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M6 17l1.5-6h9L18 17"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="16.5" cy="18.5" r="1.5"/></svg>
+            <span class="val">18 min · 7.2 mi</span>
+            <span>drive · from route cache</span>
           </div>
 
-          <div class="section-label">DRIVE FROM HOME</div>
-          <div class="fam-dist">
-            <div class="fd-row"><b class="dot" style="background: var(--family-1);"></b><span class="who">The Parkers</span><span class="val">4h 05 · 212 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-5);"></b><span class="who">The Jiangs</span><span class="val">4h 50 · 251 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-6);"></b><span class="who">The Riveras</span><span class="val">5h 20 · 268 mi</span></div>
+          <!-- item 2 -->
+          <div class="item" style="--acc: var(--family-5);">
+            <span class="when">12:30<small>14:00</small></span>
+            <div class="body">
+              <div class="title">
+                <span class="type-ico" style="background: var(--cat-meal);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/></svg>
+                </span>
+                Lunch at The Hidden Hut
+              </div>
+              <div class="where">Porthcurnick Beach, Portscatho · suggested by <b style="color: var(--family-5);">Jibby</b> · 9.1 avg · 7 comments</div>
+              <div class="item-actions">
+                <button class="gmaps">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
+                  Open in Google Maps
+                </button>
+                <span class="admin-ctl">
+                  <button class="actl" title="Move up">↑</button>
+                  <button class="actl" title="Move down">↓</button>
+                  <button class="actl wide">Edit times</button>
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div class="section-label">LATEST COMMENTS</div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-5);">Ji</div>
-            <div class="bubble"><span class="who">Jibby</span><span class="when">2h ago</span><br>Garden looks perfect for the kids — and it's 10 min from the beach.</div>
+          <div class="leg">
+            <span class="rail-line"></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M6 17l1.5-6h9L18 17"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="16.5" cy="18.5" r="1.5"/></svg>
+            <span class="val">12 min · 4.1 mi</span>
+            <span>drive · from route cache</span>
           </div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-6);">S</div>
-            <div class="bubble"><span class="who">Stu</span><span class="when">45m ago</span><br><span class="mention">@Laurabel</span> is the £2,340 total or per family?</div>
+
+          <!-- item 3 -->
+          <div class="item" style="--acc: var(--family-6);">
+            <span class="when">15:00<small>17:30</small></span>
+            <div class="body">
+              <div class="title">
+                <span class="type-ico" style="background: var(--cat-activity);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
+                </span>
+                Coasteering, Praa Sands
+              </div>
+              <div class="where">Praa Sands · booked for 11 · suggested by <b style="color: var(--family-6);">Stu</b> · 7.8 avg · 2 comments</div>
+              <div class="item-actions">
+                <button class="gmaps">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
+                  Open in Google Maps
+                </button>
+                <span class="admin-ctl">
+                  <button class="actl" title="Move up">↑</button>
+                  <button class="actl" title="Move down">↓</button>
+                  <button class="actl wide">Edit times</button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- untimed -->
+          <div class="band">
+            <div class="band-label">SOMETIME TODAY</div>
+            <div class="item">
+              <span class="when">—<small>no time</small></span>
+              <div class="body">
+                <div class="title">
+                  <span class="type-ico" style="background: var(--cat-travel);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 15h16M6 15l-2-5h16l-2 5M9 10V6h6v4"/></svg>
+                  </span>
+                  Pick up the hire kayaks
+                </div>
+                <div class="where">Falmouth Watersports · suggested by <b style="color: var(--family-1);">Alex</b></div>
+                <div class="item-actions">
+                  <button class="gmaps">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
+                    Open in Google Maps
+                  </button>
+                  <span class="admin-ctl">
+                    <button class="actl wide">Give it a time</button>
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+
         <div class="admin-bar">
-          <span class="note">Admin decision</span>
-          <button class="btn btn-reject">Reject</button>
-          <button class="btn btn-approve">✓ Approve for itinerary</button>
+          <span class="note">Main admin · removing an item returns its suggestion to the approved pool</span>
+          <button class="btn btn-secondary">Add to this day</button>
         </div>
       </aside>
     </div>
 
-    <!-- bottom timeline -->
-    <footer class="timeline">
-      <span class="tl-label">Jul 17 – 24 · 8 days</span>
-      <div class="tl-track">
-        <div class="tl-day">Sat 17</div><div class="tl-day">Sun 18</div><div class="tl-day">Mon 19</div>
-        <div class="tl-day">Tue 20</div><div class="tl-day">Wed 21</div><div class="tl-day">Thu 22</div>
-        <div class="tl-day">Fri 23</div><div class="tl-day hint">Sat 24</div>
+    <!-- ---------- full timeline panel: 8 days, weather strip, blocks per item ---------- -->
+    <footer class="tlpanel">
+      <div class="tlp-head">
+        <b>Jul 17 – 24 · 8 days</b>
+        <span>weather for each day's first mapped place</span>
+        <div class="grow"></div>
+        <span class="legend"><i style="background: var(--cat-stay);"></i>Stay</span>
+        <span class="legend"><i style="background: var(--cat-meal);"></i>Meal</span>
+        <span class="legend"><i style="background: var(--cat-activity);"></i>Activity</span>
+        <span class="legend"><i style="background: var(--cat-travel);"></i>Travel</span>
       </div>
-      <button class="btn btn-ghost tl-cta">Open itinerary →</button>
+      <div class="tlp-grid">
+        <div class="now-line" style="left: 56.5%;"></div>
+
+        <div class="tlp-day">
+          <div class="tlp-wx">☀<span class="t">21°</span></div>
+          <div class="tlp-date">Sat 17</div>
+          <div class="tlp-blocks">
+            <div class="blk travel">Drive down</div>
+            <div class="blk stay">Check in 16:00</div>
+          </div>
+        </div>
+
+        <div class="tlp-day">
+          <div class="tlp-wx">⛅<span class="t">19°</span></div>
+          <div class="tlp-date">Sun 18</div>
+          <div class="tlp-blocks">
+            <div class="blk activity">Portloe walk</div>
+            <div class="blk meal">Ship Inn 19:00</div>
+          </div>
+        </div>
+
+        <div class="tlp-day">
+          <div class="tlp-wx">🌧<span class="t">17°</span></div>
+          <div class="tlp-date">Mon 19</div>
+          <div class="tlp-blocks">
+            <div class="blk activity">Eden Project</div>
+          </div>
+        </div>
+
+        <div class="tlp-day">
+          <div class="tlp-wx">⛅<span class="t">20°</span></div>
+          <div class="tlp-date">Tue 20</div>
+          <div class="tlp-blocks">
+            <div class="tlp-empty">Nothing planned</div>
+          </div>
+        </div>
+
+        <div class="tlp-day sel">
+          <div class="tlp-wx">☀<span class="t">22°</span></div>
+          <div class="tlp-date">Wed 21</div>
+          <div class="tlp-blocks">
+            <div class="blk activity">Beach 10:00</div>
+            <div class="blk meal">Hidden Hut 12:30</div>
+            <div class="blk activity">Coasteering 15:00</div>
+          </div>
+        </div>
+
+        <div class="tlp-day">
+          <div class="tlp-wx">☀<span class="t">23°</span></div>
+          <div class="tlp-date">Thu 22</div>
+          <div class="tlp-blocks">
+            <div class="blk activity">St Michael's Mount</div>
+            <div class="blk meal">Fish &amp; chips</div>
+          </div>
+        </div>
+
+        <div class="tlp-day">
+          <div class="tlp-wx">⛅<span class="t">20°</span></div>
+          <div class="tlp-date">Fri 23</div>
+          <div class="tlp-blocks">
+            <div class="blk activity">Kayaking</div>
+          </div>
+        </div>
+
+        <div class="tlp-day hint">
+          <div class="tlp-wx">◌<span class="t">—</span>no forecast yet</div>
+          <div class="tlp-date">Sat 24</div>
+          <div class="tlp-blocks">
+            <div class="blk travel">Drive home</div>
+          </div>
+        </div>
+      </div>
     </footer>
   </div>
 </div>

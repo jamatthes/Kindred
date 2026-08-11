@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" name="Planning — map view" subtitle="Desktop 1440 · map + side panel + timeline, light theme" -->
+<!-- @dsCard group="Screens" name="Planning — polls" subtitle="Desktop 1440 · poll list + score matrix + disagreement view, light theme" -->
 <meta charset="utf-8">
 <!-- Brand font; self-hosted in production. Falls back to --font-brand's stack when blocked. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
@@ -588,33 +588,180 @@ body {
 }
 .tl-day.hint { border-style: dashed; color: var(--color-text-faint); background: transparent; }
 .tl-cta { font-size: var(--text-sm); }
+
+/* ---------- polls workspace (replaces the map/panel split) ---------- */
+.poll-work { flex: 1; display: flex; min-height: 0; }
+
+/* left: poll list */
+.poll-list {
+  width: 296px; flex: none; background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);
+  overflow: hidden;
+}
+.list-head {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: 12px; font-weight: 700; color: var(--color-text-faint);
+  padding: 0 var(--space-1) var(--space-1);
+}
+.list-head .grow { flex: 1; }
+.poll-card {
+  border: 1px solid var(--color-border); border-radius: var(--radius-2);
+  padding: var(--space-3); background: var(--color-surface); cursor: pointer;
+}
+.poll-card.on { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.poll-card h4 { font-size: var(--text-body); font-weight: 700; margin-bottom: 6px; }
+.pc-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
+  border-radius: var(--chip-radius); font-size: 12px; font-weight: 700;
+  background: var(--color-surface-sunken); color: var(--color-text-muted);
+}
+.tag.open { background: var(--color-info-soft); color: var(--color-info); }
+.tag.closed { background: var(--color-surface-sunken); color: var(--color-text-faint); }
+.tag.todo { background: var(--color-warning-soft); color: var(--color-warning); }
+.pc-prog { margin-top: var(--space-2); display: flex; align-items: center; gap: var(--space-2); font-size: 12px; color: var(--color-text-muted); }
+.pc-bar { flex: 1; height: 6px; border-radius: var(--radius-full); background: var(--color-surface-sunken); overflow: hidden; }
+.pc-bar i { display: block; height: 100%; background: var(--color-accent); }
+.decision-mini {
+  margin-top: var(--space-2); display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: var(--color-success);
+  background: var(--color-success-soft); border-radius: var(--radius-1); padding: 4px 8px;
+}
+.list-foot { margin-top: auto; font-size: 12px; color: var(--color-text-faint); padding: var(--space-2) var(--space-1) 0; border-top: 1px solid var(--color-border); }
+
+/* right: the open poll */
+.poll-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.poll-head {
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-border); background: var(--color-surface);
+  display: flex; align-items: flex-start; gap: var(--space-3);
+}
+.poll-head h2 { font-size: var(--text-sub); font-weight: 700; line-height: var(--leading-tight); }
+.poll-head .sub { font-size: var(--text-sm); color: var(--color-text-muted); margin-top: 2px; }
+.poll-head .grow { flex: 1; }
+.nudge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-sm); color: var(--color-text-muted);
+  border: 1px solid var(--color-border-strong); border-radius: var(--chip-radius);
+  padding: 5px 6px 5px 14px;
+}
+.nudge b { font-family: var(--font-mono); color: var(--color-text); font-weight: 700; }
+.nudge button {
+  height: 28px; padding: 0 12px; border-radius: var(--chip-radius);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface); color: var(--color-text-muted);
+  font-size: 12px; font-weight: 700; font-family: var(--font-sans); cursor: pointer;
+}
+.poll-body { flex: 1; overflow: hidden; padding: var(--space-2) var(--space-4); }
+
+.insight { font-size: var(--text-lg); font-weight: 700; line-height: var(--leading-tight); }
+.insight-sub { font-size: 12px; color: var(--color-text-faint); margin: 2px 0 var(--space-2); }
+
+/* score matrix */
+.mx-wrap { border: 1px solid var(--color-border); border-radius: var(--radius-2); overflow: hidden; background: var(--color-surface); }
+/* denser than the default row height — this is a comparison grid, and density is a feature */
+table.mx { border-collapse: collapse; width: 100%; font-size: var(--text-sm); --table-row-height: 32px; }
+table.mx th, table.mx td { border-bottom: 1px solid var(--color-border); padding: 0; }
+table.mx thead th {
+  background: var(--color-surface-raised); text-align: center;
+  font-size: 12px; font-weight: 700; color: var(--color-text-muted);
+  padding: 7px var(--space-1); border-left: 1px solid var(--color-border); white-space: nowrap;
+}
+table.mx thead th.who { text-align: left; padding-left: var(--space-3); border-left: none; width: 176px; }
+table.mx thead th .lead { display: block; font-size: 10px; font-weight: 700; color: var(--color-accent); letter-spacing: .02em; }
+table.mx tbody td.who {
+  padding: 0 var(--space-3); height: var(--table-row-height);
+  display: table-cell; vertical-align: middle; white-space: nowrap;
+}
+.who-in { display: flex; align-items: center; gap: 8px; }
+.who-in b.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.who-in .you { font-size: 11px; color: var(--color-text-faint); }
+.who-in .nov { font-size: 11px; color: var(--color-text-faint); margin-left: auto; }
+tr.norow td.who { color: var(--color-text-faint); }
+tr.norow td.who .who-in b.dot { opacity: .45; }
+td.cell {
+  text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-weight: 700; height: var(--table-row-height);
+  border-left: 1px solid var(--color-border); color: var(--color-text);
+}
+/* heat cells: the sanctioned tint recipe over the shared preference ramp,
+   so a score of 8 is the same colour here, in SpreadDots and on the map */
+td.cell.p1  { background: color-mix(in srgb, var(--scale-pref-1)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p2  { background: color-mix(in srgb, var(--scale-pref-2)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p3  { background: color-mix(in srgb, var(--scale-pref-3)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p4  { background: color-mix(in srgb, var(--scale-pref-4)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p5  { background: color-mix(in srgb, var(--scale-pref-5)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p6  { background: color-mix(in srgb, var(--scale-pref-6)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p7  { background: color-mix(in srgb, var(--scale-pref-7)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p8  { background: color-mix(in srgb, var(--scale-pref-8)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p9  { background: color-mix(in srgb, var(--scale-pref-9)  var(--mix-tint-strong), var(--color-surface)); }
+td.cell.p10 { background: color-mix(in srgb, var(--scale-pref-10) var(--mix-tint-strong), var(--color-surface)); }
+td.cell.none {
+  background: repeating-linear-gradient(45deg, var(--color-surface) 0 5px, var(--color-surface-sunken) 5px 10px);
+  color: var(--color-text-faint); font-weight: 400;
+}
+tr.mine td.who { background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); }
+
+/* AvgBar row — bars always start at zero */
+tfoot td { border-left: 1px solid var(--color-border); border-top: 1px solid var(--color-border-strong); vertical-align: bottom; padding: var(--space-2) 0 6px; }
+tfoot td.who { border-left: none; padding-left: var(--space-3); font-size: 11px; font-weight: 700; color: var(--color-text-faint); vertical-align: bottom; }
+.avgbar { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.avgbar .track { width: 34px; height: 34px; background: var(--color-surface-sunken); border-radius: var(--radius-1); display: flex; align-items: flex-end; overflow: hidden; }
+.avgbar .track i { display: block; width: 100%; }
+.avgbar .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-sm); font-weight: 700; }
+.avgbar.win .num { color: var(--color-accent); }
+
+/* SpreadDots */
+.spread { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.sd-row { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
+.sd-row .lbl { width: 120px; font-weight: 700; }
+.sd-axis { flex: 1; position: relative; height: 26px; border-bottom: 1px solid var(--color-border); }
+.sd-axis .dot {
+  position: absolute; top: 7px; width: 12px; height: 12px; border-radius: 50%;
+  transform: translateX(-50%); border: 2px solid var(--color-surface);
+}
+.sd-axis .tickmark { position: absolute; bottom: -1px; width: 1px; height: 5px; background: var(--color-border-strong); }
+.sd-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-text-faint); margin-left: 132px; }
+.sd-val { width: 132px; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text-muted); }
+.split-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; margin-left: 6px;
+  border-radius: var(--chip-radius); font-family: var(--font-sans); font-size: 11px; font-weight: 700;
+  background: var(--color-warning-soft); color: var(--color-warning);
+}
+
+/* comments strip */
+.cstrip { display: flex; gap: var(--space-3); margin-top: var(--space-2); align-items: flex-start; }
+.cstrip .comment { flex: 1; margin: 0; }
+.cstrip .avatar { width: 28px; height: 28px; }
+.cstrip .see-all { font-size: 12px; color: var(--color-text-faint); white-space: nowrap; padding-top: 6px; }
 </style>
 
 <div class="screen" data-theme="light">
   <!-- nav rail -->
   <nav class="rail">
     <div class="logo">K</div>
-    <button class="rail-btn active" title="Map">
+    <button class="rail-btn " title="Map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></svg>
     </button>
-    <button class="rail-btn" title="Polls">
+    <button class="rail-btn active" title="Polls">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
     </button>
-    <button class="rail-btn" title="Itinerary">
+    <button class="rail-btn " title="Itinerary">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>
     </button>
-    <button class="rail-btn" title="Families">
+    <button class="rail-btn " title="Families">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><circle cx="17.5" cy="9.5" r="2.7"/><path d="M16 15.2c2.6.2 4.7 1.8 5.5 4.3"/></svg>
     </button>
     <div class="spacer"></div>
-    <button class="rail-btn" title="Admin">
+    <button class="rail-btn " title="Admin">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.5-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.5 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
     </button>
     <div class="avatar" style="background: var(--family-2);">J</div>
   </nav>
 
   <div class="main">
-    <!-- top bar -->
+    <!-- top bar: canonical composition — wordmark · trip · stage · search · bell · presence · primary action -->
     <header class="topbar">
       <span class="wordmark">Kindred</span>
       <span class="trip-name">Cornwall · July 2027</span>
@@ -626,18 +773,11 @@ body {
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="badge">3</span>
       </button>
-      <!-- family avatar stack: colored = family has someone active; grey = all offline.
-           Jiangs hovered → tooltip open (static demo of the hover state) -->
+      <!-- family presence stack: full colour = someone online, grey = family all offline -->
       <div class="fam-stack">
         <div class="fam-av" style="background: var(--family-1);" title="The Parkers">P</div>
-        <div class="fam-av" style="background: var(--family-5);">J</div>
+        <div class="fam-av" style="background: var(--family-5);" title="The Jiangs">J</div>
         <div class="fam-av offline" style="background: var(--family-6);" title="The Riveras">R</div>
-        <div class="fam-tip">
-          <div class="tip-head">THE JIANGS</div>
-          <div class="member"><span class="presence"></span>Jibby<span class="you">you</span></div>
-          <div class="member"><span class="presence"></span>Jas</div>
-          <div class="member off"><span class="presence"></span>Alicia</div>
-        </div>
       </div>
       <button class="suggest-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
@@ -645,157 +785,189 @@ body {
       </button>
     </header>
 
-    <div class="workspace">
-      <!-- map -->
-      <div class="map-wrap">
-        <!-- Map illustration: stand-in for Google Maps tiles. Its raw fills are exempt
-             from the token rule (the real map is Google-rendered, not ours to token);
-             everything OVERLAID on the map uses tokens. -->
-        <svg class="map-svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice">
-          <!-- sea -->
-          <rect width="900" height="620" fill="#DCE7E4"/>
-          <!-- land -->
-          <path d="M120 620 C 90 520 150 470 220 430 C 300 380 330 300 420 280 C 520 255 560 180 660 150 C 760 122 830 60 900 40 L 900 620 Z" fill="#EFEAE0"/>
-          <path d="M60 620 C 80 560 60 540 30 520 L 0 540 L 0 620 Z" fill="#EFEAE0"/>
-          <!-- roads -->
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#FFFFFF" stroke-width="7"/>
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#D9D2C4" stroke-width="2"/>
-          <path d="M340 620 C 380 540 460 520 520 400" fill="none" stroke="#FFFFFF" stroke-width="5"/>
-          <!-- region tints: organic outlined areas (Google-style locality boundary),
-               preference-ramp fill; numbers shown in labels -->
-          <path id="region-cornwall" d="M 205 561
-            C 180 540 172 505 190 478
-            C 205 452 235 440 262 428
-            C 292 415 322 402 355 408
-            C 390 414 415 436 420 468
-            C 425 498 410 528 384 546
-            C 355 566 318 574 282 578
-            C 252 581 224 578 205 561 Z"
-            fill="#5E9468" opacity="0.30"/>
-          <use href="#region-cornwall" fill="none" stroke="#3A8E74" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-          <path id="region-lakes" d="M 640 265
-            C 615 250 605 220 615 192
-            C 624 166 648 150 675 140
-            C 703 130 733 128 757 143
-            C 780 157 792 183 788 210
-            C 784 238 765 260 738 271
-            C 706 284 668 282 640 265 Z"
-            fill="#D99A2B" opacity="0.28"/>
-          <use href="#region-lakes" fill="none" stroke="#CD7228" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-        </svg>
+    <div class="poll-work">
+      <!-- ---------- poll list ---------- -->
+      <aside class="poll-list">
+        <div class="list-head"><span>POLLS</span><span class="grow"></span><span>3</span></div>
 
-        <!-- region labels -->
-        <div class="region-label" style="left: 33%; top: 62%;">
-          <span class="region-score">8.0</span><span class="region-name">Cornwall</span>
-        </div>
-        <div class="region-label" style="left: 76.6%; top: 22%;">
-          <span class="region-score">5.0</span><span class="region-name">Lake District</span>
-        </div>
-
-        <!-- pins: family-colored, type icons -->
-        <div class="pin selected" style="left: 31%; top: 70%; background: var(--family-1);" title="Harbour House Cottages — Parkers">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
-        </div>
-        <div class="pin" style="left: 38%; top: 64%; background: var(--family-5);" title="The Hidden Hut — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/></svg>
-        </div>
-        <div class="pin" style="left: 27%; top: 58%; background: var(--family-6);" title="Coasteering — Riveras">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-        <div class="cluster" style="left: 43%; top: 74%;">4</div>
-        <div class="pin" style="left: 74%; top: 30%; background: var(--family-5);" title="Windermere boat hire — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-
-        <!-- popover for selected pin -->
-        <div class="popover" style="left: calc(31% + 26px); top: 46%;">
-          <h4>Harbour House Cottages</h4>
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
+        <div class="poll-card on">
+          <h4>Where should we go?</h4>
+          <div class="pc-meta">
+            <span class="tag open">Open</span>
+            <span class="tag">Score 1–10</span>
+            <span class="tag">7 options</span>
           </div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 votes</span>
-          </div>
-          <div class="dist-row">
-            <span class="dchip"><b style="background: var(--family-1);"></b>4h 05</span>
-            <span class="dchip"><b style="background: var(--family-5);"></b>4h 50</span>
-            <span class="dchip"><b style="background: var(--family-6);"></b>5h 20</span>
-          </div>
-          <div class="pop-actions">
-            <button class="btn btn-primary">Details</button>
-            <button class="btn btn-secondary">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
-              Open in Maps
-            </button>
+          <div class="pc-prog">
+            <div class="pc-bar"><i style="width: 67%;"></i></div>
+            <span>6 of 9 voted</span>
           </div>
         </div>
 
-        <!-- overlays -->
-        <div class="map-filters">
-          <button class="fchip on">All</button>
-          <button class="fchip">🏠 Stays</button>
-          <button class="fchip">🍴 Meals</button>
-          <button class="fchip">⛰ Activities</button>
-          <button class="fchip">◌ Regions</button>
-        </div>
-        <div class="map-controls"><div class="mc">+</div><div class="mc">−</div></div>
-        <div class="map-attr">Map data ©2027 Google</div>
-      </div>
-
-      <!-- side panel -->
-      <aside class="panel">
-        <div class="panel-tabs">
-          <button class="ptab">List <span class="count">12</span></button>
-          <button class="ptab on">Details</button>
-          <button class="ptab">Comments <span class="count">3</span></button>
-        </div>
-        <div class="panel-scroll">
-          <div class="photo-strip"><div class="photo"></div><div class="photo"></div><div class="photo"></div></div>
-          <div class="rec-title">Harbour House Cottages</div>
-          <div class="rec-sub">Portloe, Cornwall · sleeps 14 · £2,340 for the week · suggested by <b style="color: var(--family-1);">Laurabel</b></div>
-
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
-            <span class="minichip">↗ airbnb.co.uk</span>
+        <div class="poll-card">
+          <h4>How long?</h4>
+          <div class="pc-meta">
+            <span class="tag open">Open</span>
+            <span class="tag">Pick one</span>
+            <span class="tag todo">You haven't voted</span>
           </div>
-
-          <div class="section-label">GROUP SCORE</div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 of 9 voted</span>
-          </div>
-
-          <div class="section-label">DRIVE FROM HOME</div>
-          <div class="fam-dist">
-            <div class="fd-row"><b class="dot" style="background: var(--family-1);"></b><span class="who">The Parkers</span><span class="val">4h 05 · 212 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-5);"></b><span class="who">The Jiangs</span><span class="val">4h 50 · 251 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-6);"></b><span class="who">The Riveras</span><span class="val">5h 20 · 268 mi</span></div>
-          </div>
-
-          <div class="section-label">LATEST COMMENTS</div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-5);">Ji</div>
-            <div class="bubble"><span class="who">Jibby</span><span class="when">2h ago</span><br>Garden looks perfect for the kids — and it's 10 min from the beach.</div>
-          </div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-6);">S</div>
-            <div class="bubble"><span class="who">Stu</span><span class="when">45m ago</span><br><span class="mention">@Laurabel</span> is the £2,340 total or per family?</div>
+          <div class="pc-prog">
+            <div class="pc-bar"><i style="width: 89%;"></i></div>
+            <span>8 of 9 · 7 days leads</span>
           </div>
         </div>
-        <div class="admin-bar">
-          <span class="note">Admin decision</span>
-          <button class="btn btn-reject">Reject</button>
-          <button class="btn btn-approve">✓ Approve for itinerary</button>
+
+        <div class="poll-card">
+          <h4>Holiday interests</h4>
+          <div class="pc-meta">
+            <span class="tag closed">Closed</span>
+            <span class="tag">Score 1–10</span>
+          </div>
+          <div class="decision-mini">✓ Decided: Coast &amp; walking</div>
         </div>
+
+        <div class="list-foot">Open polls you haven't finished are listed first.</div>
       </aside>
+
+      <!-- ---------- open poll: destination score matrix ---------- -->
+      <section class="poll-main">
+        <div class="poll-head">
+          <div>
+            <h2>Where should we go?</h2>
+            <div class="sub">Opened by Laurabel · 12 Feb · everyone scores every option, 1 = really rather not, 10 = yes please</div>
+          </div>
+          <div class="grow"></div>
+          <span class="nudge"><b>6 of 9</b> voted <button>Nudge</button></span>
+        </div>
+
+        <div class="poll-body">
+          <div class="insight">Cornwall leads; Lake District splits the group</div>
+          <div class="insight-sub">Averages count only cast scores — nobody is treated as a zero.</div>
+
+          <div class="mx-wrap">
+            <table class="mx">
+              <thead>
+                <tr>
+                  <th class="who">MEMBER</th>
+                  <th>York</th>
+                  <th>Cornwall<span class="lead">▲ LEADS</span></th>
+                  <th>Somerset</th>
+                  <th>Lake District</th>
+                  <th>Peak District</th>
+                  <th>Scotland</th>
+                  <th>Wales</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-1);"></b>Alex</span></td>
+                  <td class="cell p5">5</td><td class="cell p8">8</td><td class="cell p6">6</td><td class="cell p9">9</td><td class="cell p6">6</td><td class="cell p7">7</td><td class="cell p5">5</td>
+                </tr>
+                <tr>
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-1);"></b>Chris</span></td>
+                  <td class="cell p6">6</td><td class="cell p9">9</td><td class="cell p5">5</td><td class="cell p2">2</td><td class="cell p4">4</td><td class="cell p8">8</td><td class="cell p6">6</td>
+                </tr>
+                <tr>
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-1);"></b>Laurabel</span></td>
+                  <td class="cell p4">4</td><td class="cell p8">8</td><td class="cell p7">7</td><td class="cell p8">8</td><td class="cell p6">6</td><td class="cell p5">5</td><td class="cell p6">6</td>
+                </tr>
+                <tr class="mine">
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-5);"></b>Jibby<span class="you">you</span></span></td>
+                  <td class="cell p6">6</td><td class="cell p7">7</td><td class="cell p6">6</td><td class="cell p3">3</td><td class="cell p5">5</td><td class="cell p4">4</td><td class="cell p7">7</td>
+                </tr>
+                <tr>
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-5);"></b>Jas</span></td>
+                  <td class="cell p5">5</td><td class="cell p9">9</td><td class="cell p4">4</td><td class="cell p9">9</td><td class="cell p7">7</td><td class="cell p6">6</td><td class="cell p5">5</td>
+                </tr>
+                <tr>
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-6);"></b>Richard</span></td>
+                  <td class="cell p7">7</td><td class="cell p7">7</td><td class="cell p6">6</td><td class="cell p1">1</td><td class="cell p5">5</td><td class="cell p9">9</td><td class="cell p6">6</td>
+                </tr>
+                <!-- non-responders: hatched cells, never a fabricated zero -->
+                <tr class="norow">
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-5);"></b>Alicia<span class="nov">hasn't voted</span></span></td>
+                  <td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td>
+                  <td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td>
+                </tr>
+                <tr class="norow">
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-6);"></b>Luis<span class="nov">hasn't voted</span></span></td>
+                  <td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td>
+                  <td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td>
+                </tr>
+                <tr class="norow">
+                  <td class="who"><span class="who-in"><b class="dot" style="background: var(--family-6);"></b>Stu<span class="nov">hasn't voted</span></span></td>
+                  <td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td>
+                  <td class="cell none">–</td><td class="cell none">–</td><td class="cell none">–</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="who">AVERAGE · 6 responses</td>
+                  <td><div class="avgbar"><div class="track"><i style="height: 55%; background: var(--scale-pref-5);"></i></div><span class="num">5.5</span></div></td>
+                  <td><div class="avgbar win"><div class="track"><i style="height: 80%; background: var(--scale-pref-8);"></i></div><span class="num">8.0</span></div></td>
+                  <td><div class="avgbar"><div class="track"><i style="height: 57%; background: var(--scale-pref-6);"></i></div><span class="num">5.7</span></div></td>
+                  <td><div class="avgbar"><div class="track"><i style="height: 53%; background: var(--scale-pref-5);"></i></div><span class="num">5.3</span></div></td>
+                  <td><div class="avgbar"><div class="track"><i style="height: 55%; background: var(--scale-pref-5);"></i></div><span class="num">5.5</span></div></td>
+                  <td><div class="avgbar"><div class="track"><i style="height: 65%; background: var(--scale-pref-6);"></i></div><span class="num">6.5</span></div></td>
+                  <td><div class="avgbar"><div class="track"><i style="height: 58%; background: var(--scale-pref-6);"></i></div><span class="num">5.8</span></div></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- disagreement strip: one dot per member, family coloured -->
+          <div class="spread">
+            <div class="sd-row">
+              <span class="lbl">Cornwall</span>
+              <div class="sd-axis">
+                <span class="tickmark" style="left: 0;"></span><span class="tickmark" style="left: 50%;"></span><span class="tickmark" style="left: 100%;"></span>
+                <span class="dot" style="left: 80%; background: var(--family-1);"></span>
+                <span class="dot" style="left: 90%; background: var(--family-1);"></span>
+                <span class="dot" style="left: 80%; background: var(--family-1); top: 2px;"></span>
+                <span class="dot" style="left: 70%; background: var(--family-5);"></span>
+                <span class="dot" style="left: 90%; background: var(--family-5); top: 2px;"></span>
+                <span class="dot" style="left: 70%; background: var(--family-6); top: 2px;"></span>
+              </div>
+              <span class="sd-val">spread 0.8 · tight agreement</span>
+            </div>
+            <div class="sd-row">
+              <span class="lbl">Lake District</span>
+              <div class="sd-axis">
+                <span class="tickmark" style="left: 0;"></span><span class="tickmark" style="left: 50%;"></span><span class="tickmark" style="left: 100%;"></span>
+                <span class="dot" style="left: 90%; background: var(--family-1);"></span>
+                <span class="dot" style="left: 20%; background: var(--family-1);"></span>
+                <span class="dot" style="left: 80%; background: var(--family-1); top: 2px;"></span>
+                <span class="dot" style="left: 30%; background: var(--family-5);"></span>
+                <span class="dot" style="left: 90%; background: var(--family-5); top: 2px;"></span>
+                <span class="dot" style="left: 10%; background: var(--family-6);"></span>
+              </div>
+              <span class="sd-val">spread 3.4 <span class="split-chip">⚡ split</span></span>
+            </div>
+            <div class="sd-scale"><span>1 · really rather not</span><span>5</span><span>10 · yes please</span></div>
+          </div>
+
+          <!-- comments -->
+          <div class="cstrip">
+            <div class="comment">
+              <div class="avatar" style="background: var(--family-5);">Ja</div>
+              <div class="bubble"><span class="who">Jas</span><span class="when">1h ago</span><br>The Lakes are stunning but it's five hours in the car for the Riveras.</div>
+            </div>
+            <div class="comment">
+              <div class="avatar" style="background: var(--family-1);">A</div>
+              <div class="bubble"><span class="who">Alex</span><span class="when">24m ago</span><br>Cornwall works for us. <span class="mention">@Chris</span> is a firm no on the Lakes.</div>
+            </div>
+            <span class="see-all">All 7 comments →</span>
+          </div>
+        </div>
+
+        <div class="admin-bar">
+          <span class="note">Main admin · setting a decision shows the numbers first, including when you choose against the leader</span>
+          <button class="btn btn-secondary">Close poll</button>
+          <button class="btn btn-primary">✓ Mark Cornwall as decision</button>
+        </div>
+      </section>
     </div>
 
-    <!-- bottom timeline -->
+    <!-- bottom timeline (collapsed planning strip) -->
     <footer class="timeline">
       <span class="tl-label">Jul 17 – 24 · 8 days</span>
       <div class="tl-track">

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" name="Planning — map view" subtitle="Desktop 1440 · map + side panel + timeline, light theme" -->
+<!-- @dsCard group="Screens" name="Families &amp; members" subtitle="Desktop 1440 · family cards, invite link, member profile panel, light theme" -->
 <meta charset="utf-8">
 <!-- Brand font; self-hosted in production. Falls back to --font-brand's stack when blocked. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
@@ -588,33 +588,124 @@ body {
 }
 .tl-day.hint { border-style: dashed; color: var(--color-text-faint); background: transparent; }
 .tl-cta { font-size: var(--text-sm); }
+
+/* ---------- families ---------- */
+.fam-work { flex: 1; display: flex; min-height: 0; }
+.fam-content { flex: 1; min-width: 0; overflow: hidden; padding: var(--space-4); }
+.content-head { display: flex; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-3); }
+.content-head h2 { font-size: var(--text-sub); font-weight: 700; }
+.content-head .sub { font-size: var(--text-sm); color: var(--color-text-muted); }
+.content-head .grow { flex: 1; }
+
+.fam-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+.fcard {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--card-radius); padding: var(--space-3) var(--space-4) var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+.fcard.mine { border-color: var(--color-accent); }
+.fc-head { display: flex; align-items: center; gap: var(--space-2); }
+.fc-head b.dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.fc-head h3 { font-size: var(--text-lg); font-weight: 700; }
+.fc-head .grow { flex: 1; }
+.fc-count { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-faint); }
+.locality {
+  display: flex; align-items: center; gap: 6px; margin: 6px 0 var(--space-3);
+  font-size: var(--text-sm); color: var(--color-text-muted);
+}
+.locality .privacy { margin-left: auto; font-size: 11px; color: var(--color-text-faint); }
+
+.mlist { display: flex; flex-direction: column; gap: 2px; }
+.mrow {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: 5px 6px; border-radius: var(--radius-1); font-size: var(--text-sm);
+}
+.mrow:hover { background: var(--color-surface-sunken); }
+.mrow.sel { background: var(--color-accent-soft); }
+.mrow .presence { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex: none; }
+.mrow.off { color: var(--color-text-faint); }
+.mrow.off .presence { background: var(--color-border-strong); }
+.mrow .avatar { width: 26px; height: 26px; font-size: 11px; }
+.mrow.off .avatar { filter: grayscale(1) opacity(0.55); }
+.mrow .star { color: var(--color-warning); font-size: 12px; }
+.mrow .tail { margin-left: auto; font-size: 11px; color: var(--color-text-faint); }
+.admin-hint {
+  margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--color-border);
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-muted);
+}
+.admin-hint .grow { flex: 1; }
+.link { color: var(--color-accent); font-weight: 700; font-size: 12px; cursor: pointer; }
+
+/* invite card */
+.fcard.invite {
+  border: 1px dashed var(--color-border-strong); background: var(--color-surface-raised);
+  box-shadow: none; display: flex; flex-direction: column; gap: var(--space-2);
+}
+.invite-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-lg); font-weight: 700; }
+.invite-head .plus {
+  width: 26px; height: 26px; border-radius: var(--radius-1); background: var(--color-surface-sunken);
+  color: var(--color-text-muted); display: grid; place-items: center;
+}
+.invite-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-2); padding: 7px var(--space-2) 7px var(--space-3);
+}
+.invite-row code {
+  flex: 1; font-family: var(--font-mono); font-size: 12px; color: var(--color-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.expiry { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-faint); }
+
+/* ---------- member profile panel ---------- */
+.panel.profile { max-width: 380px; }
+.profile-top { padding: var(--space-4); border-bottom: 1px solid var(--color-border); text-align: center; }
+.profile-top .avatar { width: 64px; height: 64px; font-size: var(--text-sub); margin: 0 auto var(--space-2); }
+.profile-top h3 { font-size: var(--text-sub); font-weight: 700; line-height: var(--leading-tight); }
+.profile-top .uname { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-faint); }
+.prow {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+.prow .lbl { color: var(--color-text-muted); width: 132px; flex: none; }
+.prow .val { font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.prow .val b.dot { width: 10px; height: 10px; border-radius: 50%; }
+.prow .go { margin-left: auto; color: var(--color-text-faint); }
+.seg { margin-left: auto; display: inline-flex; border: 1px solid var(--color-border-strong); border-radius: var(--chip-radius); overflow: hidden; }
+.seg button {
+  border: none; background: var(--color-surface); color: var(--color-text-muted);
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700; padding: 5px 12px; cursor: pointer;
+}
+.seg button.on { background: var(--color-text); color: var(--color-surface); }
+.panel.profile .admin-bar { margin-top: auto; }
 </style>
 
 <div class="screen" data-theme="light">
   <!-- nav rail -->
   <nav class="rail">
     <div class="logo">K</div>
-    <button class="rail-btn active" title="Map">
+    <button class="rail-btn " title="Map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></svg>
     </button>
-    <button class="rail-btn" title="Polls">
+    <button class="rail-btn " title="Polls">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
     </button>
-    <button class="rail-btn" title="Itinerary">
+    <button class="rail-btn " title="Itinerary">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>
     </button>
-    <button class="rail-btn" title="Families">
+    <button class="rail-btn active" title="Families">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><circle cx="17.5" cy="9.5" r="2.7"/><path d="M16 15.2c2.6.2 4.7 1.8 5.5 4.3"/></svg>
     </button>
     <div class="spacer"></div>
-    <button class="rail-btn" title="Admin">
+    <button class="rail-btn " title="Admin">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.5-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.5 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
     </button>
     <div class="avatar" style="background: var(--family-2);">J</div>
   </nav>
 
   <div class="main">
-    <!-- top bar -->
+    <!-- top bar: canonical composition — wordmark · trip · stage · search · bell · presence · primary action -->
     <header class="topbar">
       <span class="wordmark">Kindred</span>
       <span class="trip-name">Cornwall · July 2027</span>
@@ -626,18 +717,11 @@ body {
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="badge">3</span>
       </button>
-      <!-- family avatar stack: colored = family has someone active; grey = all offline.
-           Jiangs hovered → tooltip open (static demo of the hover state) -->
+      <!-- family presence stack: full colour = someone online, grey = family all offline -->
       <div class="fam-stack">
         <div class="fam-av" style="background: var(--family-1);" title="The Parkers">P</div>
-        <div class="fam-av" style="background: var(--family-5);">J</div>
+        <div class="fam-av" style="background: var(--family-5);" title="The Jiangs">J</div>
         <div class="fam-av offline" style="background: var(--family-6);" title="The Riveras">R</div>
-        <div class="fam-tip">
-          <div class="tip-head">THE JIANGS</div>
-          <div class="member"><span class="presence"></span>Jibby<span class="you">you</span></div>
-          <div class="member"><span class="presence"></span>Jas</div>
-          <div class="member off"><span class="presence"></span>Alicia</div>
-        </div>
       </div>
       <button class="suggest-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
@@ -645,165 +729,147 @@ body {
       </button>
     </header>
 
-    <div class="workspace">
-      <!-- map -->
-      <div class="map-wrap">
-        <!-- Map illustration: stand-in for Google Maps tiles. Its raw fills are exempt
-             from the token rule (the real map is Google-rendered, not ours to token);
-             everything OVERLAID on the map uses tokens. -->
-        <svg class="map-svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice">
-          <!-- sea -->
-          <rect width="900" height="620" fill="#DCE7E4"/>
-          <!-- land -->
-          <path d="M120 620 C 90 520 150 470 220 430 C 300 380 330 300 420 280 C 520 255 560 180 660 150 C 760 122 830 60 900 40 L 900 620 Z" fill="#EFEAE0"/>
-          <path d="M60 620 C 80 560 60 540 30 520 L 0 540 L 0 620 Z" fill="#EFEAE0"/>
-          <!-- roads -->
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#FFFFFF" stroke-width="7"/>
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#D9D2C4" stroke-width="2"/>
-          <path d="M340 620 C 380 540 460 520 520 400" fill="none" stroke="#FFFFFF" stroke-width="5"/>
-          <!-- region tints: organic outlined areas (Google-style locality boundary),
-               preference-ramp fill; numbers shown in labels -->
-          <path id="region-cornwall" d="M 205 561
-            C 180 540 172 505 190 478
-            C 205 452 235 440 262 428
-            C 292 415 322 402 355 408
-            C 390 414 415 436 420 468
-            C 425 498 410 528 384 546
-            C 355 566 318 574 282 578
-            C 252 581 224 578 205 561 Z"
-            fill="#5E9468" opacity="0.30"/>
-          <use href="#region-cornwall" fill="none" stroke="#3A8E74" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-          <path id="region-lakes" d="M 640 265
-            C 615 250 605 220 615 192
-            C 624 166 648 150 675 140
-            C 703 130 733 128 757 143
-            C 780 157 792 183 788 210
-            C 784 238 765 260 738 271
-            C 706 284 668 282 640 265 Z"
-            fill="#D99A2B" opacity="0.28"/>
-          <use href="#region-lakes" fill="none" stroke="#CD7228" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-        </svg>
-
-        <!-- region labels -->
-        <div class="region-label" style="left: 33%; top: 62%;">
-          <span class="region-score">8.0</span><span class="region-name">Cornwall</span>
-        </div>
-        <div class="region-label" style="left: 76.6%; top: 22%;">
-          <span class="region-score">5.0</span><span class="region-name">Lake District</span>
+    <div class="fam-work">
+      <section class="fam-content">
+        <div class="content-head">
+          <h2>Families</h2>
+          <span class="sub">3 families · 9 members · everyone belongs to exactly one family</span>
         </div>
 
-        <!-- pins: family-colored, type icons -->
-        <div class="pin selected" style="left: 31%; top: 70%; background: var(--family-1);" title="Harbour House Cottages — Parkers">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
-        </div>
-        <div class="pin" style="left: 38%; top: 64%; background: var(--family-5);" title="The Hidden Hut — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/></svg>
-        </div>
-        <div class="pin" style="left: 27%; top: 58%; background: var(--family-6);" title="Coasteering — Riveras">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-        <div class="cluster" style="left: 43%; top: 74%;">4</div>
-        <div class="pin" style="left: 74%; top: 30%; background: var(--family-5);" title="Windermere boat hire — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-
-        <!-- popover for selected pin -->
-        <div class="popover" style="left: calc(31% + 26px); top: 46%;">
-          <h4>Harbour House Cottages</h4>
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
+        <div class="fam-grid">
+          <!-- The Parkers -->
+          <div class="fcard">
+            <div class="fc-head">
+              <b class="dot" style="background: var(--family-1);"></b>
+              <h3>The Parkers</h3>
+              <span class="grow"></span>
+              <span class="fc-count">3 members</span>
+            </div>
+            <div class="locality">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
+              Bristol
+              <span class="privacy">home address visible to the Parkers only</span>
+            </div>
+            <div class="mlist">
+              <div class="mrow"><span class="presence"></span><span class="avatar" style="background: var(--family-1);">A</span>Alex <span class="star" title="Family admin">★</span><span class="tail">family admin</span></div>
+              <div class="mrow off"><span class="presence"></span><span class="avatar" style="background: var(--family-1);">C</span>Chris<span class="tail">offline</span></div>
+              <div class="mrow"><span class="presence"></span><span class="avatar" style="background: var(--family-1);">L</span>Laurabel<span class="tail">online</span></div>
+            </div>
           </div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 votes</span>
+
+          <!-- The Jiangs (own family) -->
+          <div class="fcard mine">
+            <div class="fc-head">
+              <b class="dot" style="background: var(--family-5);"></b>
+              <h3>The Jiangs</h3>
+              <span class="grow"></span>
+              <span class="fc-count">3 members</span>
+            </div>
+            <div class="locality">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
+              Sheffield
+              <span class="privacy">your family</span>
+            </div>
+            <div class="mlist">
+              <div class="mrow sel"><span class="presence"></span><span class="avatar" style="background: var(--family-5);">Ji</span>Jibby <span class="star" title="Family admin">★</span><span class="tail">you · family admin</span></div>
+              <div class="mrow"><span class="presence"></span><span class="avatar" style="background: var(--family-5);">Ja</span>Jas<span class="tail">online</span></div>
+              <div class="mrow off"><span class="presence"></span><span class="avatar" style="background: var(--family-5);">Al</span>Alicia<span class="tail">offline</span></div>
+            </div>
+            <div class="admin-hint">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+              Family admin: manage members, home address and invites
+              <span class="grow"></span>
+              <span class="link">Manage →</span>
+            </div>
           </div>
-          <div class="dist-row">
-            <span class="dchip"><b style="background: var(--family-1);"></b>4h 05</span>
-            <span class="dchip"><b style="background: var(--family-5);"></b>4h 50</span>
-            <span class="dchip"><b style="background: var(--family-6);"></b>5h 20</span>
+
+          <!-- The Riveras -->
+          <div class="fcard">
+            <div class="fc-head">
+              <b class="dot" style="background: var(--family-6);"></b>
+              <h3>The Riveras</h3>
+              <span class="grow"></span>
+              <span class="fc-count">3 members</span>
+            </div>
+            <div class="locality">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
+              Newcastle
+              <span class="privacy">home address visible to the Riveras only</span>
+            </div>
+            <div class="mlist">
+              <div class="mrow off"><span class="presence"></span><span class="avatar" style="background: var(--family-6);">L</span>Luis<span class="tail">offline</span></div>
+              <div class="mrow off"><span class="presence"></span><span class="avatar" style="background: var(--family-6);">R</span>Richard<span class="tail">last seen 2h ago</span></div>
+              <div class="mrow off"><span class="presence"></span><span class="avatar" style="background: var(--family-6);">S</span>Stu <span class="star" title="Family admin">★</span><span class="tail">family admin</span></div>
+            </div>
           </div>
-          <div class="pop-actions">
-            <button class="btn btn-primary">Details</button>
-            <button class="btn btn-secondary">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
-              Open in Maps
-            </button>
+
+          <!-- invite a family -->
+          <div class="fcard invite">
+            <div class="invite-head">
+              <span class="plus">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+              Invite a family
+            </div>
+            <div style="font-size: var(--text-sm); color: var(--color-text-muted);">
+              Whoever opens this link creates their own family and joins the trip. Main admin only.
+            </div>
+            <div class="invite-row">
+              <code>kindred.family/join/8f2c-4d91-ae07</code>
+              <button class="btn btn-secondary">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5h10"/></svg>
+                Copy
+              </button>
+            </div>
+            <div class="expiry">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              Expires in 7 days · shown once, it can't be retrieved later
+            </div>
           </div>
         </div>
+      </section>
 
-        <!-- overlays -->
-        <div class="map-filters">
-          <button class="fchip on">All</button>
-          <button class="fchip">🏠 Stays</button>
-          <button class="fchip">🍴 Meals</button>
-          <button class="fchip">⛰ Activities</button>
-          <button class="fchip">◌ Regions</button>
-        </div>
-        <div class="map-controls"><div class="mc">+</div><div class="mc">−</div></div>
-        <div class="map-attr">Map data ©2027 Google</div>
-      </div>
-
-      <!-- side panel -->
-      <aside class="panel">
+      <!-- ---------- selected member ---------- -->
+      <aside class="panel profile">
         <div class="panel-tabs">
-          <button class="ptab">List <span class="count">12</span></button>
-          <button class="ptab on">Details</button>
-          <button class="ptab">Comments <span class="count">3</span></button>
+          <button class="ptab on">Member</button>
+          <button class="ptab">Invites <span class="count">1</span></button>
         </div>
-        <div class="panel-scroll">
-          <div class="photo-strip"><div class="photo"></div><div class="photo"></div><div class="photo"></div></div>
-          <div class="rec-title">Harbour House Cottages</div>
-          <div class="rec-sub">Portloe, Cornwall · sleeps 14 · £2,340 for the week · suggested by <b style="color: var(--family-1);">Laurabel</b></div>
-
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
-            <span class="minichip">↗ airbnb.co.uk</span>
-          </div>
-
-          <div class="section-label">GROUP SCORE</div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 of 9 voted</span>
-          </div>
-
-          <div class="section-label">DRIVE FROM HOME</div>
-          <div class="fam-dist">
-            <div class="fd-row"><b class="dot" style="background: var(--family-1);"></b><span class="who">The Parkers</span><span class="val">4h 05 · 212 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-5);"></b><span class="who">The Jiangs</span><span class="val">4h 50 · 251 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-6);"></b><span class="who">The Riveras</span><span class="val">5h 20 · 268 mi</span></div>
-          </div>
-
-          <div class="section-label">LATEST COMMENTS</div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-5);">Ji</div>
-            <div class="bubble"><span class="who">Jibby</span><span class="when">2h ago</span><br>Garden looks perfect for the kids — and it's 10 min from the beach.</div>
-          </div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-6);">S</div>
-            <div class="bubble"><span class="who">Stu</span><span class="when">45m ago</span><br><span class="mention">@Laurabel</span> is the £2,340 total or per family?</div>
-          </div>
+        <div class="profile-top">
+          <div class="avatar" style="background: var(--family-5);">Ji</div>
+          <h3>Jibby</h3>
+          <div class="uname">@jibby</div>
+        </div>
+        <div class="prow">
+          <span class="lbl">Family</span>
+          <span class="val"><b class="dot" style="background: var(--family-5);"></b>The Jiangs</span>
+        </div>
+        <div class="prow">
+          <span class="lbl">Role</span>
+          <span class="val">★ Family admin</span>
+        </div>
+        <div class="prow">
+          <span class="lbl">Display name</span>
+          <span class="val">Jibby</span>
+          <span class="go">Edit</span>
+        </div>
+        <div class="prow">
+          <span class="lbl">Theme</span>
+          <span class="seg"><button class="on">Light</button><button>Dark</button><button>System</button></span>
+        </div>
+        <div class="prow">
+          <span class="lbl">Password</span>
+          <span class="val">Change password</span>
+          <span class="go">→</span>
+        </div>
+        <div class="prow">
+          <span class="lbl">Joined</span>
+          <span class="val" style="font-family: var(--font-mono); font-weight: 400;">14 Jan 2027</span>
         </div>
         <div class="admin-bar">
-          <span class="note">Admin decision</span>
-          <button class="btn btn-reject">Reject</button>
-          <button class="btn btn-approve">✓ Approve for itinerary</button>
+          <span class="note">You can edit your own profile at any time, in any stage.</span>
         </div>
       </aside>
     </div>
-
-    <!-- bottom timeline -->
-    <footer class="timeline">
-      <span class="tl-label">Jul 17 – 24 · 8 days</span>
-      <div class="tl-track">
-        <div class="tl-day">Sat 17</div><div class="tl-day">Sun 18</div><div class="tl-day">Mon 19</div>
-        <div class="tl-day">Tue 20</div><div class="tl-day">Wed 21</div><div class="tl-day">Thu 22</div>
-        <div class="tl-day">Fri 23</div><div class="tl-day hint">Sat 24</div>
-      </div>
-      <button class="btn btn-ghost tl-cta">Open itinerary →</button>
-    </footer>
   </div>
 </div>

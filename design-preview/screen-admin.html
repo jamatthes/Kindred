@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" name="Planning — map view" subtitle="Desktop 1440 · map + side panel + timeline, light theme" -->
+<!-- @dsCard group="Screens" name="Admin console" subtitle="Desktop 1440 · trip settings, stage, voting modes, Google status, light theme" -->
 <meta charset="utf-8">
 <!-- Brand font; self-hosted in production. Falls back to --font-brand's stack when blocked. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
@@ -588,33 +588,118 @@ body {
 }
 .tl-day.hint { border-style: dashed; color: var(--color-text-faint); background: transparent; }
 .tl-cta { font-size: var(--text-sm); }
+
+/* ---------- admin console: a sectioned page, not a map view ---------- */
+.console { flex: 1; min-height: 0; overflow: hidden; padding: var(--space-3) var(--space-4); }
+.console-head { display: flex; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-3); }
+.console-head h2 { font-size: var(--text-lg); font-weight: 700; }
+.console-head .sub { font-size: var(--text-sm); color: var(--color-text-muted); }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); align-items: start; }
+.col { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.sect {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--card-radius); box-shadow: var(--shadow-card);
+  padding: var(--space-3) var(--space-4);
+}
+.sect > h3 { font-size: var(--text-body); font-weight: 700; margin-bottom: 2px; }
+.sect > .hint { font-size: 12px; color: var(--color-text-faint); margin-bottom: var(--space-2); }
+
+/* fields */
+.field-row { display: flex; gap: var(--space-3); margin-bottom: 6px; }
+.field { flex: 1; min-width: 0; }
+.field label { display: block; font-size: 12px; font-weight: 700; color: var(--color-text-muted); margin-bottom: 4px; }
+.field .input {
+  height: 38px; border-radius: var(--field-radius);
+  border: 1px solid var(--color-border-strong); background: var(--color-surface);
+  display: flex; align-items: center; padding: 0 var(--space-3); font-size: var(--text-sm); white-space: nowrap;
+}
+.field .input.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.field .input .ph { color: var(--color-text-faint); }
+.save-row { display: flex; align-items: center; gap: var(--space-2); margin-top: 6px; }
+.save-row .note { flex: 1; font-size: 12px; color: var(--color-text-faint); }
+.btn[disabled], .btn.off { opacity: .5; cursor: default; }
+
+/* stage stepper */
+.stepper { display: flex; align-items: center; gap: 0; margin-bottom: var(--space-3); }
+.stg {
+  flex: 1; text-align: center; padding: 7px var(--space-2); font-size: var(--text-sm); font-weight: 700;
+  color: var(--color-text-faint); border: 1px solid var(--color-border); background: var(--color-surface-raised);
+}
+.stg:first-child { border-radius: var(--radius-2) 0 0 var(--radius-2); }
+.stg:last-child { border-radius: 0 var(--radius-2) var(--radius-2) 0; }
+.stg + .stg { border-left: none; }
+.stg.now { background: var(--color-info-soft); color: var(--color-info); border-color: var(--color-info); }
+.stg small { display: block; font-weight: 400; font-size: 11px; color: var(--color-text-faint); }
+.stage-actions { display: flex; align-items: center; gap: var(--space-2); }
+.revert-row { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--color-border); font-size: 12px; color: var(--color-text-faint); }
+
+/* generic table */
+table.t { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+table.t th {
+  text-align: left; font-size: 11px; font-weight: 700; color: var(--color-text-faint);
+  padding: 0 var(--space-2) 4px; border-bottom: 1px solid var(--color-border); white-space: nowrap;
+}
+table.t td { padding: 3px var(--space-2); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+table.t tr:last-child td { border-bottom: none; }
+table.t td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text-muted); }
+table.t td .why { display: block; font-size: 11px; color: var(--color-text-faint); }
+.fam-cell { display: flex; align-items: center; gap: 7px; }
+.fam-cell b.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.rowact { font-size: 12px; font-weight: 700; color: var(--color-accent); cursor: pointer; white-space: nowrap; }
+.rowact.off { color: var(--color-text-faint); cursor: default; }
+
+/* segmented voting-mode control */
+.vseg { display: inline-flex; border: 1px solid var(--color-border-strong); border-radius: var(--chip-radius); overflow: hidden; }
+.vseg button {
+  border: none; background: var(--color-surface); color: var(--color-text-muted);
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700; padding: 3px 10px; cursor: pointer; white-space: nowrap;
+}
+.vseg button.on { background: var(--color-text); color: var(--color-surface); }
+
+/* status chips: icon + word, never colour alone */
+.st { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: var(--chip-radius); font-size: 12px; font-weight: 700; }
+.st.ok { background: var(--color-success-soft); color: var(--color-success); }
+.st.na { background: var(--color-surface-sunken); color: var(--color-text-faint); }
+
+/* danger zone — subdued, not an alarm */
+.sect.danger { background: var(--color-surface-raised); border-color: var(--color-border-strong); }
+.danger-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.danger-row + .danger-row { border-top: 1px solid var(--color-border); }
+.danger-row .txt { flex: 1; }
+.danger-row .txt b { font-weight: 700; font-size: var(--text-sm); }
+.danger-row .txt span { display: block; font-size: 12px; color: var(--color-text-faint); }
+.btn-quiet {
+  background: var(--color-surface); color: var(--color-text-muted);
+  border-color: var(--color-border-strong); font-weight: 700;
+}
 </style>
 
 <div class="screen" data-theme="light">
   <!-- nav rail -->
   <nav class="rail">
     <div class="logo">K</div>
-    <button class="rail-btn active" title="Map">
+    <button class="rail-btn " title="Map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></svg>
     </button>
-    <button class="rail-btn" title="Polls">
+    <button class="rail-btn " title="Polls">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
     </button>
-    <button class="rail-btn" title="Itinerary">
+    <button class="rail-btn " title="Itinerary">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>
     </button>
-    <button class="rail-btn" title="Families">
+    <button class="rail-btn " title="Families">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><circle cx="17.5" cy="9.5" r="2.7"/><path d="M16 15.2c2.6.2 4.7 1.8 5.5 4.3"/></svg>
     </button>
     <div class="spacer"></div>
-    <button class="rail-btn" title="Admin">
+    <button class="rail-btn active" title="Admin">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.5-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.5 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
     </button>
     <div class="avatar" style="background: var(--family-2);">J</div>
   </nav>
 
   <div class="main">
-    <!-- top bar -->
+    <!-- top bar: canonical composition — wordmark · trip · stage · search · bell · presence · primary action -->
     <header class="topbar">
       <span class="wordmark">Kindred</span>
       <span class="trip-name">Cornwall · July 2027</span>
@@ -626,18 +711,11 @@ body {
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="badge">3</span>
       </button>
-      <!-- family avatar stack: colored = family has someone active; grey = all offline.
-           Jiangs hovered → tooltip open (static demo of the hover state) -->
+      <!-- family presence stack: full colour = someone online, grey = family all offline -->
       <div class="fam-stack">
         <div class="fam-av" style="background: var(--family-1);" title="The Parkers">P</div>
-        <div class="fam-av" style="background: var(--family-5);">J</div>
+        <div class="fam-av" style="background: var(--family-5);" title="The Jiangs">J</div>
         <div class="fam-av offline" style="background: var(--family-6);" title="The Riveras">R</div>
-        <div class="fam-tip">
-          <div class="tip-head">THE JIANGS</div>
-          <div class="member"><span class="presence"></span>Jibby<span class="you">you</span></div>
-          <div class="member"><span class="presence"></span>Jas</div>
-          <div class="member off"><span class="presence"></span>Alicia</div>
-        </div>
       </div>
       <button class="suggest-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
@@ -645,165 +723,184 @@ body {
       </button>
     </header>
 
-    <div class="workspace">
-      <!-- map -->
-      <div class="map-wrap">
-        <!-- Map illustration: stand-in for Google Maps tiles. Its raw fills are exempt
-             from the token rule (the real map is Google-rendered, not ours to token);
-             everything OVERLAID on the map uses tokens. -->
-        <svg class="map-svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice">
-          <!-- sea -->
-          <rect width="900" height="620" fill="#DCE7E4"/>
-          <!-- land -->
-          <path d="M120 620 C 90 520 150 470 220 430 C 300 380 330 300 420 280 C 520 255 560 180 660 150 C 760 122 830 60 900 40 L 900 620 Z" fill="#EFEAE0"/>
-          <path d="M60 620 C 80 560 60 540 30 520 L 0 540 L 0 620 Z" fill="#EFEAE0"/>
-          <!-- roads -->
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#FFFFFF" stroke-width="7"/>
-          <path d="M200 560 C 300 480 420 470 520 400 C 610 340 700 330 800 260" fill="none" stroke="#D9D2C4" stroke-width="2"/>
-          <path d="M340 620 C 380 540 460 520 520 400" fill="none" stroke="#FFFFFF" stroke-width="5"/>
-          <!-- region tints: organic outlined areas (Google-style locality boundary),
-               preference-ramp fill; numbers shown in labels -->
-          <path id="region-cornwall" d="M 205 561
-            C 180 540 172 505 190 478
-            C 205 452 235 440 262 428
-            C 292 415 322 402 355 408
-            C 390 414 415 436 420 468
-            C 425 498 410 528 384 546
-            C 355 566 318 574 282 578
-            C 252 581 224 578 205 561 Z"
-            fill="#5E9468" opacity="0.30"/>
-          <use href="#region-cornwall" fill="none" stroke="#3A8E74" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-          <path id="region-lakes" d="M 640 265
-            C 615 250 605 220 615 192
-            C 624 166 648 150 675 140
-            C 703 130 733 128 757 143
-            C 780 157 792 183 788 210
-            C 784 238 765 260 738 271
-            C 706 284 668 282 640 265 Z"
-            fill="#D99A2B" opacity="0.28"/>
-          <use href="#region-lakes" fill="none" stroke="#CD7228" stroke-width="2.5" stroke-dasharray="7 5" opacity="1"/>
-        </svg>
-
-        <!-- region labels -->
-        <div class="region-label" style="left: 33%; top: 62%;">
-          <span class="region-score">8.0</span><span class="region-name">Cornwall</span>
-        </div>
-        <div class="region-label" style="left: 76.6%; top: 22%;">
-          <span class="region-score">5.0</span><span class="region-name">Lake District</span>
-        </div>
-
-        <!-- pins: family-colored, type icons -->
-        <div class="pin selected" style="left: 31%; top: 70%; background: var(--family-1);" title="Harbour House Cottages — Parkers">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
-        </div>
-        <div class="pin" style="left: 38%; top: 64%; background: var(--family-5);" title="The Hidden Hut — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/></svg>
-        </div>
-        <div class="pin" style="left: 27%; top: 58%; background: var(--family-6);" title="Coasteering — Riveras">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-        <div class="cluster" style="left: 43%; top: 74%;">4</div>
-        <div class="pin" style="left: 74%; top: 30%; background: var(--family-5);" title="Windermere boat hire — Jiangs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/></svg>
-        </div>
-
-        <!-- popover for selected pin -->
-        <div class="popover" style="left: calc(31% + 26px); top: 46%;">
-          <h4>Harbour House Cottages</h4>
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
-          </div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 votes</span>
-          </div>
-          <div class="dist-row">
-            <span class="dchip"><b style="background: var(--family-1);"></b>4h 05</span>
-            <span class="dchip"><b style="background: var(--family-5);"></b>4h 50</span>
-            <span class="dchip"><b style="background: var(--family-6);"></b>5h 20</span>
-          </div>
-          <div class="pop-actions">
-            <button class="btn btn-primary">Details</button>
-            <button class="btn btn-secondary">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>
-              Open in Maps
-            </button>
-          </div>
-        </div>
-
-        <!-- overlays -->
-        <div class="map-filters">
-          <button class="fchip on">All</button>
-          <button class="fchip">🏠 Stays</button>
-          <button class="fchip">🍴 Meals</button>
-          <button class="fchip">⛰ Activities</button>
-          <button class="fchip">◌ Regions</button>
-        </div>
-        <div class="map-controls"><div class="mc">+</div><div class="mc">−</div></div>
-        <div class="map-attr">Map data ©2027 Google</div>
+    <div class="console">
+      <div class="console-head">
+        <h2>Admin console</h2>
+        <span class="sub">Main admin · Jibby · changes here affect everyone on the trip</span>
       </div>
 
-      <!-- side panel -->
-      <aside class="panel">
-        <div class="panel-tabs">
-          <button class="ptab">List <span class="count">12</span></button>
-          <button class="ptab on">Details</button>
-          <button class="ptab">Comments <span class="count">3</span></button>
+      <div class="cols">
+        <!-- ============ left column ============ -->
+        <div class="col">
+          <!-- trip settings -->
+          <section class="sect">
+            <h3>Trip settings</h3>
+            <div class="hint">Dates drive the timeline and the itinerary. Times are read in the trip's timezone, never the server's.</div>
+            <div class="field-row">
+              <div class="field" style="flex: 2;">
+                <label>TRIP NAME</label>
+                <div class="input">Cornwall · July 2027</div>
+              </div>
+              <div class="field" style="flex: 1.5;">
+                <label>TIMEZONE</label>
+                <div class="input mono">Europe/London</div>
+              </div>
+              <div class="field" style="flex: 1.2;">
+                <label>START</label>
+                <div class="input mono">2027-07-17</div>
+              </div>
+              <div class="field" style="flex: 1.2;">
+                <label>END</label>
+                <div class="input mono">2027-07-24</div>
+              </div>
+            </div>
+            <div class="save-row">
+              <span class="note">Nothing changed yet</span>
+              <button class="btn btn-primary off">Save</button>
+            </div>
+          </section>
+
+          <!-- voting modes -->
+          <section class="sect">
+            <h3>Voting modes</h3>
+            <div class="hint">Switching a mode keeps existing votes; they are hidden, not deleted.</div>
+            <table class="t">
+              <thead><tr><th>CATEGORY</th><th>WHAT IT COVERS</th><th style="text-align:right;">MODE</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Polls</td><td class="num" style="color: var(--color-text-faint);">Where should we go?, How long?</td>
+                  <td style="text-align:right;"><span class="vseg"><button class="on">Score 1–10</button><button>Thumbs</button></span></td>
+                </tr>
+                <tr>
+                  <td>Regions</td><td class="num" style="color: var(--color-text-faint);">Areas drawn on the map</td>
+                  <td style="text-align:right;"><span class="vseg"><button class="on">Score 1–10</button><button>Thumbs</button></span></td>
+                </tr>
+                <tr>
+                  <td>Accommodation</td><td class="num" style="color: var(--color-text-faint);">Cottages, hotels, campsites</td>
+                  <td style="text-align:right;"><span class="vseg"><button class="on">Score 1–10</button><button>Thumbs</button></span></td>
+                </tr>
+                <tr>
+                  <td>Activities</td><td class="num" style="color: var(--color-text-faint);">Days out and walks</td>
+                  <td style="text-align:right;"><span class="vseg"><button>Score 1–10</button><button class="on">Thumbs</button></span></td>
+                </tr>
+                <tr>
+                  <td>Meals</td><td class="num" style="color: var(--color-text-faint);">Pubs, cafés, restaurants</td>
+                  <td style="text-align:right;"><span class="vseg"><button>Score 1–10</button><button class="on">Thumbs</button></span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="save-row">
+              <span class="note">12 votes already cast on activities — you'll be asked to confirm</span>
+              <button class="btn btn-primary">Save modes</button>
+            </div>
+          </section>
+
+          <!-- google -->
+          <section class="sect">
+            <h3>Google APIs</h3>
+            <div class="hint">Run check makes a few real API calls. Last checked 2h ago by Jibby.</div>
+            <table class="t">
+              <thead><tr><th>API</th><th>KEY</th><th>STATUS</th><th style="text-align:right;">DETAIL</th></tr></thead>
+              <tbody>
+                <tr><td>Maps JavaScript</td><td class="num">browser</td><td><span class="st ok">✓ Configured</span></td><td class="num" style="text-align:right;">can't be verified server-side</td></tr>
+                <tr><td>Places</td><td class="num">server</td><td><span class="st ok">✓ OK</span></td><td class="num" style="text-align:right;">142 ms</td></tr>
+                <tr><td>Distance Matrix</td><td class="num">server</td><td><span class="st ok">✓ OK</span></td><td class="num" style="text-align:right;">203 ms</td></tr>
+                <tr><td>Geocoding</td><td class="num">server</td><td><span class="st ok">✓ OK</span></td><td class="num" style="text-align:right;">118 ms</td></tr>
+              </tbody>
+            </table>
+            <div class="save-row">
+              <span class="note">Directions is called once per itinerary change, never on render.</span>
+              <button class="btn btn-secondary">Run check</button>
+            </div>
+          </section>
         </div>
-        <div class="panel-scroll">
-          <div class="photo-strip"><div class="photo"></div><div class="photo"></div><div class="photo"></div></div>
-          <div class="rec-title">Harbour House Cottages</div>
-          <div class="rec-sub">Portloe, Cornwall · sleeps 14 · £2,340 for the week · suggested by <b style="color: var(--family-1);">Laurabel</b></div>
 
-          <div class="pop-meta">
-            <span class="minichip">🏠 Accommodation</span>
-            <span class="minichip status">★ Shortlisted</span>
-            <span class="minichip">↗ airbnb.co.uk</span>
-          </div>
+        <!-- ============ right column ============ -->
+        <div class="col">
+          <!-- stage -->
+          <section class="sect">
+            <h3>Stage</h3>
+            <div class="hint">The stage decides what the whole app lets people do.</div>
+            <div class="stepper">
+              <div class="stg now">Planning<small>voting &amp; suggestions</small></div>
+              <div class="stg">Holiday<small>now/next &amp; check-ins</small></div>
+              <div class="stg">End<small>read-only archive</small></div>
+            </div>
+            <div class="stage-actions">
+              <button class="btn btn-primary">Start Holiday</button>
+              <span class="note" style="font-size: 12px; color: var(--color-text-faint);">
+                You'll be asked to confirm: voting and suggestions stay open, phones switch to the now/next view, and check-ins become available.
+              </span>
+            </div>
+            <div class="revert-row">Reverting a stage is possible from here and never turns anyone's location sharing back on.</div>
+          </section>
 
-          <div class="section-label">GROUP SCORE</div>
-          <div class="vote-line">
-            <span class="vote-avg">8.2</span>
-            <div class="vote-bar"><i style="width: 82%; background: var(--scale-pref-8);"></i></div>
-            <span style="font-size:12px; color: var(--color-text-faint);">6 of 9 voted</span>
-          </div>
+          <!-- members -->
+          <section class="sect">
+            <h3>Members</h3>
+            <div class="hint">Removing someone takes them off the trip; their votes and comments stay attributed.</div>
+            <table class="t">
+              <thead><tr><th>NAME</th><th>FAMILY</th><th>ROLE</th><th>LAST LOGIN</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Jibby</td>
+                  <td><span class="fam-cell"><b class="dot" style="background: var(--family-5);"></b>The Jiangs</span></td>
+                  <td>Main admin</td><td class="num">2 min ago</td>
+                  <td style="text-align:right;"><span class="rowact off">Protected</span></td>
+                </tr>
+                <tr>
+                  <td>Alex</td>
+                  <td><span class="fam-cell"><b class="dot" style="background: var(--family-1);"></b>The Parkers</span></td>
+                  <td>Family admin</td><td class="num">18 min ago</td>
+                  <td style="text-align:right;"><span class="rowact">Reset password</span></td>
+                </tr>
+                <tr>
+                  <td>Laurabel</td>
+                  <td><span class="fam-cell"><b class="dot" style="background: var(--family-1);"></b>The Parkers</span></td>
+                  <td>Member</td><td class="num">1h ago</td>
+                  <td style="text-align:right;"><span class="rowact">Reset password</span></td>
+                </tr>
+                <tr>
+                  <td>Jas</td>
+                  <td><span class="fam-cell"><b class="dot" style="background: var(--family-5);"></b>The Jiangs</span></td>
+                  <td>Member</td><td class="num">3h ago</td>
+                  <td style="text-align:right;"><span class="rowact">Reset password</span></td>
+                </tr>
+                <tr>
+                  <td>Stu</td>
+                  <td><span class="fam-cell"><b class="dot" style="background: var(--family-6);"></b>The Riveras</span></td>
+                  <td>Family admin</td><td class="num">yesterday</td>
+                  <td style="text-align:right;"><span class="rowact">Reset password</span></td>
+                </tr>
+                <tr>
+                  <td>Alicia<span class="why">must change password</span></td>
+                  <td><span class="fam-cell"><b class="dot" style="background: var(--family-5);"></b>The Jiangs</span></td>
+                  <td>Member</td><td class="num">never</td>
+                  <td style="text-align:right;"><span class="rowact">Reset password</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="save-row">
+              <span class="note">9 members across 3 families · 1 open invite</span>
+              <button class="btn btn-secondary">See all members</button>
+            </div>
+          </section>
 
-          <div class="section-label">DRIVE FROM HOME</div>
-          <div class="fam-dist">
-            <div class="fd-row"><b class="dot" style="background: var(--family-1);"></b><span class="who">The Parkers</span><span class="val">4h 05 · 212 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-5);"></b><span class="who">The Jiangs</span><span class="val">4h 50 · 251 mi</span></div>
-            <div class="fd-row"><b class="dot" style="background: var(--family-6);"></b><span class="who">The Riveras</span><span class="val">5h 20 · 268 mi</span></div>
-          </div>
-
-          <div class="section-label">LATEST COMMENTS</div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-5);">Ji</div>
-            <div class="bubble"><span class="who">Jibby</span><span class="when">2h ago</span><br>Garden looks perfect for the kids — and it's 10 min from the beach.</div>
-          </div>
-          <div class="comment">
-            <div class="avatar" style="background: var(--family-6);">S</div>
-            <div class="bubble"><span class="who">Stu</span><span class="when">45m ago</span><br><span class="mention">@Laurabel</span> is the £2,340 total or per family?</div>
-          </div>
+          <!-- danger zone -->
+          <section class="sect danger">
+            <h3>Danger zone</h3>
+            <div class="hint">Both actions ask for a typed confirmation first.</div>
+            <div class="danger-row">
+              <span class="txt"><b>Transfer main admin</b><span>Hands the trip over to another member. You keep your family admin role.</span></span>
+              <button class="btn btn-quiet">Transfer</button>
+            </div>
+            <div class="danger-row">
+              <span class="txt"><b>Delete this trip</b><span>Removes the itinerary, polls, suggestions, comments and photos. Not recoverable.</span></span>
+              <button class="btn btn-quiet">Delete trip</button>
+            </div>
+          </section>
         </div>
-        <div class="admin-bar">
-          <span class="note">Admin decision</span>
-          <button class="btn btn-reject">Reject</button>
-          <button class="btn btn-approve">✓ Approve for itinerary</button>
-        </div>
-      </aside>
+      </div>
     </div>
-
-    <!-- bottom timeline -->
-    <footer class="timeline">
-      <span class="tl-label">Jul 17 – 24 · 8 days</span>
-      <div class="tl-track">
-        <div class="tl-day">Sat 17</div><div class="tl-day">Sun 18</div><div class="tl-day">Mon 19</div>
-        <div class="tl-day">Tue 20</div><div class="tl-day">Wed 21</div><div class="tl-day">Thu 22</div>
-        <div class="tl-day">Fri 23</div><div class="tl-day hint">Sat 24</div>
-      </div>
-      <button class="btn btn-ghost tl-cta">Open itinerary →</button>
-    </footer>
   </div>
 </div>
