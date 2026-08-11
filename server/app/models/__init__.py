@@ -10,6 +10,7 @@ from app.models.family import (
     FAMILY_MANAGER_ROLES,
     FAMILY_ROLES,
     GEOCODE_STATUSES,
+    HEX_COLOR_RE,
     INVITE_EXPIRY_CHOICES,
     INVITE_MODE_CREATE_FAMILY,
     LOCATION_BLOCKED_CONSENT,
@@ -27,6 +28,7 @@ from app.models.family import (
     location_block_reason,
     next_free_color,
     spouse_may_act_on,
+    taken_colors,
 )
 from app.models.session import LoginAttempt, Session
 from app.models.setting import (
@@ -54,6 +56,7 @@ __all__ = [
     "FAMILY_MANAGER_ROLES",
     "FAMILY_ROLES",
     "GEOCODE_STATUSES",
+    "HEX_COLOR_RE",
     "INVITE_EXPIRY_CHOICES",
     "INVITE_MODE_CREATE_FAMILY",
     "LOCATION_BLOCKED_CONSENT",
@@ -94,4 +97,5 @@ __all__ = [
     "location_block_reason",
     "next_free_color",
     "spouse_may_act_on",
+    "taken_colors",
 ]

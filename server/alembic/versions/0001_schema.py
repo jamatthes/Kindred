@@ -51,7 +51,10 @@ FAMILY_ROLES = ("head", "spouse", "member")
 INVITE_MODES = ("join", "create_family")
 
 #: The design palette defines eight slots (`--family-1…8`).
-MAX_COLOR_SLOTS = 8
+#: The curated palette (2026-08-11: grown from 8 to 24; slots 1-8 keep their original hex
+#: values in both themes). The 25th family on a trip gets a free-choice colour wheel instead
+#: of a slot — see `families.color_custom` below and `ck_families_color_xor`.
+MAX_COLOR_SLOTS = 24
 
 #: `trip_category_settings.category`. Five fixed kinds of thing a group votes on; `poll`
 #: governs every poll, because the mode is per category rather than per poll
@@ -316,9 +319,14 @@ def upgrade() -> None:
         sa.Column("trip_id", sa.UUID(), nullable=False),
         sa.Column("name", sa.String(length=120), nullable=False),
         # A smallint token slot, not a hex colour, so the design system can retune the palette
-        # without a data migration. NOT NULL: a family with no colour cannot be drawn on the
-        # map or in any list, and a unique index would not constrain nulls in any case.
-        sa.Column("color", sa.SmallInteger(), nullable=False),
+        # without a data migration. Nullable since 2026-08-11: once all 24 slots on a trip are
+        # claimed, a family gets a free-choice hex in `color_custom` instead — exactly one of
+        # the two is ever set, enforced by `ck_families_color_xor` below.
+        sa.Column("color", sa.SmallInteger(), nullable=True),
+        # The overflow colour wheel's value (`#RRGGBB`), set only when the palette was full at
+        # pick time. Escapes the curated palette's tuning/distinguishability guarantees by
+        # design — see `plan/features/families/design.md` > Family colour palette.
+        sa.Column("color_custom", sa.String(length=7), nullable=True),
         sa.Column("home_address", sa.Text(), nullable=True),
         sa.Column("home_lat", sa.Float(), nullable=True),
         sa.Column("home_lng", sa.Float(), nullable=True),
@@ -346,7 +354,15 @@ def upgrade() -> None:
             f"geocode_status IN {GEOCODE_STATUSES}", name="ck_families_geocode_status"
         ),
         sa.CheckConstraint(
-            f"color BETWEEN 1 AND {MAX_COLOR_SLOTS}", name="ck_families_color_range"
+            f"color IS NULL OR color BETWEEN 1 AND {MAX_COLOR_SLOTS}",
+            name="ck_families_color_range",
+        ),
+        # Exactly one of the palette slot or the overflow custom hex is ever set — the row
+        # can never claim both a slot and a wheel colour, or neither.
+        sa.CheckConstraint(
+            "(color IS NOT NULL AND color_custom IS NULL) OR "
+            "(color IS NULL AND color_custom IS NOT NULL)",
+            name="ck_families_color_xor",
         ),
     )
     op.create_index("ix_families_trip_id", "families", ["trip_id"], unique=False)
