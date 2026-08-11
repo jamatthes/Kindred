@@ -128,8 +128,15 @@ with the flag set.
 - [ ] Bind Tailwind 4 `@theme` to the semantic layer so utilities resolve to tokens.
 - [ ] `app/apiClient.ts` — base URL, JSON handling, automatic `X-CSRF-Token`, one retry after
       a `csrf_invalid`, and a typed error object carrying `code`.
-- [ ] `app/session.ts` — `auth/me` on load, in-memory user context, routing rules: no user →
-      login; `must_change_password` → the change screen; otherwise the app.
+- [ ] `auth/me` returns a `next_step` field — `change_password` | `setup_trip` | `setup_family`
+      | `app` — computed server-side in that precedence order (F-13). In M0 only
+      `change_password` and `app` are reachable; `setup_trip` and `setup_family` become live
+      when `admin-console` and `families` land in M1, and the shell must already handle them by
+      rendering nothing rather than falling through to the app.
+- [ ] `app/session.ts` — `auth/me` on load, in-memory user context, and routing on `next_step`
+      **alone**: no user → login; otherwise render the screen the server named. Do not branch on
+      `must_change_password` or any other individual flag in the client — one gate, one owner,
+      or the two will drift the first time a fourth state is added.
 - [ ] `app/wsClient.ts` — connect after a successful `auth/me`, exponential backoff with
       jitter (1s → 30s), `resync` handling, a subscribe API for feature code, and a
       reconnecting indicator that appears only after the second consecutive failure.
@@ -156,8 +163,10 @@ confirm the reconnecting indicator appears only after the second failure.
 - [ ] `deploy/docker-compose.yml` — `postgres` (named volume, healthcheck), `api` (built from
       `server/`, depends on the postgres healthcheck, restart policy), `caddy` (serves the
       built `web/dist`, reverse-proxies `/api` and `/ws`, WebSocket upgrade headers).
-- [ ] `deploy/Caddyfile` — static file server with SPA fallback to `index.html`, the two
-      proxies, sensible security headers.
+- [ ] `web/Caddyfile` — static file server with SPA fallback to `index.html`, the two
+      proxies, sensible security headers. It sits in `web/` and is `COPY`ed into the web image;
+      do not bind-mount it from compose, because Docker Desktop cannot bind-mount a single file
+      from an SMB/UNC share and that breaks every checkout on a network drive.
 - [ ] `server/Dockerfile` (multi-stage, non-root user) and `web/Dockerfile` or a build stage
       that outputs `dist` into the Caddy image.
 - [ ] Startup ordering: retry the database connection with backoff for up to 60 seconds, then

@@ -17,13 +17,27 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       POSTGRES_DB: ${POSTGRES_DB:-kindred}
       TZ: ${TZ:-Europe/London}
+      # PGDATA points at a *subdirectory* of the bind mount, not the mount point itself.
+      # Postgres refuses to start unless its data directory is mode 0700, and it cannot
+      # chmod the mount point on a Docker Desktop bind mount. Letting initdb create its own
+      # directory inside the mount is the only arrangement that has a chance of working.
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       # Published for host-side development tooling (alembic, pytest). Remove this on a
       # server that does not need it — the api container reaches Postgres over the compose
       # network either way.
       - "${KINDRED_POSTGRES_PORT:-5432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Bind-mounted to ../data/postgres (repo root `data/`) so the database is visible in
+      # Explorer instead of hidden in Docker's VM disk. Relative to this file, so it follows
+      # the checkout.
+      #
+      # WARNING: Postgres on a Windows/SMB bind mount is unreliable — it needs POSIX
+      # permissions, file locking and honest fsync, and a network share provides none of
+      # them. See deploy/README.md ("Where the data lives") for the failure modes and how to
+      # go back to a named volume. This is a deliberate, owner-requested trade of durability
+      # for visibility.
+      - ../data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kindred} -d ${POSTGRES_DB:-kindred}"]
       interval: 5s
@@ -50,7 +64,10 @@ services:
     expose:
       - "8000"
     volumes:
-      - attachments:${ATTACHMENTS_DIR:-/data/attachments}
+      # Uploads (profile pictures, check-in photos) beside the code, same reasoning as the
+      # database above. These are ordinary files, so a bind mount suits them far better than
+      # it suits Postgres — no permissions or fsync semantics are required.
+      - ../data/attachments:${ATTACHMENTS_DIR:-/data/attachments}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=4)"]
       interval: 10s
@@ -75,15 +92,23 @@ services:
       # - "80:80"
       # - "443:443"
     volumes:
-      # Bind-mounted, not baked in, so the proxy can be adjusted without a rebuild.
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The Caddyfile lives at web/Caddyfile and is COPYed into the image, not bind-mounted.
+      # Docker Desktop cannot bind-mount a single file from an SMB/UNC share, so the old
+      # `./Caddyfile:/etc/caddy/Caddyfile` mount failed with "not a directory" on any host
+      # whose checkout is on a network drive. Editing the proxy now costs a rebuild — which
+      # the SPA bundle in this same image already cost.
+      #
       # Certificates and OCSP staples survive a recreate; without this Caddy re-requests a
       # certificate on every deploy and will hit Let's Encrypt rate limits.
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
-  pgdata:
-  attachments:
+  # `pgdata` and `attachments` are gone — both are now bind mounts under the repo's `data/`
+  # directory so they are visible in Explorer.
+  #
+  # These two stay named on purpose. They hold TLS certificates, OCSP staples and Caddy's
+  # own state — regenerable infrastructure, not your data — and putting a certificate store
+  # on a network share is a way to break Caddy without gaining anything you would ever open.
   caddy_data:
   caddy_config:

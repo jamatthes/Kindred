@@ -34,9 +34,13 @@ Kindred/
 │   └── vite.config.ts
 └── deploy/
     ├── docker-compose.yml
-    ├── Caddyfile
     └── .env.example
 ```
+
+> NOTE (2026-08-11): `Caddyfile` moved from `deploy/` to `web/`. It is `COPY`ed into the web
+> image rather than bind-mounted, because Docker Desktop cannot bind-mount an individual file
+> from an SMB/UNC share and the old mount broke any checkout on a network drive. A `COPY`
+> cannot reach outside its build context, which is `web/`, so the file lives there now.
 
 > NOTE (implementation, Phase 2): two files exist that the tree above does not name.
 > `models/family.py` holds the bare `families` / `family_members` tables — the tree lists
@@ -288,8 +292,8 @@ inline spinner; a sub-second wait shows no skeleton.
 
 **Forced password change screen.** Reached automatically whenever `must_change_password` is
 true, from any route. No nav rail, no tabs — only the form and a log-out link. Copy states
-plainly why: the account still has its seeded password. Rules (minimum 10 characters, must
-differ from current) are shown before submission. On success, a toast confirms and the user
+plainly why: the account still has its seeded password. The one rule (must differ from the
+current password) is shown before submission. There is no length requirement. On success, a toast confirms and the user
 lands on home — a toast is correct here because it confirms the user's own action and needs
 no persistence.
 
@@ -330,7 +334,8 @@ scale in `web/src/features/**` and `web/src/app/**`.
 | Cookie present but session revoked or expired | `401 not_authenticated`; the web client clears local state and routes to login |
 | CSRF cookie missing but session valid | `403 csrf_invalid`; the client refetches `auth/me` to reissue, then retries once |
 | Password change with new == current | `400` with code `password_unchanged` |
-| Password shorter than 10 characters | `422 validation_error`, message beneath the field |
+| Empty new password | `422 validation_error`, message beneath the field. There is no minimum length beyond non-empty (F-5) |
+| New password longer than 1024 characters | `422 validation_error`. A DoS guard on argon2, not a policy limit — no human hits it |
 | Rate limit reached | `429 rate_limited` with a `Retry-After` header; the form disables submit and shows the wait |
 | WebSocket connects without a session | Close `1008`; the client does not retry until `auth/me` succeeds |
 | WebSocket drops | Reconnect with exponential backoff (1s → 30s cap) plus jitter; a subtle "reconnecting" indicator appears only after the second failure, so a blink is not shown to the user |

@@ -75,7 +75,34 @@ Mutating routes additionally carry a stage guard as noted.
 | POST | `/admin/trip/stage` | `{to_stage, confirm: true}` | `TripAdminOut` | main admin only — **no stage guard**, by design |
 | GET | `/admin/trip/stage-history` | — | `[StageTransitionOut]` | main admin |
 
-`TripAdminOut`: `{id, name, stage, start_date, end_date, timezone, owner_user_id, can_advance_to, can_revert_to, blockers: [str]}`.
+`TripAdminOut`: `{id, name, stage, start_date, end_date, timezone, owner_user_id, can_advance_to, can_revert_to, blockers: [str], setup_complete: bool}`.
+
+`setup_complete` is `name is not null and name != "" and timezone is not null`. It is the same
+predicate foundation's `next_step` uses to decide `setup_trip` (F-13), computed in one place and
+exposed so the console and the gate cannot drift. It is deliberately **not** `start_date` and
+`end_date`: those are legitimately unknown during Planning, and requiring them to finish setup
+would block the main admin on a decision the trip has not made yet.
+
+### Trip setup (AC-0)
+
+The first-login setup screen writes through the endpoint that already exists — `PATCH
+/admin/trip` — rather than a parallel one. There is no separate "setup" route, because a setup
+screen that wrote through a different code path would be a second place for validation to drift.
+
+The only additions AC-0 needs:
+
+- The screen is reached solely through foundation's `next_step: "setup_trip"`. It is not a
+  route the main admin can navigate to afterwards; once `setup_complete` is true the gate
+  returns `app` and the same fields are edited in Section 1 of the console.
+- `PATCH /admin/trip` keeps `require_stage("planning","holiday")`. A trip that has never been
+  set up is by definition in Planning, so the guard is satisfied and no exemption is needed.
+- The seeded trip is created with `name = ''` and `timezone` from the container's `TZ`. The
+  empty name is what makes `setup_complete` false on a fresh install; seeding a placeholder like
+  "My trip" would let the gate be skipped silently and leave the placeholder in the header.
+
+> NOTE: `TZ` gives the setup screen a sensible default but does not satisfy `setup_complete` on
+> its own — the name still must be set. This is deliberate: the timezone has a defensible
+> default and the trip's name does not.
 
 `can_advance_to` is the single legal forward target or null; `can_revert_to` is the single
 legal backward target or null; `blockers` lists machine-readable reasons the forward move is
@@ -115,7 +142,14 @@ served by a separate non-admin route owned by this feature:
 | POST | `/admin/users/{id}/reset-password` | `{confirm: true}` | `{temporary_password}` | main admin |
 | DELETE | `/admin/users/{id}` | — | `204` | main admin + `require_stage("planning","holiday")` |
 
-`AdminMemberOut`: `{user_id, username, display_name, family: {id, name, color}|null, role, must_change_password, last_login_at, created_at, is_main_admin}`.
+`AdminMemberOut`: `{user_id, username, first_name, last_name, display_name, initials, avatar_thumb_url, family: {id, name, color}|null, role, must_change_password, last_login_at, created_at, is_main_admin}`.
+
+The identity fields come from `families`' shared serialiser, not from a second implementation
+here — the console must show the same badge and the same name as the map and the member list.
+
+`AdminMemberOut` deliberately carries **no** location-sharing fields. The main admin edits
+those through the family panel in `families` (FM-15), which is the same rule the rest of this
+console follows: family editing lives there and is linked to, not duplicated here.
 
 **PROPOSED ADDITION — `users.last_login_at`** (timestamptz, nullable). AC-6 asks whether a
 member has ever logged in; nothing in the schema records it. Written by foundation's login
@@ -123,8 +157,12 @@ route once this column exists.
 
 `reset-password` returns the generated password exactly once, in the response body only. It is
 never logged, never stored in plaintext, and never re-retrievable. Generation: 4 short words
-from a bundled wordlist joined by hyphens, which is easy to read aloud over the phone and
-still long enough to satisfy the 10-character minimum.
+from a bundled wordlist joined by hyphens, which is easy to read aloud over the phone.
+
+> NOTE: the four-word format is kept even though F-5's length minimum was removed
+> (2026-08-11). A *generated* credential costs the recipient nothing to be long, and it is
+> handed over on a phone call rather than typed from memory — so the reasoning that justified
+> dropping the minimum for user-chosen passwords does not apply here.
 
 `DELETE /admin/users/{id}` deletes the `family_members` row and revokes sessions; it does
 **not** delete the `users` row, because votes, comments and suggestions reference it and AC-8
@@ -234,12 +272,36 @@ left, inside the standard app shell. This is the one place the 62/38 map split d
 because there is no map dataset here. Mobile: the same sections stacked, with the index
 collapsed into a jump menu.
 
+### Trip setup screen (AC-0)
+
+Rendered whenever `auth/me` returns `next_step: "setup_trip"` — the main admin's state between
+changing the seeded password and naming the trip. A standalone route `/setup/trip`, outside the
+app shell: there is no trip to put in the header yet, and every nav destination would be empty.
+
+- Heading and one line of context: "Set up your trip — you can invite families next."
+- The same four fields as Section 1 below, in the same order, with the same validation. Name is
+  required; timezone is required and pre-filled from the container's `TZ`; the dates are
+  optional and labelled "you can decide these later", because a trip in Planning legitimately
+  has no dates.
+- One `Create trip` action. On success `next_step` becomes `app` and the shell routes to home
+  with the trip name in the header.
+- Abandoning the screen writes nothing and changes nothing; the next login lands here again,
+  because the gate is derived from `setup_complete` rather than from a one-shot redirect.
+- Log out is the only other action, and this screen carries it — the nav rail that normally
+  holds one is not rendered.
+- The screen never appears for anyone else. A family admin's equivalent is the family setup
+  screen in `plan/features/families/` (FM-13); both are reached through foundation's one gate,
+  and neither feature reimplements the other's.
+
 ### Section 1 — Trip
 
 Form fields for name, start date, end date, timezone, each with all six field states. Explicit
 `Save` (AC-2), disabled until something changes. Validation on blur; `end_date` before
 `start_date` shows an error beneath the field. While in Planning, empty dates render as a
 neutral "not decided yet" placeholder rather than an error, because that is the normal state.
+
+These are the same fields as the setup screen above, rendered by the same form component. The
+setup screen is that form with a different frame around it, not a second implementation.
 
 ### Section 2 — Stage
 
@@ -339,6 +401,11 @@ element, not a toast, because it is information that must stay visible.
 | Case | Behaviour |
 |---|---|
 | Non-admin opens `/admin` | Access screen in the UI; every endpoint returns `403 forbidden` |
+| Main admin abandons trip setup and logs back in | `next_step` is still `setup_trip`; the same screen renders. Nothing was written, so there is no partial trip to reconcile |
+| Non-admin reaches `/setup/trip` directly | The gate returns their own `next_step`, and the shell renders that instead. `PATCH /admin/trip` returns `403` regardless of what the client did |
+| Main admin clears the trip name after setup | `422` — name is required by the same validator the setup screen used. `setup_complete` can never go from true back to false |
+| Trip seeded with an empty name and `TZ` unset in the container | `timezone` falls back to `UTC` so the field is never blank; `setup_complete` is still false because the name is empty, so the admin is still gated |
+| A family admin finishes family setup before the main admin has named the trip | Allowed. The two gates are independent, and the family setup screen shows the trip's name as blank rather than blocking on someone else's task |
 | Forward transition without dates | `409 stage_blocked` with `blockers: ["missing_dates"]`; the control was already disabled |
 | Illegal transition (e.g. planning → end) | `409 illegal_transition` |
 | Two admins transition at once | Only one succeeds; the second gets `409 illegal_transition` because the from-stage no longer matches. Implemented as a conditional update on `stage = <expected>` |
@@ -365,7 +432,10 @@ element, not a toast, because it is information that must stay visible.
 ## Dependencies and hand-offs
 
 - **Depends on `foundation`** for `require_main_admin`, `require_stage`, sessions and
-  revocation, the rate limiter, the error envelope, and the WebSocket helpers.
+  revocation, the rate limiter, the error envelope, the WebSocket helpers, and the `next_step`
+  onboarding gate (F-13) that routes the main admin to the trip setup screen.
+- **Provides to `foundation`** the `setup_complete` predicate that gate reads. Foundation
+  defines the field and its precedence; this feature defines when a trip counts as set up.
 - **Depends on `families`** for the family and member listing shapes, and for the
   `last_family_admin` rule which must behave identically in both features.
 - **Provides to every voting feature** the `GET /trip/category-settings` read, which decides

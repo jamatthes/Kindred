@@ -81,8 +81,9 @@ People join by invite link — either into an existing family, or by creating a 
   family".
 - Only the main admin can create this variant. A family admin can only invite into their own
   family.
-- On acceptance the recipient names their new family, becomes its family admin automatically,
-  and may set a home address then or later.
+- On acceptance the recipient is logged in and directed to the family setup screen (see
+  `plan/features/families/design.md` "Family setup screen") where they name their new family,
+  become its family admin automatically, and may set a home address then or later.
 
 ### FM-7 — Logged-out visitor: accept an invite and register
 
@@ -90,12 +91,19 @@ People join by invite link — either into an existing family, or by creating a 
 
 - Opening the link shows a preview before any details are entered: the instance name, the trip
   name, and either the family being joined or "you will create a new family".
-- The registration form asks for a username, a display name and a password (same rules as
-  foundation: minimum 10 characters, confirmation must match).
+- The registration form asks for a first name, a last name, a username and a password (same
+  password rules as foundation: no minimum length, confirmation must match). Last name is
+  optional and labelled as such; everything else is required.
+- No display name is asked for. It is set to "first last" and can be changed later on the
+  profile page (FM-11), so nobody meets three name fields before they have seen the app.
 - A username already taken is rejected with a clear, specific message on that field.
-- On success the account is created, the `family_members` row is written with the right role,
-  the invite is marked used (`invites.used_by`, and it can never be used again), the user is
-  logged in, and they land on the trip.
+- On success the account is created, the invite is marked used (`invites.used_by`), the user is
+  logged in, and what happens next depends on the invite's mode:
+  - **`join`** — the `family_members` row is written with `role = 'member'`, their location
+    setting is seeded from that family's default (FM-15), and they land on the app home.
+  - **`create_family`** — **no family membership is written**, because no family exists yet.
+    They land on the family setup screen (FM-13), and are not a member of the trip until they
+    finish it.
 - An expired, revoked, already-used or unknown token shows a plain explanation and an
   instruction to ask the person who invited them for a new link. No detail about the trip or
   its families is revealed for an invalid token.
@@ -143,9 +151,14 @@ switching accounts.**
 
 ### FM-11 — Any user: manage my own profile
 
-**As a logged-in user, I can change my display name and my password.**
+**As a logged-in user, I can change my name, my picture and my password.**
 
-- Display name is editable by the user at any time, in any stage.
+- First name, last name and display name are each editable by the user at any time, in any
+  stage. Changing a name updates my initials badge and my map label everywhere, live.
+- My profile picture is uploaded and removed here (FM-14).
+- My own location-sharing toggle lives here too, alongside the explanation of what it does
+  (`plan/features/holiday-stage/`, HS-9). If my family's settings are currently hiding me, the
+  toggle still works and says so — it is never silently disabled by someone else's decision.
 - Password change reuses foundation's endpoint and rules; changing it revokes my other
   sessions.
 - Username is not editable in v1.
@@ -159,6 +172,81 @@ switching accounts.**
 - When a family is renamed or recoloured, open views update.
 - When someone joins or is removed, member lists and counts update.
 - When a home address is geocoded, the home pin appears on the map.
+- When someone changes their picture or name, their badge and map label update.
+- When a family's location settings change, markers that are no longer permitted disappear
+  immediately, without waiting for a refresh.
+
+### FM-13 — New family admin: name my family on first login
+
+**As someone who accepted an invite to start a new family, I am asked to name my family before
+I enter the app.**
+
+- After registering I am logged in and taken straight to a family setup screen. I am not yet on
+  the trip: I have an account, but no family.
+- The screen asks for one thing — our family name — and optionally lets me add our home
+  address, clearly marked as something I can do later.
+- It tells me I will be this family's admin, and that the name and the admin can both be
+  changed afterwards.
+- A name already used on this trip is rejected on the field with a specific message.
+- On submit, my family is created, I become its admin, a colour is assigned automatically, and
+  I land on the app home.
+- If I close the tab without finishing, nothing is half-created; logging in again brings me
+  back to the same screen.
+- Until I finish, no other part of the app is reachable — not because the UI hides it, but
+  because I am genuinely not on the trip yet and the server refuses.
+
+> NOTE: this splits what would otherwise be one long registration form into two screens. The
+> reason is that the two questions have different owners in time: who you are is answered by
+> the person holding the link, at the moment they click it; what your family is called is often
+> agreed with the rest of the family first. A resumable second screen lets that happen without
+> the invite going stale.
+
+### FM-14 — Any user: put a face to my name
+
+**As a member, I can upload a profile picture, and I am recognisable on the map without one.**
+
+- I can upload a JPEG, PNG or WebP up to 8MB from the profile page, see a square preview, and
+  save it.
+- The picture is resized and re-encoded server-side; the original is not kept.
+- **All metadata is stripped, including any GPS coordinates the photo was taken with.** A
+  product built around a location-privacy promise must not republish a location hidden in a
+  photo.
+- I can remove my picture at any time and go back to initials.
+- With no picture I get an initials badge — the first letter of my first name and the first
+  letter of my last name. With a single name, one letter.
+- Either way the badge carries my family's colour as a ring, and my full name is always
+  available as a label or on hover, so colour is never the only thing identifying me.
+- My picture is visible to everyone on the trip and to nobody else.
+
+### FM-15 — Family admin: decide who in my family appears on the map
+
+**As a family admin, I can control which of my family are shown on the trip map, without being
+able to switch on sharing for someone who has not agreed to it.**
+
+- Everyone on the trip is shown on the map individually — one marker per person, not one per
+  family.
+- I have a single switch for my whole family: *show our family on the map*. It is on by
+  default. Turning it off removes every one of us from the map, myself included, and does not
+  change anybody's own setting — turning it back on restores exactly the people who had chosen
+  to share.
+- I have a switch per member, so I can show some of my family and not others.
+- I set the default that new members start with. It is off by default. It applies only to
+  people who join after I set it; it never rewrites the setting of someone already here.
+- My own sharing is on from the moment I create the family, because the person organising a
+  family's travel is the one the rest of them expect to be able to find.
+- **None of my controls can turn on sharing for another person.** They can only prevent it.
+  A member's own toggle, and their browser's own permission prompt, are still required — and
+  only they can answer either.
+- A member whose sharing I have turned off is told so plainly in their own settings, with who
+  to ask. It is never silently ineffective.
+- The main admin can do all of this for any family, as they can with everything else (FM-10).
+
+> NOTE: this is a real change to the rule in `plan/features/holiday-stage/requirements.md`
+> that said sharing was governed by the member alone. The invariant that survives — and the
+> one that matters — is that **permission and consent are separate, and an admin holds only
+> permission**. Seeding a new member's default is the single point where an admin's decision
+> touches a member's own setting, it happens once, and the browser's permission prompt still
+> stands between it and any location leaving the device.
 
 ## Permissions
 
@@ -169,7 +257,8 @@ switching accounts.**
 | List families and member counts | yes | yes | yes | no |
 | See a family's full home address | yes (any) | own only | own only | no |
 | See a family's coarse home locality | yes | yes | yes | no |
-| Create a family | yes | no | no | no |
+| Create a family for someone else | yes | no | no | no |
+| Create my own family during setup | n/a | n/a (this is how you become one) | no | no |
 | Rename / recolour a family | yes (any) | own only | no | no |
 | Set or clear a home address | yes (any) | own only | no | no |
 | Retry geocoding | yes (any) | own only | no | no |
@@ -181,10 +270,23 @@ switching accounts.**
 | Accept an invite (register) | n/a | n/a | n/a | yes |
 | Promote / demote a family admin | yes (any) | own family only | no | no |
 | Remove a member from a family | yes (any) | own family only | no | no |
-| Edit own display name / password / theme | yes | yes | yes | no |
-| Edit another user's display name | no (see `admin-console`) | no | no | no |
+| Set a family's map-visibility switch | yes (any) | own only | no | no |
+| Set a member's map-visibility switch | yes (any) | own family only | no | no |
+| Set a family's new-member default | yes (any) | own only | no | no |
+| Turn **on** another user's sharing | **no** | **no** | **no** | **no** |
+| Edit own names / picture / password / theme | yes | yes | yes | no |
+| Edit own location-sharing toggle | yes | yes | yes | no |
+| Edit another user's names or picture | no (see `admin-console`) | no | no | no |
 
 The main admin can never be removed from their family or demoted through this feature.
+
+"Create my own family during setup" is available to exactly one caller: an authenticated user
+who has accepted a new-family invite and has no family yet. It is not a general capability of
+any role, which is why it does not fit the columns above.
+
+The "turn on another user's sharing" row is `no` in every column on purpose. It is the one
+capability this feature deliberately gives to nobody, and it is listed rather than omitted so
+that a later reader can see it was a decision.
 
 ## Stage availability
 
@@ -192,14 +294,25 @@ The main admin can never be removed from their family or demoted through this fe
 |---|---|---|---|
 | View families, members, home pins | yes | yes | yes (read-only) |
 | Create / edit / delete a family | yes | yes | no (`409`) |
+| Create my own family during setup | yes | yes | no — an End-stage invite is refused before this point |
 | Set or retry a home address | yes | yes | no (`409`) |
 | Create / revoke invites | yes | yes | no (`409`) |
 | Accept an invite | yes | yes | no — the trip is closed; the preview says so |
 | Promote / demote / remove members | yes | yes | no (`409`) |
-| Edit own display name, password, theme | yes | yes | yes |
+| Edit family / member map-visibility switches | yes | yes | no (`409`) |
+| Edit own names, picture, password, theme | yes | yes | yes |
+| Edit own location-sharing toggle | yes | yes | yes |
 
 Account operations stay available in End because they are not trip data — consistent with
 foundation. Everything else is frozen.
+
+The location-sharing toggle stays editable in End even though there is nothing to share: it is
+a personal setting, and the one direction that matters — turning it off — must never be blocked
+by the trip's state. `holiday-stage` separately purges all live-location rows on entering End,
+so an End-stage toggle has no effect on the map either way.
+
+Family and member visibility switches are frozen in End along with the rest of the trip record,
+because by then they describe a finished trip rather than governing anything live.
 
 ## Out of scope
 
@@ -211,7 +324,10 @@ foundation. Everything else is frozen.
   browser Places SDK is reserved for the create-suggestion flow per `plan/architecture.md`.
 - Multiple homes per family, or per-member addresses.
 - Moving a member between families in one action; v1 removes then re-invites.
-- Avatars and profile photos.
+- Editing a profile picture in the browser beyond the automatic square crop — no zoom, pan or
+  rotate. An image cropper is a component the product needs nowhere else.
+- Per-member location scheduling ("share only between 9am and 6pm") or per-viewer visibility
+  ("show me to my family but not to the Smiths"). The switches are all-or-nothing per person.
 - Email delivery of invites. Links are copied and shared by whatever channel the family
   already uses; v1 has no mail transport.
 - More than eight families. The colour palette defines eight slots; a ninth family is refused

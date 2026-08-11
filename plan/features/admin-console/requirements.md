@@ -14,6 +14,24 @@ stage's read-only freeze real.
 
 ## User stories
 
+### AC-0 — Main admin: set up the trip on first login
+
+**As the seeded main admin, after changing my password I am guided through setting up the trip.**
+
+- After a successful password change (`foundation` F-5), I am redirected to a dedicated trip
+  setup screen instead of the app home — a single-purpose, fullscreen form outside the app shell.
+- The screen explains: "Set up your trip — configure destinations and invite families next."
+- I fill in: trip name (required), start date (optional during Planning), end date (optional
+  during Planning), timezone (required, defaults to container's `TZ`).
+- The timezone field offers a searchable dropdown of IANA zones; the default is the container's
+  `TZ` env var.
+- On submit, the trip is updated with these values, and I land on the app home. The trip name
+  is immediately visible in the top bar.
+- If I navigate away or close without saving, on next login I return to this setup screen until
+  the trip name and timezone are set.
+- This screen is not shown for users who did not require a password change (i.e., anyone not
+  the seeded admin).
+
 ### AC-1 — Main admin: reach the console
 
 **As the main admin, I can open an admin page that nobody else can see.**
@@ -185,6 +203,7 @@ Every action in this feature requires the main admin. The table is short by desi
 
 | Action | Main admin | Family admin | Member | Logged-out |
 |---|---|---|---|---|
+| Reach the trip setup screen (AC-0) | yes, until setup is done | no | no | no |
 | See the `Admin` nav entry | yes | no | no | no |
 | Read trip settings | yes | no (reads the trip via `auth/me`) | no | no |
 | Edit trip name / dates / timezone | yes | no | no | no |
@@ -204,6 +223,7 @@ whether they are shown a 1–10 scale or thumbs — not the settings editor.
 
 | Capability | Planning | Holiday | End |
 |---|---|---|---|
+| Trip setup screen (AC-0) | shown on first login (before Planning) | n/a | n/a |
 | Read every section of the console | yes | yes | yes |
 | Edit trip name / dates / timezone | yes | yes | no (`409`) |
 | Planning → Holiday | yes | n/a | n/a |

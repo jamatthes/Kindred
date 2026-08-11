@@ -57,8 +57,9 @@ the enforcement primitives.
 
 **As a logged-in user, my session persists across page reloads, and I can end it.**
 
-- `GET /api/v1/auth/me` returns the current user (id, username, display name, platform-admin
-  flag, must-change-password flag, theme preference, family membership) or `401`.
+- `GET /api/v1/auth/me` returns the current user (id, username, first name, last name,
+  display name, avatar, platform-admin flag, must-change-password flag, theme preference,
+  family membership, and the `next_step` onboarding gate of F-13) or `401`.
 - The web shell calls it on load and routes to the login screen on `401`.
 - `POST /api/v1/auth/logout` revokes the server-side session and clears the cookie;
   subsequent requests with the old cookie return `401`.
@@ -78,10 +79,20 @@ the enforcement primitives.
   navigate away other than logging out.
 - Changing the password requires the current password, a new password, and a confirmation
   that matches. The new password must differ from the current one.
-- Minimum password length is 10 characters; the rule is stated on screen before submission,
-  not only on error.
+- **There is no minimum password length.** A password must only be non-empty and different
+  from the current one. Both rules are stated on screen before submission, not only on error.
+
+> NOTE (changed 2026-08-11): this previously required 10 characters. Removed at the owner's
+> request — this is a private, invite-only instance for one family group, and a rule that
+> pushes a grandparent towards a written-down password is not obviously a net gain. The
+> mitigations that actually carry the weight here are the per-username **and** per-IP login
+> rate limits (F-3), argon2 hashing, and the absence of any open sign-up. A 1024-character
+> ceiling remains, which is not a policy limit but a denial-of-service guard: argon2 hashes
+> whatever it is given, and an unbounded field would let one request burn arbitrary CPU.
 - On success `must_change_password` is cleared, all **other** sessions for that user are
-  revoked, the current session remains valid, and the user lands on the app home.
+  revoked, the current session remains valid, and the user lands on whatever `auth/me` says
+  comes next (see F-13). In M0 that is the app home; from M1 it is the trip setup screen
+  (`plan/features/admin-console/requirements.md`, AC-0).
 - Seeding is idempotent: restarting the stack does not reset an admin who has already
   changed their password.
 
@@ -127,6 +138,11 @@ the enforcement primitives.
 **As a developer, I can gate any route with a dependency rather than ad-hoc checks.**
 
 - `require_member` — any authenticated user who belongs to a family on the current trip.
+  A user with no family row is **not** a member and is refused with `403 not_on_trip`. This
+  is deliberate and covers three distinct people: someone removed from the trip, someone
+  whose family was deleted, and someone who has accepted a new-family invite but has not yet
+  named their family (see F-13). The refusal code is the same; the onboarding state that
+  distinguishes them comes from `auth/me`, not from the error.
 - `require_family_admin(family_id)` — the requesting user is an `admin` in that family, or
   is the main admin.
 - `require_main_admin` — the requesting user is the trip owner / platform admin.
@@ -135,6 +151,12 @@ the enforcement primitives.
 - All four are FastAPI dependencies. No permission logic lives in the frontend; the frontend
   only hides what the backend would refuse.
 - Every dependency has a unit test covering the allow case and the deny case.
+
+> NOTE: because `require_member` refuses a family-less user, any route that such a user must
+> be able to call during onboarding cannot use it. There is exactly one such route —
+> "create my own family" — and `families` defines it with its own dependency
+> (`require_pending_family`). Adding a second route in this category needs a decision, not a
+> quiet exemption.
 
 ### F-10 — Developer: mutations are CSRF-protected
 
@@ -173,6 +195,37 @@ the enforcement primitives.
 - `GET /api/v1/settings` returns the small public subset needed before login (instance name,
   whether self-registration is open). Everything else requires the main admin and is owned by
   `admin-console`.
+
+### F-13 — Developer: one server-owned answer to "what does this user see next"
+
+**As a developer, the server decides which top-level screen a session is entitled to, and the
+client renders that answer rather than inferring it.**
+
+- `auth/me` carries a single `next_step` field with exactly one of:
+  `change_password` | `setup_trip` | `setup_family` | `app`.
+- The order of precedence is fixed and evaluated server-side:
+  1. `must_change_password` is true → `change_password`.
+  2. The user is the main admin and the trip is not yet configured (no `name`, or no
+     `timezone`) → `setup_trip` (`admin-console` AC-0).
+  3. The user has no family row and holds a consumed new-family invite → `setup_family`
+     (`families` FM-13).
+  4. Otherwise → `app`.
+- The web shell routes solely on `next_step`. It never computes the gate from the individual
+  flags, so the client and the server cannot disagree about which screen is legal.
+- A user who abandons an onboarding screen and returns later gets the same `next_step`,
+  because it is derived from stored state rather than from a one-shot redirect. This is what
+  makes "you come back to this screen until it is done" true rather than aspirational.
+- Every value except `app` is terminal for navigation: the shell renders that screen and no
+  other, with logging out as the only escape.
+- A user with no family who does **not** hold a new-family invite (removed from the trip, or
+  their family was deleted) gets `app`, and the app shows the "you are not on this trip"
+  state. They are not sent to family setup — they were not invited to create a family.
+
+> NOTE: foundation ships the field and the routing gate in M0, where only `change_password`
+> and `app` can ever be returned. `setup_trip` and `setup_family` become reachable when
+> `admin-console` and `families` land in M1. Shipping the mechanism in M0 is what stops the
+> forced-password-change screen from being special-cased, and stops M1 from having to rewrite
+> the shell's routing.
 
 ## Permissions
 
@@ -220,6 +273,8 @@ preserved.
 - Email of any kind, including password-reset email. v1 has no mail transport; a forgotten
   admin password is recovered by the main admin resetting it in `admin-console`.
 - The final palette, type ramp and visual identity — DesignSync pass after M0.
-- File uploads and attachments.
+- File uploads and attachments, including profile pictures. The upload path and the avatar
+  itself are owned by `families` (FM-14); foundation only carries the avatar reference on the
+  user record it already returns from `auth/me`.
 - Multi-trip UI. The schema carries `trip_id` everywhere; the v1 shell resolves a single
   active trip.

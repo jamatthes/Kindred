@@ -95,6 +95,49 @@ The override is needed because the `api` service's `env_file:` is a fixed path i
 compose file, which `--env-file` does not change. Tear the whole thing down with
 `... -p kindred-verify ... down -v`, then delete the two throwaway files.
 
+## Where the data lives
+
+Two bind mounts under the repo's `data/` directory, relative to this compose file, so the
+data follows the checkout and is visible in a file browser:
+
+| Path | Holds |
+|---|---|
+| `data/postgres/pgdata/` | The Postgres data directory |
+| `data/attachments/` | Uploaded profile pictures and check-in photos |
+
+`data/` is gitignored. Caddy's certificate store and config stay as named volumes
+(`kindred_caddy_data`, `kindred_caddy_config`) — regenerable infrastructure, nothing you
+would open.
+
+Note `PGDATA` points at `pgdata/` *inside* the mount rather than at the mount point itself.
+Postgres requires its data directory to be mode `0700` and cannot `chmod` a bind mount's root,
+so `initdb` must create the directory itself one level down.
+
+### This is a trade, and it is worth knowing which way
+
+A bind mount gives visibility. It costs durability guarantees that Postgres assumes it has:
+
+- **On Windows or macOS via Docker Desktop**, permissions are synthesized and `chown`/`chmod`
+  are ignored. `initdb` may fail outright with `could not change permissions of directory`.
+- **On an SMB/CIFS share** (a mapped network drive, a NAS), it is worse: no reliable file
+  locking, and `fsync` that can return before data is on disk. Postgres's crash-safety
+  depends on both. A stack that appears to work can still corrupt on an unclean shutdown.
+- **Performance** is markedly worse than a named volume in every case.
+
+A named volume has none of these problems because it is a real Linux filesystem inside
+Docker's VM. If Postgres will not start, or you start seeing corruption, revert:
+
+```yaml
+# deploy/docker-compose.yml — postgres service
+volumes:
+  - pgdata:/var/lib/postgresql/data
+# ...and restore the `pgdata:` entry under the top-level `volumes:` key,
+# and delete the PGDATA environment variable.
+```
+
+Either way, **the durable answer for anything you care about is a dump, not a copy of the
+data directory** — a directory copied while Postgres is running is not a valid backup.
+
 ## Backups
 
 Nightly `pg_dump` plus the attachments volume. Both matter — a database without its
@@ -113,11 +156,9 @@ docker compose -f /srv/kindred/deploy/docker-compose.yml exec -T postgres \
   pg_dump -U kindred -d kindred --format=custom \
   > "$BACKUP_DIR/kindred-$STAMP.dump"
 
-# Attachments volume (uploads live on a volume, not in Postgres)
-docker run --rm \
-  -v kindred_attachments:/data:ro \
-  -v "$BACKUP_DIR":/backup \
-  alpine:3.20 tar czf "/backup/attachments-$STAMP.tar.gz" -C /data .
+# Attachments (uploads live on disk, not in Postgres). Now a bind mount at data/attachments,
+# so this is a plain tar of a directory rather than a volume dance.
+tar czf "$BACKUP_DIR/attachments-$STAMP.tar.gz" -C /srv/kindred/data/attachments .
 
 # Keep 30 days
 find "$BACKUP_DIR" -type f -mtime +30 -delete

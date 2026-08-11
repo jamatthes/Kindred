@@ -84,7 +84,7 @@ describe('apiClient', () => {
           detail: {
             code: 'validation_error',
             message: 'Check the form.',
-            errors: [{ field: 'new_password', message: 'Use at least 10 characters.' }],
+            errors: [{ field: 'new_password', message: 'Choose a new password.' }],
           },
         }),
       ),
@@ -94,7 +94,7 @@ describe('apiClient', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect(error.code).toBe('validation_error')
     expect(error.status).toBe(422)
-    expect(error.fieldError('new_password')).toBe('Use at least 10 characters.')
+    expect(error.fieldError('new_password')).toBe('Choose a new password.')
   })
 
   it('reports Retry-After on a rate limit', async () => {

@@ -20,6 +20,7 @@
 
 - **Everything external is called server-side and cached in Postgres** except the Google Maps JS map itself and Places Autocomplete/Details in the create-suggestion flow (browser SDK requirement).
 - One WebSocket channel per authenticated session; server pushes typed events, namespaced by domain (`poll.vote.updated`, `suggestion.vote.updated`, `suggestion.created`, `notification.new`, `location.updated`, `stage.changed`, `presence.updated`). Frontend applies optimistic UI for own actions.
+- Almost every event fans out to the whole trip room unfiltered. **`location.updated` is the exception**: its audience is evaluated per recipient against the visibility rule below, because broadcasting a coordinate to a client that must not see it and relying on a client-side filter would make that filter advisory. Any future event carrying data some members may not see needs the same treatment, and needs to say so where it is defined.
 - **Presence** is ephemeral: the socket registry knows which users have live sessions, broadcasts `presence.updated {user_id, online}` on connect/disconnect (with a short debounce so refreshes don't flap), and answers a REST snapshot for initial render. No table — presence is never persisted. It drives the top bar's family avatar stack (see `plan/design-system.md`).
 
 ## Repo layout (monorepo)
@@ -39,6 +40,7 @@ Kindred/
 │   ├── alembic/         # migrations
 │   └── tests/
 ├── web/                 # React + Vite PWA
+│   ├── Caddyfile        # serves dist/ and proxies /api + /ws; COPYed into the web image
 │   └── src/
 │       ├── design/      # tokens.css, themes, primitives
 │       ├── charts/      # own chart widget library
@@ -47,8 +49,10 @@ Kindred/
 │       └── app/         # shell, routing, ws client, api client
 ├── deploy/
 │   ├── docker-compose.yml   # web (caddy+static), api, postgres
-│   ├── Caddyfile
 │   └── .env.example         # DB creds, GOOGLE_MAPS_API_KEY, VAPID keys, SECRET_KEY
+├── data/                # gitignored; bind-mounted container data, visible to the operator
+│   ├── postgres/        # the Postgres data directory (PGDATA=.../pgdata inside it)
+│   └── attachments/     # uploaded photos and profile pictures
 └── legacy notes: reference app lives at E:\GitRepos\palantir-for-family-trips (NOT copied here)
 ```
 
@@ -57,9 +61,9 @@ Kindred/
 All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied by names.
 
 ### Identity
-- **users** — username, password_hash (argon2), display_name, must_change_password (bool, seeds true for `admin`), theme_pref (`light`/`dark`/`system`), locale, is_platform_admin (bool)
-- **families** — trip_id, name, color (token slot, used for map pins/labels), home_address (text), home_lat/home_lng (nullable until geocoded), home_geocoded_at
-- **family_members** — family_id, user_id, role (`admin`/`member`) — the per-family admin
+- **users** — username, password_hash (argon2), first_name, last_name (may be empty), display_name (seeded "first last", separately editable), avatar_attachment_id (nullable), must_change_password (bool, seeds true for `admin`), theme_pref (`light`/`dark`/`system`), locale, is_platform_admin (bool)
+- **families** — trip_id, name, color (token slot, used for map pins/labels), home_address (text), home_lat/home_lng (nullable until geocoded), home_geocoded_at, location_sharing_allowed (bool default true), member_location_default (bool default false)
+- **family_members** — family_id, user_id, role (`admin`/`member`) — the per-family admin — location_sharing_allowed (bool default true)
 - **invites** — family_id (nullable = invite creates a new family), token, expires_at, created_by, used_by (nullable)
 - **sessions** — user_id, token_hash (sha256 of the opaque cookie value; the raw value is never stored), csrf_token, expires_at, revoked_at (nullable), user_agent (nullable), ip (inet, nullable), last_seen_at, created_at. No `updated_at` — `last_seen_at` is the mutable column, touched at most once a minute. Valid when `revoked_at is null and expires_at > now()`. Indexed on user_id and expires_at; token_hash unique. Expired rows removed by a lazy sweep on login, not a scheduler. *foundation*
 - **login_attempts** — username (lowercased; recorded even when no such user exists), ip (inet, nullable), succeeded, created_at. No `updated_at` — rows are append-only. Indexed on created_at and on (username, created_at) / (ip, created_at). A login is refused when either the username or the IP has ≥ `RATE_LIMIT_LOGIN_PER_MINUTE` failures in the trailing 60 seconds; a success clears that username's recent failures; rows older than an hour are swept lazily on login. *foundation*
@@ -91,7 +95,7 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 ### Platform
 - **notifications** — recipient_user_id, type, payload_json (deep-link target), read_at (nullable)
 - **push_subscriptions** — user_id, endpoint (unique), p256dh, auth, user_agent, last_used_at, failure_count, created_at
-- **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive
+- **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive, and for profile pictures (`subject_type = 'user'`, referenced back from `users.avatar_attachment_id`). All uploads are re-encoded server-side and **stripped of EXIF, GPS included** — a location-privacy product must not republish coordinates hidden in a photo
 
 ### Approved additions (proposed in feature design docs, accepted 2026-08-10)
 
@@ -106,6 +110,21 @@ the feature docs carry the rationale.
 - **families.home_locality, geocode_status, geocode_error** — locality shown to other families without leaking the street address; geocode failure states. *families*
 - **family_members** — unique index on user_id (a user belongs to one family). *families*
 - **invites.trip_id, token_hash, revoked_at, used_at** — hashed single-use invite tokens. *families*
+- **users.first_name, users.last_name** — collected at registration; `display_name` seeded to "first last" and still separately editable. Needed because the map badge is initials and its hover label is a full name, neither of which can be derived reliably from a single free-text field. *families*
+- **users.avatar_attachment_id** (nullable, FK → attachments, ON DELETE SET NULL) — profile picture; the image itself is an `attachments` row with `subject_type = 'user'`. *families*
+- **families.location_sharing_allowed** (default true), **families.member_location_default** (default false) — the family admin's map-visibility switch and the value new members' sharing toggle is seeded with. *families*
+- **family_members.location_sharing_allowed** (default true) — the family admin's per-member map-visibility switch. *families*
+
+> **Location visibility is the conjunction of four independent facts**, three of them
+> permissions and one of them consent: `families.location_sharing_allowed`,
+> `family_members.location_sharing_allowed`, `user_settings.live_location_enabled`, and a fresh
+> `live_locations` row. The first two are written only by a family admin; the third only by the
+> member themselves; the fourth only by that member's browser. No API accepts a request that
+> sets another user's consent — admins can remove a marker, never create one. The single point
+> where an admin's decision reaches a member's own setting is the one-time seed from
+> `member_location_default` at join, which is still gated by the browser's permission prompt and
+> a first-run disclosure. Rationale in `plan/features/families/` (FM-15) and
+> `plan/features/holiday-stage/` (HS-15).
 - **trip_category_settings** — unique index (trip_id, category). *admin-console*
 - **polls.decision_option_id, decided_by, decided_at, closed_at, closed_by, last_nudge_at** — recorded poll outcome + close/nudge audit; decision FK `ON DELETE SET NULL`. *polls*
 - **poll_options.suggestion_id** — link from a decided geographic option to its seeded region suggestion; column created at M2 without FK, constraint added at M3 by *map-suggestions*. *polls*
@@ -119,6 +138,8 @@ the feature docs carry the rationale.
 - REST under `/api/v1/…`, one router per feature; plural nouns; Pydantic schemas for every request/response (auto OpenAPI).
 - Session auth: httpOnly secure cookie, server-side session table or signed token; CSRF token for mutations. Login rate-limited.
 - Permissions enforced in FastAPI dependencies: `require_member`, `require_family_admin(family_id)`, `require_main_admin`, plus stage guards (`require_stage("planning", "holiday")`; End stage rejects all mutations except admin stage-change).
+- `require_member` refuses any authenticated user with no family row, which includes someone mid-onboarding who has accepted a new-family invite but not yet named their family. Exactly one route admits that caller — `POST /families/mine`, via `require_pending_family` — and a second route in this category is a decision to be documented, not a quiet exemption. *families*
+- Which top-level screen a session may see is decided server-side and returned as `auth/me`'s `next_step` (`change_password` | `setup_trip` | `setup_family` | `app`). The web shell routes on that field alone and never recomputes the gate from individual flags, so the forced password change and both first-login setup screens cannot be navigated around. *foundation* F-13
 - WebSocket authenticates via the same session cookie; server broadcasts to trip-scoped rooms.
 
 ## Google API usage & cost control
@@ -139,7 +160,8 @@ Haversine straight-line distance is computed instantly in SQL as a fallback whil
 - `deploy/docker-compose.yml`: `caddy` (serves built web + reverse-proxies `/api`, `/ws`), `api` (uvicorn), `postgres` (volume-backed). Single `.env`.
 - **Network path:** Cloudflare DNS record (proxied) → origin reachable over IPv6 only is fine — Cloudflare's edge gives IPv4 visitors access and terminates TLS with an auto cert; Caddy runs with a Cloudflare origin cert or HTTP-only behind the tunnel/proxy.
 - HTTPS is mandatory end-to-end for the product to function: browser geolocation, PWA install, service workers, and Web Push all require a secure context.
-- Backups: nightly `pg_dump` to the host volume (documented in deploy README); attachments volume included.
+- Backups: nightly `pg_dump` to the host volume (documented in deploy README); attachments included.
+- **Data location (changed 2026-08-11):** Postgres and attachments are bind-mounted to `data/postgres` and `data/attachments`, relative to the compose file, at the owner's request so the data is visible in a file browser rather than sealed inside Docker's VM disk. `PGDATA` is a subdirectory of the mount because Postgres cannot `chmod` a bind mount's root. This trades durability guarantees for visibility — Postgres assumes POSIX permissions, file locking and honest `fsync`, and a Docker Desktop or SMB bind mount supplies none of them reliably. Caddy's certificate store stays a named volume. Failure modes and the revert are in `deploy/README.md` ("Where the data lives").
 - First-run: Alembic migrations auto-apply; seed creates `admin`/`admin` with `must_change_password=true` and one trip in `planning`.
 
 ## Realtime & offline

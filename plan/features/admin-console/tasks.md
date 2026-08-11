@@ -150,6 +150,22 @@ closes their connection.
       for everyone else.
 - [ ] **Trip** section — the four fields with all six states, explicit `Save` disabled until
       dirty, inline date validation, the "not decided yet" placeholder while in Planning.
+- [ ] `/setup/trip` route (AC-0) outside the app shell, rendered only when foundation's
+      `next_step` is `setup_trip`: the **same form component** as the Trip section with a
+      different frame, a `Create trip` action, and its own log-out action because there is no
+      nav rail. Two implementations of this form is two places for validation to drift.
+- [ ] `TripAdminOut.setup_complete` (`name` non-empty and `timezone` set) is computed
+      server-side and is the same predicate foundation's gate reads — exported from one place,
+      not reimplemented in the gate.
+- [ ] Seed the trip with `name = ''` and `timezone` from the container's `TZ` (falling back to
+      `UTC`), so a fresh install gates the main admin instead of shipping a placeholder name
+      into the app header.
+
+**Verify (AC-0):** on a fresh stack, log in as `admin`/`admin`, change the password, and confirm
+you land on `/setup/trip` rather than home. Close the tab, log in again, and confirm you land
+there again with nothing half-written. Submit a name and confirm you arrive on home with that
+name in the header and `next_step: "app"`. Confirm a non-admin hitting `/setup/trip` directly
+renders their own `next_step` screen and that `PATCH /admin/trip` returns `403` for them.
 - [ ] **Stage** section — current stage with its description, the forward primary action, the
       visually separated backward correction, disabled state with the blocker reason in words,
       and the stage-history table.

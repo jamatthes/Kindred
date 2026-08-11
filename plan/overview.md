@@ -23,10 +23,12 @@ detail lives in a right-hand side panel; time lives in a bottom timeline panel.
 ## Roles
 
 - **Main admin** — one per platform/trip; also a regular family member. Final say: confirms/rejects suggestions into the itinerary, manages stages, configures voting modes, manages any family.
-- **Family admin** — one per family; manages own family's members and home address.
-- **Member** — individual login, belongs to one family; votes, suggests, comments, checks in.
+- **Family admin** — one per family; manages own family's members, home address, and who in the family appears on the map.
+- **Member** — individual login, belongs to one family; votes, suggests, comments, checks in, and alone decides whether to share their own location.
 
-The first deploy seeds a platform account `admin`/`admin` and **forces a password change on first login**.
+The first deploy seeds a platform account `admin`/`admin` and **forces a password change on first login**, after which the main admin names the trip before reaching the app.
+
+**How people get in.** The main admin invites each family with a new-family invite link. The recipient registers, then names their family on a setup screen and becomes its family admin. From there a family admin invites their own family's members (or the main admin does it for them); a family admin can never invite into another family. Every account is created through an invite — there is no open sign-up.
 
 ## Decision log (settled 2026-08-10)
 
@@ -43,6 +45,10 @@ The first deploy seeds a platform account `admin`/`admin` and **forces a passwor
 | Theme | **Light by default**; dark mode = swapped token set; user preference persisted server-side |
 | Notifications | In-app bell + unread counter + dropdown list (GitKraken-style) over WebSocket; Web Push via PWA (iOS requires add-to-home-screen); **email out of scope for v1** (schema allows later) |
 | Location | Check-in button (single fix) + optional foreground `watchPosition` toggle, off by default, visible indicator. No background tracking (web platform can't; privacy feature anyway) |
+| Who shows on the map | **Every sharing person individually** — one marker per person, never one per family. A marker requires all four of: family switch on, per-member switch on, the member's own toggle on, and a fresh position. The first three are permissions held by the family admin and can only ever *remove* a marker; **no API sets another user's consent** (added 2026-08-11; `families` FM-15, `holiday-stage` HS-15) |
+| Family location policy | The family admin gets a family-wide switch, a per-member switch, and the default new members start at (off). Their own sharing starts on when they create the family. A seeded default is gated by the browser permission prompt **and** a one-time disclosure, so it pre-sets a toggle rather than granting consent (added 2026-08-11) |
+| Identity | `users.first_name` + `users.last_name` alongside `display_name`, because the map badge is initials and its hover label is a full name — neither derivable reliably from one free-text field. Profile pictures via the existing `attachments` table, re-encoded server-side with **all EXIF including GPS stripped** (added 2026-08-11; `families` FM-14) |
+| Onboarding | One server-owned gate: `auth/me.next_step` ∈ `change_password` / `setup_trip` / `setup_family` / `app`. The client routes on that field alone. The main admin names the trip on first login (`admin-console` AC-0); a new family's admin names their family on first login (`families` FM-13) — the family name is **not** collected on the join form (added 2026-08-11) |
 | Deploy | Docker Compose on home server; **Cloudflare proxy in front of IPv6-only origin** (IPv4 reachability + auto-TLS; HTTPS is required by geolocation/PWA/push) |
 | Charts | **Own small token-aware SVG chart widgets** — no heavy chart library; honesty rules baked in (see `design-system.md`) |
 | Styling sources | Palantir = system design only. designmotionhq patterns = principles only, **explicitly do not copy its visual styling**. Visual direction set by a DesignSync pass after M0 |

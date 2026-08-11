@@ -18,16 +18,14 @@ import { useToast } from '../../app/ui/toastContext'
 import { useValidatedField } from '../../app/ui/useValidatedField'
 import './auth.css'
 
-const MIN_LENGTH = 10
-
 function validateCurrent(value: string): string | null {
   return value.length === 0 ? 'Enter your current password.' : null
 }
 
+// No minimum length (F-5). The only rules left are "not empty" and "not the one you already
+// have", the second of which only the server can check.
 function validateNew(value: string): string | null {
-  if (value.length === 0) return 'Choose a new password.'
-  if (value.length < MIN_LENGTH) return `Use at least ${MIN_LENGTH} characters.`
-  return null
+  return value.length === 0 ? 'Choose a new password.' : null
 }
 
 export default function ChangePasswordScreen() {
@@ -82,7 +80,6 @@ export default function ChangePasswordScreen() {
         {error ? <Banner tone="error">{error}</Banner> : null}
 
         <ul className="auth-rules">
-          <li>At least {MIN_LENGTH} characters</li>
           <li>Different from your current password</li>
         </ul>
 

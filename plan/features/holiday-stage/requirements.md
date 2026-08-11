@@ -91,13 +91,20 @@ toggle is off by default and there is a visible indicator the entire time sharin
 ### Holiday: live location
 
 **HS-9 — As a member, I can opt in to sharing my live location while the app is open.**
-- The toggle lives in my settings and is **OFF by default**.
+- The toggle lives in my settings and is **OFF by default** — unless my family admin set our
+  family's default to on before I joined, in which case it starts on and I am asked once
+  before anything is sent (see HS-15).
 - The settings copy states plainly: sharing only works while the app is open and in the
   foreground; closing the app or switching away stops it; there is no background tracking.
 - Turning it on requests geolocation permission and starts `watchPosition`.
 - While active, a persistent, always-visible "Sharing location" indicator is shown in the app
   shell, with a one-tap stop.
+- If my family's settings are currently hiding me, the indicator says so rather than claiming
+  I am visible. An indicator that overstates what is being shared is worse than none.
 - Position updates are throttled and only sent when the position meaningfully changed.
+- **Nobody can turn this toggle on for me.** My family admin can prevent my location being
+  shown and can choose what the toggle starts at for people who join after them, but the act
+  of sharing is mine alone, and my browser's permission prompt is mine alone to answer.
 
 **HS-10 — As a member, I can stop sharing at any time, and it really stops.**
 - Toggling off stops the watch and deletes my `live_locations` row server-side.
@@ -106,11 +113,42 @@ toggle is off by default and there is a visible indicator the entire time sharin
   rows that stop updating as stale and stops showing them as live.
 
 **HS-11 — As a member, I can see who is currently sharing.**
-- Live markers are family-coloured, visually distinct from check-in pins, labelled with the
-  person's name and a "last updated N min ago" freshness label.
+- **Every sharing person gets their own marker.** There is no grouping into one pin per family
+  and no "representative member" — if four people in a family are sharing, four markers appear.
+  The product's question on the day is "where is each person", not "where is each household".
+- A marker is that person's profile picture in a circle, ringed in their family's colour. With
+  no picture, their initials on a neutral fill, ringed the same way.
+- Hovering or focusing a marker shows their full name. On touch, a tap shows the same label
+  before opening anything, so the name is reachable without a pointer.
+- Family colour is never the only carrier: the name is always one interaction away, and the
+  side panel lists everyone sharing with their family named in words.
+- A freshness label — "last updated N min ago" — accompanies the marker.
 - Markers older than the staleness threshold are shown as stale (muted + explicit label) and then
   dropped, rather than silently pretending to be current.
+- When several people are in the same place, their markers cluster rather than stacking into an
+  unreadable pile; opening the cluster lists them by name.
 - Only members of the same trip can see them.
+- I only see people whose family settings permit it (HS-15). I am never told that somebody is
+  hidden by a setting versus simply not sharing — from outside their family, the two look the
+  same, which is what stops the map becoming a way to audit other people's choices.
+
+**HS-15 — As a family admin, I decide which of my family appear on the map.**
+- I have one switch for the whole family and one per member, and I set what new members start
+  with. All three live in my family's settings, not on the map.
+- Turning the family switch off removes all of us, myself included, immediately and for
+  everyone.
+- **None of my switches can start someone sharing.** They can only stop it. Turning them all on
+  puts nobody on the map who has not chosen to be there.
+- My own sharing starts on when I create the family; everyone else starts from the default I
+  set, and is asked before anything is sent.
+- The full rules, and the reasoning behind them, live in `plan/features/families/`
+  (FM-15) — that feature owns these settings; this one only reads them.
+
+> NOTE: an earlier version of this document said the member alone governed their sharing and
+> that there was no admin override at all. That is now narrowed: an admin holds *permission*,
+> the member holds *consent*, and both are required. The property worth preserving — that no
+> administrator can cause a person to broadcast their location — is unchanged, and is stated
+> explicitly in HS-9 and in the permissions table below.
 
 ### Holiday: everything else keeps working
 
@@ -145,11 +183,20 @@ toggle is off by default and there is a visible indicator the entire time sharin
 | Delete anyone's check-in | ✅ | ✅ (own family only) | ❌ | ❌ |
 | Toggle own live-location sharing | ✅ | ✅ | ✅ | ❌ |
 | View others' live locations | ✅ | ✅ | ✅ | ❌ |
-| Force another user's sharing off | ❌ | ❌ | ❌ | ❌ |
+| Hide a family from the map | ✅ (any) | ✅ (own family) | ❌ | ❌ |
+| Hide one member from the map | ✅ (any) | ✅ (own family) | ❌ | ❌ |
+| Set a family's new-member default | ✅ (any) | ✅ (own family) | ❌ | ❌ |
+| **Turn on another user's sharing** | **❌** | **❌** | **❌** | **❌** |
 | View End-stage archive | ✅ | ✅ | ✅ | ❌ |
 
-Nobody — main admin included — can turn on another person's live-location sharing or read a
-location for a user who is not sharing. There is no admin override for this.
+Nobody — main admin included — can turn on another person's live-location sharing, or read a
+location for a user who is not sharing. Admins can only ever *remove* someone from the map.
+
+The three admin rows above are permission, not consent: each is an independent veto over a
+marker, and a marker requires every veto to be clear **and** the member's own toggle to be on
+**and** a fresh position from their own browser. The settings themselves are owned by
+`plan/features/families/` (FM-15); they are listed here because this is the feature where their
+effect is visible.
 
 ## Stage availability
 

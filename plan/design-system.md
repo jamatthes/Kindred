@@ -69,6 +69,14 @@ Implementation: CSS custom properties + Tailwind 4 `@theme`; `data-theme` on `<h
   global search "Search places or people" (center) · notification bell with unread badge,
   **family presence stack**, and the primary "Suggest a place" action (right). The primary
   create action lives in the top bar, not floating on the map.
+- **Identity badge:** the one component that renders a person anywhere in the product — map
+  markers, member lists, the presence stack, comment authors, the profile page. A circle
+  holding either their profile picture or their initials on a neutral fill, ringed in their
+  `--family-N` token, at 24 / 32 / 40 / 64px. The ring is the family carrier and is never the
+  only one: a name label or hover always accompanies it. Initials sit on a neutral fill rather
+  than the family colour so contrast does not depend on which of the eight slots a family
+  holds. A failed image renders initials — the badge has no broken state. Specified in
+  `plan/features/families/design.md`.
 - **Family presence stack:** one avatar per family (family color, initial), overlapping.
   A family's avatar is **full color when at least one member has a live session** and
   greyed/desaturated when nobody is online. Hovering a family opens a tooltip listing its

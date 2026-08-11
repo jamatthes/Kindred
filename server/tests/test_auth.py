@@ -389,15 +389,39 @@ async def test_new_password_must_differ_from_the_current_one(
     assert response.json()["detail"]["code"] == "password_unchanged"
 
 
-@pytest.mark.parametrize("candidate", ["short", "123456789"])
-async def test_new_password_must_be_at_least_ten_characters(
+@pytest.mark.parametrize("candidate", ["a", "short", "123456789"])
+async def test_a_short_new_password_is_accepted(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, candidate: str
 ) -> None:
+    """F-5 (changed 2026-08-11): there is no minimum password length.
+
+    Pinned as a test rather than left implicit, because "short passwords are allowed" is a
+    deliberate decision the owner made and not an oversight for someone to helpfully re-add a
+    minimum to later.
+    """
     await make_user(db, "alice")
     await login(client, "alice")
 
     response = await client.post(
         PASSWORD_URL, json={"current_password": PASSWORD, "new_password": candidate}
+    )
+    assert response.status_code == 204
+
+    # The new password really is in force: the old one no longer authenticates.
+    await client.post(LOGOUT)
+    assert (await login(client, "alice", PASSWORD)).status_code == 401
+    assert (await login(client, "alice", candidate)).status_code == 200
+
+
+async def test_an_empty_new_password_is_rejected(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip
+) -> None:
+    """No minimum length still means non-empty — an empty password is no password."""
+    await make_user(db, "alice")
+    await login(client, "alice")
+
+    response = await client.post(
+        PASSWORD_URL, json={"current_password": PASSWORD, "new_password": ""}
     )
     assert response.status_code == 422
     body = response.json()

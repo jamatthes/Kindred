@@ -15,8 +15,15 @@ tables from the foundation migration; this feature adds columns, constraints and
         (text null). Confirm `trip_id`, `name`, `color`, `home_address`, `home_lat`,
         `home_lng`, `home_geocoded_at` already exist from `0001`; add any that do not.
   - [ ] `families.color` as `smallint` with a check constraint `between 1 and 8`.
+  - [ ] `families`: add `location_sharing_allowed` (bool not null default `true`) and
+        `member_location_default` (bool not null default `false`).
   - [ ] Unique indexes: `(trip_id, lower(name))`, `(trip_id, color)`.
-  - [ ] `family_members`: unique index on `(user_id)`.
+  - [ ] `family_members`: unique index on `(user_id)`; add `location_sharing_allowed`
+        (bool not null default `true`).
+  - [ ] `users`: add `first_name` (text not null) and `last_name` (text not null, default
+        `''`), plus `avatar_attachment_id` (uuid null, FK → `attachments`,
+        `ON DELETE SET NULL`). Backfill the seeded admin's `first_name` from its
+        `display_name` so the not-null constraint holds on an existing install.
   - [ ] `invites`: add `trip_id` (uuid, not null, fk), `token_hash` (text, unique, not null)
         replacing plaintext `token`, `revoked_at` (timestamptz null), `used_at`
         (timestamptz null). Keep `family_id` nullable — null means "creates a new family".
@@ -26,7 +33,8 @@ tables from the foundation migration; this feature adds columns, constraints and
 
 **Verify:** `alembic upgrade head` then `downgrade -1` then `upgrade head` all succeed. In
 psql, inserting two families with the same colour on one trip fails; inserting two
-`family_members` rows for one user fails.
+`family_members` rows for one user fails; a family created without touching the new columns
+has `location_sharing_allowed = true` and `member_location_default = false`.
 
 ## Phase 2 — Models
 
@@ -53,13 +61,25 @@ covers all four falsy cases.
       includes `home_address`, `home_lat`, `home_lng` and `home_geocoded_at` **only** when the
       caller is a member of that family or the main admin. Write it as one function used by
       every route that returns a family, so it cannot be forgotten on a new endpoint.
-- [ ] Validation: `family_name` required when the invite mode is `create_family`, rejected
-      otherwise; `expires_in_hours` restricted to `24 | 168 | 720`.
+- [ ] `InviteAcceptIn` is `{username, first_name, last_name?, password, password_confirm}`.
+      It accepts **no** `family_name` and **no** `display_name`: the family is named on the
+      setup screen (Phase 10), and `display_name` is derived server-side as
+      `f"{first_name} {last_name}".strip()`.
+- [ ] Validation: `expires_in_hours` restricted to `24 | 168 | 720`.
+- [ ] One shared `initials(user)` helper, used by every serialiser that emits `MemberOut` or a
+      live-location row — first grapheme of `first_name` plus first grapheme of `last_name`,
+      uppercased, falling back to one character when `last_name` is empty. Computing it in two
+      places is how a person ends up with two different badges.
+- [ ] `MemberOut` includes `first_name`, `last_name`, `initials`, `avatar_url`,
+      `avatar_thumb_url`, `location_sharing_allowed`, and `location_sharing_enabled` — the
+      last **null unless** the caller is that member, their family admin, or the main admin.
 
 **Verify:** `pytest server/tests/test_family_schemas.py` — the serialiser omits address fields
 for a non-member caller and includes them for a member and for the main admin;
-`InviteAcceptIn` rejects a `family_name` on a `join` invite and requires one on a
-`create_family` invite.
+`InviteAcceptIn` rejects a body carrying `family_name`; `display_name` is derived correctly
+including the single-name case; `initials` returns one character when `last_name` is empty and
+handles a non-Latin name by grapheme rather than byte; `location_sharing_enabled` is null for a
+caller in another family and populated for that member's own family admin.
 
 ## Phase 4 — Geocoding service
 
@@ -81,10 +101,23 @@ from exactly two places.
 
 ## Phase 5 — Families and members router
 
-- [ ] `routers/families.py` with the eight family routes and three member routes from
-      `design.md`.
+- [ ] `routers/families.py` with the family routes and member routes from `design.md`.
 - [ ] Every mutating route declares `Depends(require_stage("planning", "holiday"))` alongside
       its permission dependency.
+- [ ] `require_pending_family` dependency: admits **only** an authenticated user with no
+      `family_members` row whose id appears as `used_by` on a consumed invite with
+      `family_id is null`. Everyone else gets `403 forbidden`. Unit-test the four denial cases
+      (existing member, removed member, no invite, invite was family-scoped) alongside the
+      allow case.
+- [ ] `POST /families/mine` — the family setup screen's only write. One transaction: create the
+      family on the invite's `trip_id` with the lowest free colour, write `family_members` with
+      `role='admin'`, set that user's `user_settings.live_location_enabled = true`, geocode the
+      home address if supplied. A caller who already has a family gets `409 already_has_family`.
+- [ ] `PATCH /families/{id}/location-policy` — writes `location_sharing_allowed` and
+      `member_location_default`. It must **not** write to any `user_settings` row; assert this
+      in a test, because it is the invariant the whole privacy story rests on.
+- [ ] `PATCH /families/{id}/members/{user_id}` accepts `location_sharing_allowed` alongside
+      `role`, and likewise never touches `user_settings`.
 - [ ] Colour assignment on create: use the requested slot if free, else the next free slot,
       else `409 no_color_slots`.
 - [ ] `PUT /families/{id}/home`: skip the external call when the address is unchanged and the
@@ -101,7 +134,9 @@ from exactly two places.
 second and confirm colour 2; attempt to set the second to colour 1 and get `409 color_taken`.
 Set a home address with the fake geocoder configured to succeed and confirm `home_lat` is
 populated. `pytest server/tests/test_families.py` — happy path, permission-denied, and
-stage-guard tests for every route.
+stage-guard tests for every route, plus a test asserting that **no route in this router writes
+`user_settings.live_location_enabled`** except `POST /families/mine` seeding the new family
+admin's own row.
 
 ## Phase 6 — Invites router and registration
 
@@ -116,30 +151,57 @@ stage-guard tests for every route.
   - [ ] Rate-limited using foundation's limiter, keyed by IP.
   - [ ] Refuse when a session is already present (`409 already_member`).
   - [ ] Refuse when the trip stage is `end`.
-  - [ ] Create the user (argon2, `must_change_password=false`), create the `user_settings`
-        row, create the family when the mode is `create_family` (assigning the next free
-        colour, and the accepting user becomes its `admin`), create the `family_members` row.
+  - [ ] Create the user (argon2, `must_change_password=false`) with `display_name` derived
+        from the two name fields, and create the `user_settings` row.
+  - [ ] **`join` mode:** write `family_members` with `role='member'`, and seed
+        `user_settings.live_location_enabled` from that family's `member_location_default`.
+  - [ ] **`create_family` mode:** write **no** family and **no** `family_members` row. The
+        family is created later by `POST /families/mine` from the setup screen. Seed
+        `live_location_enabled = false`; there is no family to take a default from yet.
   - [ ] Mark the invite used with a **conditional update** (`WHERE used_by IS NULL`) inside
         the same transaction; if it affects zero rows, roll back the whole thing and return
         `409 invite_already_used`.
-  - [ ] Issue a session and CSRF token exactly as login does, then return the user.
+  - [ ] Issue a session and CSRF token exactly as login does, then return the user together
+        with `next_step` — `app` for `join`, `setup_family` for `create_family`.
 - [ ] `POST /invites/{id}/revoke` sets `revoked_at`; already-used invites return
       `409 invite_already_used`.
 
 **Verify:** in `/docs` — create a family-scoped invite, preview the token (valid), accept it in
-a fresh browser profile, land logged in as a member of that family. Preview the same token
-again and confirm `valid: false, reason: "used"`. `pytest server/tests/test_invites.py`
+a fresh browser profile, land logged in as a member of that family with `next_step: "app"`.
+Accept a new-family invite and confirm the response is `next_step: "setup_family"`, that no
+`family_members` row exists, and that `GET /families` then returns `403 not_on_trip`. Preview a
+used token and confirm `valid: false, reason: "used"`. `pytest server/tests/test_invites.py`
 including a concurrency test that fires two accepts at one token and asserts exactly one
-succeeds.
+succeeds, and a test that a `join` acceptor into a family with `member_location_default = true`
+gets `live_location_enabled = true` while one into a default-false family does not.
 
-## Phase 7 — Profile endpoint
+## Phase 7 — Profile and avatar endpoints
 
-- [ ] `PATCH /api/v1/me` accepting `display_name` only, available in **all** stages
-      (no `require_stage`), returning the foundation `UserOut`.
-- [ ] Confirm password change and preferences continue to work unchanged from foundation.
+- [ ] `PATCH /api/v1/me` accepting `first_name`, `last_name` and `display_name`, available in
+      **all** stages (no `require_stage`), returning the foundation `UserOut`.
+- [ ] `PUT /api/v1/me/avatar` (multipart) and `DELETE /api/v1/me/avatar`, both stage-exempt for
+      the same reason password and theme are.
+- [ ] Upload pipeline in `services/images.py`, behind an interface so tests do not shell out to
+      an image library for every case: sniff the type from magic bytes (never the filename or
+      the client's `Content-Type`), reject anything but JPEG/PNG/WebP with `415`, reject over
+      8MB with `413`, bound the decode by dimensions and pixel count so a decompression bomb
+      gives `422 image_unreadable`.
+- [ ] Apply EXIF rotation, then **drop all metadata in the re-encode, GPS included**, flatten
+      animation to the first frame, centre-crop square, and emit 256px and 64px WebP
+      renditions. Do not retain the original.
+- [ ] Write the `attachments` row with `subject_type='user'` and point
+      `users.avatar_attachment_id` at it; replacing an avatar deletes the old row and file in
+      the same transaction. Filenames carry a content hash so URLs are immutable.
+- [ ] Serve avatars through the authenticated attachments route with a long `Cache-Control`
+      and an ETag; an unauthenticated request is `401`.
 
 **Verify:** in `/docs` — set the trip stage to `end` via the database, then confirm
-`PATCH /me` still succeeds while `PATCH /families/{id}` returns `409 stage_forbidden`.
+`PATCH /me` and the avatar routes still succeed while `PATCH /families/{id}` returns
+`409 stage_forbidden`. `pytest server/tests/test_avatar.py` — a JPEG carrying GPS EXIF
+round-trips with **no** metadata in either rendition (assert on the decoded output, not on the
+absence of an error); a `.jpg` that is actually a ZIP gives `415`; a 9MB file gives `413`; a
+crafted decompression bomb gives `422` without exhausting memory; replacing an avatar leaves
+exactly one `attachments` row and no orphaned file.
 
 ## Phase 8 — WebSocket events
 
@@ -148,6 +210,12 @@ succeeds.
       `broadcast(trip_id, ...)`.
 - [ ] `family.updated` carries the coarse `FamilyOut` only — never `home_address` or
       coordinates, because the trip room includes other families.
+- [ ] `family.updated` also fires on a `location_sharing_allowed` change, and `member.updated`
+      on an avatar, name or `location_sharing_allowed` change, so the map reacts without a
+      reload.
+- [ ] `member.updated`'s payload uses the same entitlement rule as the REST serialiser:
+      `location_sharing_enabled` is null for recipients not entitled to it. A member's own
+      consent state must never reach the whole trip room.
 - [ ] Send `member.removed` to the removed user's own socket with `send_user` as well as to
       the room.
 - [ ] Add the six events to `plan/architecture.md`'s WebSocket list as PROPOSED ADDITIONs, in
@@ -171,9 +239,18 @@ member delivers `member.removed` to both the room and that user's own connection
 - [ ] Home address block with the four states (not set / placed / not found / error), the
       confirm-the-geocode step, and the retry action. The `no_api_key` case links the main
       admin to the admin console.
-- [ ] Member list with promote / demote / remove, controls rendered only for entitled callers.
-      Removal of the last family admin is prevented in the UI with an explanatory message, and
-      still refused by the API.
+- [ ] `IdentityBadge` in `web/src/design/` (not in this feature's directory — the map,
+      presence stack and comments all use it): avatar or `initials`, family-colour ring, sizes
+      24/32/40/64, initials on a neutral fill, and initials again when the image fails to load.
+      No broken-image state exists.
+- [ ] Member list with badges, promote / demote / remove, controls rendered only for entitled
+      callers. Removal of the last family admin is prevented in the UI with an explanatory
+      message, and still refused by the API.
+- [ ] Family location settings block — the family switch, the new-member default switch, and
+      the per-member switches, editable by that family's admin and the main admin, **read-only
+      but visible** to members so nobody is silently overridden. Each member row shows its
+      effective state using the five strings in `design.md`.
+- [ ] The family switch uses an undo toast, not a confirm — it is instantly reversible.
 - [ ] Invite block — create form, copy-once link display with a copy toast and a plain
       "shown only once" line, outstanding-invite list with status chips, revoke with undo.
 - [ ] The main admin's `Invite a new family` action, visually separated from per-family
@@ -189,21 +266,34 @@ phone width and confirm the bottom sheet and ≥ 44px targets. Confirm a member 
 different family cannot see the first family's street address anywhere in the network
 responses.
 
-## Phase 10 — Web: join and profile screens
+## Phase 10 — Web: join, family setup, and profile screens
 
 - [ ] `/join/<token>` route outside the app shell: preview first, then the form.
 - [ ] Invalid-token card with the plain explanation and no trip details.
 - [ ] Already-logged-in variant with `Log out and continue`.
 - [ ] End-stage variant explaining the trip has finished, with no form.
-- [ ] Registration form with all six field states, blur validation, per-field username-taken
-      error, and the conditional family-name field.
-- [ ] Profile page: display name inline edit with undo toast, password change, theme control,
-      read-only username/family/role block.
+- [ ] Registration form with all six field states, blur validation, and a per-field
+      username-taken error. Fields are first name, last name (marked optional), username,
+      password, confirm. **No family-name field and no display-name field.**
+- [ ] `/setup/family` route outside the app shell, rendered only when foundation's `next_step`
+      is `setup_family`: family name (required, `name_taken` shown on the field), optional home
+      address marked skippable, the "you will be this family's admin" line, and its own log-out
+      action because there is no nav rail.
+- [ ] Routing reads `next_step` from `auth/me` and nothing else. Do not reimplement the
+      precedence in the client — foundation F-13 owns it.
+- [ ] Profile page: avatar upload/remove with the crop preview and inline error states, first
+      and last name inline edits, display name inline edit, all with undo toasts; the member's
+      own location-sharing toggle with the settings copy and the "your family is hiding you"
+      explanation; password change; theme control; read-only username/family/role block.
 
-**Verify:** in the browser — open a valid invite in a private window, register, and land on
-the trip as a member of the right family. Open the same link again and confirm the
-invalid-token card appears with no family or trip name. Open an invite while logged in and
-confirm the log-out path works. Edit a display name and confirm the undo toast reverts it.
+**Verify:** in the browser — open a valid family-scoped invite in a private window, register,
+and land on the trip as a member of the right family. Open a **new-family** invite, register,
+and land on `/setup/family`; close the tab, log in again, and confirm you land there again with
+nothing half-created; finish setup and confirm you arrive on home as that family's admin with
+your own sharing toggle on. Open a used link and confirm the invalid-token card appears with no
+family or trip name. Open an invite while logged in and confirm the log-out path works. Upload
+an avatar and confirm the badge updates in a second browser without a reload. Edit a first name
+and confirm the undo toast reverts it and the map label follows.
 
 ## Phase 11 — Tests
 
@@ -216,19 +306,39 @@ confirm the log-out path works. Edit a display name and confirm the undo toast r
       removed or demoted.
 - [ ] `test_address_privacy.py` — assert the exact response body for a non-member caller
       contains no `home_address`, `home_lat` or `home_lng` key on any endpoint that returns a
-      family.
+      family, and no `location_sharing_enabled` value on any member of another family.
+- [ ] `test_family_setup.py` — `require_pending_family` allow and all four denial cases;
+      `POST /families/mine` creating exactly one family, one admin membership and one seeded
+      `live_location_enabled = true`; a double submit yielding `409 already_has_family` with no
+      second family; the eight-slot exhaustion case.
+- [ ] `test_location_policy.py` — the one that matters most. Assert that **no request body
+      reachable by a family admin or the main admin can set another user's
+      `live_location_enabled` to true**: enumerate the routes, call each as a family admin
+      against a member who has consent off, and assert the column is unchanged. Then assert the
+      read-time filter: a member is absent from `GET /live-locations` when any one of the three
+      permission terms is false, and present only when all three are true and a fresh row
+      exists.
+- [ ] `test_avatar.py` as specified in Phase 7, including the EXIF/GPS stripping assertion.
 - [ ] Vitest: the families table sort behaviour, the four home-address states, the invite
-      copy-once block, and permission-gated rendering of the member controls.
+      copy-once block, permission-gated rendering of the member controls, `IdentityBadge`
+      (image, initials, single-name, failed-image), and the family location settings block
+      rendering read-only for a member.
 - [ ] Confirm no test performs a real network call.
 
 **Verify:** `cd server && pytest` green; `cd web && npm test` green. Requirements FM-1 to
-FM-12 each map to at least one test or a documented manual step above.
+FM-15 each map to at least one test or a documented manual step above.
 
 ## Hand-off notes
 
 - `distances` consumes `families.home_lat/home_lng`. A null home means "no distances", not an
   error — that feature must degrade, not fail.
 - `admin-console` reuses the family and member listings for its overview, and owns account
-  deletion and password reset. Do not add those here.
+  deletion and password reset, and the **trip** setup screen (AC-0). This feature owns the
+  **family** setup screen. Both are reached through foundation's one `next_step` gate; neither
+  reimplements the other.
 - Every map feature reads the family colour slot; keep `color` authoritative in the database
   rather than deriving it in the client.
+- `holiday-stage` reads the three location-permission columns and the `initials` /
+  `avatar_thumb_url` fields, and writes none of them. If a control that changes who appears on
+  the map ever needs to exist on the map itself, it belongs here and is linked to from there —
+  a permission edited in two places will diverge.

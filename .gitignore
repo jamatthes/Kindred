@@ -25,3 +25,8 @@ Thumbs.db
 # Local data
 *.local.json
 pgdata/
+
+# Container data — bind-mounted by deploy/docker-compose.yml (Postgres data directory and
+# uploaded attachments). Never committed: it is large, machine-specific, and the database
+# directory is meaningless outside the container that wrote it.
+data/

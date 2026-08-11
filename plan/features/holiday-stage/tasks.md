@@ -76,17 +76,41 @@ deleting someone else's, 409 in planning and end, 429 on rapid repeat. Manually 
       off; `require_stage("holiday")`.
 - [ ] `DELETE /api/v1/live-locations/me` — idempotent 204, **no stage guard**.
 - [ ] `GET /api/v1/live-locations` — excludes rows older than `LIVE_DROP_AFTER`, marks rows older
-      than `LIVE_STALE_AFTER` as `stale`, excludes the caller's own row.
+      than `LIVE_STALE_AFTER` as `stale`, excludes the caller's own row, and applies the **three
+      permission terms** from `plan/features/families/design.md`:
+      `families.location_sharing_allowed`, `family_members.location_sharing_allowed`,
+      `user_settings.live_location_enabled`. Write it as one query with the terms inline — a
+      post-filter in Python is a place for a row to slip through.
+- [ ] One row per **person**, never aggregated per family. A family with four sharers yields four
+      rows.
+- [ ] The response carries no reason for an absent row. No `hidden_by_policy` flag, no suppressed
+      count — from outside a family, "chose not to", "was hidden" and "phone in a pocket" must be
+      indistinguishable.
+- [ ] `LiveLocationOut` embeds `initials` and `avatar_thumb_url` from the shared serialiser in
+      `families`; do not recompute initials here.
+- [ ] `PUT` deliberately does **not** consult the family policy — a hidden member keeps writing and
+      is filtered at read time, so flipping the switch back restores the marker instantly.
 - [ ] Wire the settings toggle so setting `live_location_enabled=false` deletes the row in the same
       transaction and broadcasts `location.cleared`.
 - [ ] Add a periodic background sweep deleting rows older than `LIVE_DROP_AFTER`, broadcasting
       `location.cleared` with `reason: "stale"`.
-- [ ] Broadcast `location.updated` to the trip room excluding the sender.
+- [ ] Broadcast `location.updated` **per recipient**, evaluating the same visibility terms for each
+      member of the trip room, excluding the sender. This is the only event in the product with a
+      filtered audience; a room-wide fan-out would put a coordinate in a browser that must not
+      have it.
+- [ ] Consume `family.updated` and `member.updated` from `families`: when a permission term goes
+      false, emit `location.cleared` with `reason: "hidden_by_family"` and leave the
+      `live_locations` row intact.
 
 **Verify:** `pytest server/tests/test_live_locations.py -q` — upsert keeps exactly one row per user;
 toggle-off deletes the row; PUT with sharing disabled is 409; PUT in `end` is 409; DELETE in `end`
 succeeds; stale rows are filtered from GET. Call the sweep task directly in a test with a frozen
-clock.
+clock. Then `pytest server/tests/test_live_visibility.py` — build a family with four sharing members
+and assert: all four appear; turning the family switch off removes all four including the admin;
+turning it back on restores exactly the members who had consented and nobody else; turning one
+member's switch off removes only that marker; a member with consent off never appears regardless of
+either switch; and a `location.updated` broadcast is delivered to an entitled recipient and **not**
+delivered to a non-entitled one (assert on what each test socket received, not on the payload).
 
 ---
 
@@ -167,15 +191,35 @@ confirm the specific error message, not a generic one.
 - [ ] `watchPosition` controller: throttle (15s / 25m), `visibilitychange` stop-and-restart with
       grace period, `pagehide` `sendBeacon` DELETE, Permissions API state check.
 - [ ] Persistent "Sharing your location" indicator with a stop action and a polite live-region
-      announcement.
-- [ ] Live-marker map layer: distinct shape, pulsing ring honouring `prefers-reduced-motion`, name
-      label, freshness caption, stale styling with explicit text.
+      announcement. When the viewer's family policy currently hides them, the indicator says so
+      rather than claiming they are visible.
+- [ ] First-run disclosure sheet for a member whose toggle was seeded on by their family's default:
+      the verbatim settings copy, a line naming the source, `Start sharing` / `Not now`, and
+      dismissal counting as `Not now`. Shown once, before any `watchPosition` call.
+- [ ] Live-marker map layer: **one marker per person**, using the shared `IdentityBadge` from
+      `families` at 40px (avatar or initials, family-colour ring) on a shape distinct from the
+      check-in teardrop, with a pulsing halo honouring `prefers-reduced-motion`, a freshness
+      caption, and stale styling with explicit text.
+- [ ] Hover, focus and first-tap all show the same tooltip: full name, family name in words,
+      freshness. Markers are keyboard-reachable in a stable order with `aria-describedby` wiring;
+      the tooltip closes with its marker if the marker disappears mid-hover.
+- [ ] On touch, the first tap shows the tooltip and the second opens the panel — a single tap never
+      jumps straight to a navigation.
+- [ ] Cluster live markers when they overlap (the normal case for one family in one restaurant),
+      showing the count and the family rings; opening a cluster lists people by full name. Cluster
+      live markers and check-in pins **separately**.
+- [ ] Consume `family.updated` / `member.updated`: drop markers whose permission has gone false
+      immediately. Do **not** draw a marker when a permission goes true — wait for that person's
+      next `location.updated`, because there is no fresh coordinate to draw.
 - [ ] Layer toggles for live markers and check-ins.
 - [ ] Stop the watch on `stage.changed` away from `holiday` and on 409 `sharing_disabled`.
 
 **Verify:** On a real phone over HTTPS, enable sharing and confirm the marker appears and moves on a
 second device; background the app and confirm the marker goes stale then disappears; toggle off and
-confirm the marker vanishes immediately.
+confirm the marker vanishes immediately. With two members of one family sharing, confirm two
+markers, that they cluster when close and list both names when opened, and that hover and keyboard
+focus both show the full name. Have the family admin turn the family switch off in a third browser
+and confirm both markers vanish at once on the other two, then return when it is switched back on.
 
 ---
 

@@ -6,9 +6,12 @@ from pydantic import BaseModel, Field
 
 from app.schemas.user import UserOut
 
-#: F-5: "Minimum password length is 10 characters; the rule is stated on screen before
-#: submission, not only on error."
-MIN_PASSWORD_LENGTH = 10
+#: F-5: there is no minimum password length. A password must merely be non-empty.
+#:
+#: The 1024-character ceiling below is not a policy limit, it is a denial-of-service guard:
+#: argon2 hashes whatever it is handed, so an unbounded field lets one request burn arbitrary
+#: CPU. Nobody types 1024 characters, so it constrains an attacker and not a user.
+MIN_PASSWORD_LENGTH = 1
 
 
 class LoginIn(BaseModel):
