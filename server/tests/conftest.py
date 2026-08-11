@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 import pytest
@@ -24,20 +25,48 @@ import pytest
 # --- must happen before `import app.*` ---------------------------------------------------
 
 
+#: Matches `app.core.config.ENV_FILE`. Read by hand below — see `_base_database_url`.
+_ENV_FILE = Path(__file__).resolve().parents[2] / "deploy" / ".env"
+
+_DEFAULT_DATABASE_URL = "postgresql+asyncpg://kindred:change-me@localhost:5432/kindred"
+
+
+def _base_database_url() -> str:
+    """The development database URL, resolved **without importing any app module**.
+
+    Importing `app.core.config` would build its settings singleton right here, from the
+    un-overridden environment, and `app.core.db` would then bind the engine to the
+    development database — which is how the suite would quietly run against real data.
+    """
+    if os.environ.get("DATABASE_URL"):
+        return os.environ["DATABASE_URL"]
+    if _ENV_FILE.exists():
+        for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("DATABASE_URL="):
+                return line.split("=", 1)[1].split(" #")[0].strip()
+    return _DEFAULT_DATABASE_URL
+
+
 def _build_test_database_url() -> str:
     explicit = os.environ.get("TEST_DATABASE_URL")
     if explicit:
         return explicit
-    os.environ.setdefault("SECRET_KEY", "test-secret-key-not-used-for-anything-real")
-    from app.core.config import Settings  # noqa: PLC0415 — deliberately late
-
-    base = Settings().database_url
-    parts = urlsplit(base)
+    parts = urlsplit(_base_database_url())
     return urlunsplit(parts._replace(path=f"{parts.path.rstrip('/')}_test"))
 
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-used-for-anything-real")
 TEST_DATABASE_URL = _build_test_database_url()
+
+# A hard stop, because the suite TRUNCATEs every table on every test. If this ever resolves
+# to the development database, the failure must be a loud one at collection time.
+if not urlsplit(TEST_DATABASE_URL).path.rstrip("/").endswith("_test"):
+    raise RuntimeError(
+        f"Refusing to run tests against {TEST_DATABASE_URL!r}: the database name must end "
+        "in '_test'. Set TEST_DATABASE_URL if you need a different target."
+    )
+
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 import httpx  # noqa: E402
