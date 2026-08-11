@@ -1,0 +1,536 @@
+/* Admin console. Token-only: every colour is a semantic token and every length is on the
+   5/8/13/21/34/55 scale, the type scale, or a hairline (see scripts/check-tokens.mjs). */
+
+.admin {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.admin__head {
+  margin-bottom: var(--space-4);
+}
+
+.admin__title {
+  font-size: var(--text-sub);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.admin__hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+.admin__hint a {
+  color: var(--color-accent);
+}
+
+.admin__muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.admin__empty {
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+}
+
+/* --- layout: one readable column, sticky index beside it --------------------------------- */
+
+.admin__body {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.admin__index {
+  position: sticky;
+  top: var(--space-4);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  border-left: 2px solid var(--color-border);
+  padding-left: var(--space-3);
+}
+.admin__index a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  padding: var(--space-1) 0;
+}
+.admin__index a:hover {
+  color: var(--color-accent);
+}
+
+.admin__column {
+  flex: 1;
+  min-width: 0;
+  max-width: var(--reading-measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.admin__section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  scroll-margin-top: var(--space-4);
+}
+
+.admin__section-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  margin-bottom: var(--space-2);
+}
+
+.admin__subheading {
+  font-size: var(--text-body);
+  font-weight: 700;
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.admin__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.admin__spacer {
+  height: var(--space-4);
+}
+
+.admin__numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the trip form ------------------------------------------------------------------------ */
+
+.trip-form__dates {
+  display: flex;
+  gap: var(--space-3);
+}
+.trip-form__dates > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip-form__placeholder {
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  margin-top: calc(-1 * var(--space-2));
+  margin-bottom: var(--space-3);
+}
+
+.trip-form__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* --- stage -------------------------------------------------------------------------------- */
+
+.stage__stepper {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  flex-wrap: wrap;
+}
+
+.stage__step {
+  flex: 1;
+  min-width: var(--stage-step-min);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+}
+.stage__step.is-current {
+  border-color: var(--color-info);
+  background: var(--color-info-soft);
+}
+
+.stage__step-name {
+  display: block;
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+.stage__step-blurb {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.stage__step.is-current .stage__step-name {
+  color: var(--color-info);
+}
+
+.stage__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.stage__revert {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+/* --- small tables inside sections --------------------------------------------------------- */
+
+.admin__mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+.admin__mini-table th {
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-faint);
+  padding: 0 var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+.admin__mini-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.admin__mini-table--roomy td {
+  padding: var(--space-2);
+}
+.admin__mini-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin__chip {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--chip-radius);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.admin__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.admin__status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--chip-radius);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* --- segmented control -------------------------------------------------------------------- */
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--chip-radius);
+  overflow: hidden;
+}
+.segmented button {
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  padding: var(--space-1) var(--space-3);
+  min-height: var(--hit-target);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.segmented button.is-on {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+/* --- members ------------------------------------------------------------------------------ */
+
+.admin__search {
+  max-width: var(--card-measure-sm);
+  margin-bottom: var(--space-3);
+}
+
+.admin__person {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin__family {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin__swatch {
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-full);
+  flex: none;
+}
+.admin__swatch--lg {
+  width: var(--space-5);
+  height: var(--space-5);
+  display: grid;
+  place-items: center;
+  color: var(--color-text-on-accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.admin__row-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.admin__link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin__link:hover:not(:disabled) {
+  color: var(--color-accent-hover);
+}
+.admin__link--danger {
+  color: var(--color-danger);
+}
+.admin__link:disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+
+.admin__copy-once {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-2);
+  background: var(--color-success-soft);
+}
+.admin__copy-once code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--color-text);
+  padding: var(--space-1) 0;
+}
+
+/* --- instance ----------------------------------------------------------------------------- */
+
+.admin__fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+.admin__fieldset legend {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-1);
+}
+.admin__radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+.admin__radio.is-disabled {
+  color: var(--color-text-faint);
+}
+
+/* --- Google status chips ------------------------------------------------------------------- */
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--chip-radius);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+.status-chip--ok,
+.status-chip--configured {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.status-chip--denied {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.status-chip--quota,
+.status-chip--unreachable {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+/* --- stats ---------------------------------------------------------------------------------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--stat-cell-min), 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+.stats__cell {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-2) var(--space-3);
+}
+.stats__cell dt {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.stats__cell dd {
+  margin: 0;
+  font-size: var(--text-sub);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- organisers ------------------------------------------------------------------------------ */
+
+.organisers {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.organisers__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  flex-wrap: wrap;
+}
+.organisers__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.organisers__meta {
+  margin-left: auto;
+}
+
+.organisers__add {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  max-width: var(--card-measure-sm);
+}
+.organisers__candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.organisers__candidates li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-1);
+}
+.organisers__candidates li:hover {
+  background: var(--color-surface-sunken);
+}
+
+/* --- the access screen ------------------------------------------------------------------------ */
+
+.admin-denied {
+  max-width: var(--reading-measure);
+  margin: var(--space-6) auto;
+  padding: var(--space-4);
+  text-align: center;
+}
+.admin-denied h1 {
+  font-size: var(--text-sub);
+  font-weight: 700;
+}
+
+/* A wider card than the auth screens use: the setup form has four fields and two of them
+   sit side by side. */
+.auth-card--wide {
+  max-width: var(--reading-measure);
+}
+
+/* Mobile: the index becomes a scrollable jump menu above the sections. */
+/* A media query cannot read a custom property, so the mobile breakpoint
+   (--breakpoint-mobile, minus one) is written out here. */
+@media (max-width: 767px) { /* token-check-ignore */
+  .admin__body {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .admin__index {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    border-left: none;
+    border-bottom: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-bottom: var(--space-2);
+    gap: var(--space-3);
+    width: 100%;
+  }
+  .admin__index a {
+    white-space: nowrap;
+  }
+  .trip-form__dates {
+    flex-direction: column;
+    gap: 0;
+  }
+  .organisers__meta {
+    margin-left: 0;
+  }
+}

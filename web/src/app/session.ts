@@ -16,7 +16,16 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiError, api, onUnauthorized } from './apiClient'
-import type { LoginResponse, NextStep, Preferences, ThemePref, User } from './types'
+import { socket } from './socket'
+import type {
+  LoginResponse,
+  NextStep,
+  Preferences,
+  ThemePref,
+  TripBrief,
+  TripStage,
+  User,
+} from './types'
 import {
   applyTheme,
   cacheTheme,
@@ -76,6 +85,12 @@ export type SessionValue = {
   resolvedTheme: ResolvedTheme
   /** Set when the last theme change failed and was rolled back. */
   themeError: string | null
+  /**
+   * Why this session ended, when it ended for a reason the user did not choose — a password
+   * reset or a removal from the trip. The login screen shows it instead of leaving someone
+   * to guess why they are looking at it.
+   */
+  signedOutReason: string | null
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
@@ -99,6 +114,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     resolveTheme(readCachedTheme()),
   )
   const [themeError, setThemeError] = useState<string | null>(null)
+  /** Set when the server ended this session for us; the login screen explains why. */
+  const [signedOutReason, setSignedOutReason] = useState<string | null>(null)
   // Guards the reconcile-on-load below from fighting a change the user just made.
   const themeTouched = useRef(false)
 
@@ -146,6 +163,57 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  // --- events that change what this session is, or may do -------------------------------
+  //
+  // `admin-console` Phase 10. The stage decides what the whole app renders as mutable, and
+  // the trip-level roles decide whether the `Admin` entry exists at all — so both are kept
+  // live here rather than being discovered on the next reload.
+  useEffect(() => {
+    const unsubscribe = [
+      socket.subscribe('stage.changed', (event) => {
+        const stage = (event.payload as { stage?: TripStage } | null)?.stage
+        if (!stage) return
+        setUser((current) =>
+          current?.trip ? { ...current, trip: { ...current.trip, stage } } : current,
+        )
+      }),
+      socket.subscribe('trip.updated', (event) => {
+        const trip = (event.payload as { trip?: Partial<TripBrief> } | null)?.trip
+        if (!trip) return
+        setUser((current) =>
+          current?.trip ? { ...current, trip: { ...current.trip, ...trip } } : current,
+        )
+      }),
+      // Appointment and demotion change what this user may see. Only their own matters here;
+      // everyone else's is the console's business.
+      socket.subscribe('organiser.appointed', (event) => {
+        const userId = (event.payload as { user_id?: string } | null)?.user_id
+        setUser((current) => {
+          if (current && userId === current.id) void refresh()
+          return current
+        })
+      }),
+      socket.subscribe('organiser.demoted', (event) => {
+        const userId = (event.payload as { user_id?: string } | null)?.user_id
+        setUser((current) => {
+          if (current && userId === current.id) void refresh()
+          return current
+        })
+      }),
+      // A password reset or a removal. The session is already dead server-side; this is what
+      // turns that into one plain message instead of a wall of 401s.
+      socket.subscribe('session.revoked', () => {
+        socket.disconnect()
+        setUser(null)
+        setStatus('anonymous')
+        setSignedOutReason(
+          'You have been signed out. An organiser reset your password or removed you from the trip.',
+        )
+      }),
+    ]
+    return () => unsubscribe.forEach((off) => off())
+  }, [refresh])
+
   // The inline script in index.html has already painted with the cached preference; this
   // makes React's idea of the theme agree with the DOM's on mount.
   useEffect(() => {
@@ -165,6 +233,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (username: string, password: string) => {
       const result = await api.post<LoginResponse>('/auth/login', { username, password })
       themeTouched.current = false
+      setSignedOutReason(null)
       adoptUser(result.user)
     },
     [adoptUser],
@@ -221,6 +290,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       themePref,
       resolvedTheme,
       themeError,
+      signedOutReason,
       login,
       logout,
       changePassword,

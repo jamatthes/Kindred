@@ -39,7 +39,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     SETTING_INVITE_ONLY: True,
 }
 
-DEFAULT_TRIP_NAME = "Our trip"
+#: Deliberately empty. `Trip.setup_complete` is false while the name is blank, which is what
+#: sends the owner to the AC-0 setup screen on first login. Seeding a placeholder like "Our
+#: trip" would let the gate be skipped silently and leave the placeholder in the app header
+#: for everyone — a name nobody chose, on every screen.
+DEFAULT_TRIP_NAME = ""
 
 
 async def _seed_admin(db: AsyncSession) -> User | None:
@@ -83,12 +87,17 @@ async def _seed_trip(db: AsyncSession, owner: User | None) -> Trip | None:
         name=DEFAULT_TRIP_NAME,
         stage="planning",
         owner_user_id=owner.id if owner else None,
-        timezone=settings.tz,
+        # The container's TZ, which gives the setup screen a sensible default without
+        # satisfying `setup_complete` on its own: a timezone has a defensible default and a
+        # trip's name does not.
+        timezone=settings.tz or "UTC",
     )
     db.add(trip)
     await db.flush()
     await seed_category_settings(db, trip)
-    logger.info("Seeded trip %r in stage 'planning'.", trip.name)
+    logger.info(
+        "Seeded an unnamed trip in stage 'planning' — the owner names it on first login."
+    )
     return trip
 
 

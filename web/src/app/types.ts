@@ -167,3 +167,113 @@ export type InvitePreview = {
 }
 
 export type InviteAccepted = { user: User; csrf_token: string; next_step: NextStep }
+
+// --- admin console ------------------------------------------------------------------------
+// Mirrors `server/app/schemas/admin.py`. The stage affordances are computed server-side and
+// arrive as answers: the console renders them, and never works out legality itself.
+
+export type TripAdmin = {
+  id: string
+  name: string
+  stage: TripStage
+  start_date: string | null
+  end_date: string | null
+  timezone: string
+  owner_user_id: string | null
+  /** The single legal forward target, or null when there is none or a blocker stands. */
+  can_advance_to: TripStage | null
+  can_revert_to: TripStage | null
+  /** Machine-readable reasons the forward move is unavailable, e.g. `missing_dates`. */
+  blockers: string[]
+  /** AC-0: name and timezone set. The same predicate foundation's gate reads. */
+  setup_complete: boolean
+}
+
+export type StageTransition = {
+  from_stage: string
+  to_stage: string
+  direction: 'forward' | 'backward'
+  changed_by: { user_id: string | null; display_name: string | null } | null
+  created_at: string
+}
+
+export type VotingCategory = 'poll' | 'region' | 'accommodation' | 'activity' | 'meal'
+export type VotingMode = 'score' | 'thumbs'
+
+export type CategorySetting = {
+  category: VotingCategory
+  voting_mode: VotingMode
+  existing_vote_count: number
+}
+
+export type AdminMember = {
+  user_id: string
+  username: string
+  first_name: string
+  last_name: string
+  display_name: string
+  initials: string
+  avatar_thumb_url: string | null
+  family: Family | null
+  family_role: FamilyRole | null
+  /** Three independent facts, not one enum — the two kinds of role are independent. */
+  is_owner: boolean
+  is_organiser: boolean
+  must_change_password: boolean
+  /** Null means never. */
+  last_login_at: string | null
+  created_at: string
+}
+
+export type Organiser = {
+  user_id: string
+  display_name: string
+  initials: string
+  avatar_thumb_url: string | null
+  family: Family | null
+  family_role: FamilyRole | null
+  granted_by: { user_id: string | null; display_name: string | null } | null
+  created_at: string
+}
+
+export type GoogleApiStatus =
+  | 'ok'
+  | 'denied'
+  | 'quota'
+  | 'unreachable'
+  | 'unchecked'
+  | 'configured'
+
+export type GoogleApiRow = {
+  name: string
+  key_type: 'browser' | 'server'
+  status: GoogleApiStatus
+  detail: string | null
+  hint: string | null
+}
+
+export type GoogleStatus = {
+  checked_at: string | null
+  checked_by: string | null
+  browser_key_configured: boolean
+  server_key_configured: boolean
+  apis: GoogleApiRow[]
+}
+
+export type Stats = {
+  families: number
+  members: number
+  invites_open: number
+  polls_open: number
+  polls_closed: number
+  suggestions_by_status: {
+    proposed: number
+    approved: number
+    scheduled: number
+    rejected: number
+  }
+  comments: number
+  itinerary_items: number
+  checkins: number
+  notifications_unread: number
+}

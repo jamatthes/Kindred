@@ -5,14 +5,17 @@
  */
 
 import { useId } from 'react'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react'
 import './ui.css'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost'
+  /** `danger` is for admin-destructive confirms only — it is not a colour choice. */
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   block?: boolean
   /** Shows an inline spinner and disables the button — for sub-second waits. */
   busy?: boolean
+  /** React 19 passes `ref` as an ordinary prop; declared so callers can focus a button. */
+  ref?: Ref<HTMLButtonElement>
 }
 
 export function Button({

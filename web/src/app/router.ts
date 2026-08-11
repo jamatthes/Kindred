@@ -23,6 +23,7 @@ export type AppRoute =
   | { name: 'home' }
   | { name: 'families'; familyId?: string }
   | { name: 'profile' }
+  | { name: 'admin' }
   | { name: 'join'; token: string }
   | { name: 'setup-family' }
   | { name: 'not-found'; path: string }
@@ -32,6 +33,10 @@ export function parsePath(path: string): AppRoute {
   if (parts.length === 0) return { name: 'home' }
   if (parts[0] === 'join' && parts[1]) return { name: 'join', token: parts.slice(1).join('/') }
   if (parts[0] === 'setup' && parts[1] === 'family') return { name: 'setup-family' }
+  // `/setup/trip` is a gate, not a place: it renders when the server says `setup_trip`, so
+  // there is nothing to match here. Reaching the URL with any other `next_step` gets that
+  // step's screen instead.
+  if (parts[0] === 'admin') return { name: 'admin' }
   if (parts[0] === 'families') return { name: 'families', familyId: parts[1] }
   if (parts[0] === 'profile') return { name: 'profile' }
   return { name: 'not-found', path }
@@ -45,6 +50,8 @@ export function pathFor(route: AppRoute): string {
       return route.familyId ? `/families/${route.familyId}` : '/families'
     case 'profile':
       return '/profile'
+    case 'admin':
+      return '/admin'
     case 'join':
       return `/join/${route.token}`
     case 'setup-family':
