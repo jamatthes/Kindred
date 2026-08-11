@@ -193,6 +193,30 @@ changed password.
 **Verify:** `cd server && pytest` is green; `cd web && npm test` is green. Tests make no
 network calls to Google, NOAA or any external host.
 
+## Requirement coverage (M0 close-out)
+
+Every requirement, and what proves it. "Manual" means there is no automated test and the
+listed step was actually run — those are the ones a future change can break silently, so
+prefer adding a test when you next touch them.
+
+| Req | Covered by |
+|---|---|
+| **F-1** one-command stack | Manual, Phase 8 Verify: clean `up --build` in a throwaway compose project — `/api/v1/health` 200 `db: ok`, SPA served, login forces the change, `/ws` upgrades 101, `down` && `up` preserves the changed password. `test_auth.py::test_settings_and_health_are_readable_logged_out` covers the health contract itself. Compose `depends_on: service_healthy` + the 60s connect retry in `app/core/migrations.py` cover "retries rather than crash-looping". |
+| **F-2** dev mode | Manual: `/docs` and `/openapi.json` both 200; `web/vite.config.ts` proxies `/api` and `/ws` to `KINDRED_API_PORT` (default 8010). Config defaults are exercised by every test that imports `app.core.config`. |
+| **F-3** log in | `test_auth.py`: success, wrong password and unknown user byte-identical, argon2 round-trip (`test_security.py`), per-username limit, **per-IP** limit, limit blocks even a correct password, success clears the counter. Error-beneath-the-field is `web/src/app/ui/useValidatedField.ts` (Phase 7, manual browser review). |
+| **F-4** stay logged in / log out | `test_auth.py`: `me` 401 without a session, logout revokes server-side, a replayed revoked cookie still fails, expired session behaves as no session. Web: `session.test.ts`, `routes.test.tsx` route to login on 401. |
+| **F-5** forced change | `test_seed.py` (seeded flags, idempotency, no undo of a change), `test_deps.py` (every non-auth route 403 `password_change_required`, auth/health still reachable), `test_auth.py` (flag cleared, other sessions revoked, min length, must differ), `test_ws.py` (socket refused 1008 while pending). Web: `routes.test.tsx` pins the user to the change screen. The matching-confirmation field is client-side (Phase 7, manual). |
+| **F-6** change own password | `test_auth.py`: wrong current password changes nothing, new must differ, other sessions revoked, old password stops working. |
+| **F-7** theme | `test_me.py`: defaults, PATCH persists, omitted fields untouched, unknown value 422, still writable in the End stage. Web: `theme.test.ts` (system resolution, `data-theme`, no-flash cache), `routes.test.tsx` (applies the server's theme, rolls back on failure). |
+| **F-8** live connection | `test_ws.py`: 1008 without a cookie / revoked / password pending, `hello`, `ping`→`pong`, idle close, broadcast delivery, registry cleanup. Web: `wsClient.test.ts` (backoff 1s→30s with jitter, indicator only after the second failure, `resync`, stops on 1008). Manual: 101 upgrade through Caddy in the Phase 8 Verify. |
+| **F-9** permission primitives | `test_deps.py`: allow **and** deny for `require_member`, `require_family_admin`, `require_main_admin`, `require_stage`, through `tests/probeapp.py`. |
+| **F-10** CSRF | `test_deps.py`: missing header, wrong token, matching token, GET exempt, login exempt. `test_auth.py`: login issues a fresh token, logout retires it. Web: `apiClient.test.ts` (echo on unsafe methods only, one retry after `csrf_invalid`, no retry loop). |
+| **F-11** app shell | `web/scripts/check-tokens.mjs` in `npm run verify` fails the build on a raw hex or off-scale px. Manual, Phase 7 browser review: nav rail / bottom tabs, bottom sheet, ≥44px targets, PWA manifest and icons. Manifest served with `no-cache` verified in the Phase 8 Verify. |
+| **F-12** platform settings | `test_seed.py` (the three keys seeded, a renamed instance is not reset), `test_auth.py::test_settings_and_health_are_readable_logged_out` (public subset only, logged out). |
+
+No test touches Google, NOAA or any external host: the ASGI transport talks to the app
+object in-process, and M0 ships no external service client at all.
+
 ## Hand-off notes for the next milestone
 
 - The DesignSync pass runs **after** this milestone and before any feature UI. It changes
