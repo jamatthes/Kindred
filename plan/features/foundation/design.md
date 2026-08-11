@@ -257,6 +257,16 @@ ephemeral; nothing is persisted.
 Broadcast helper exposed for features: `await ws.broadcast(trip_id, type, payload)` and
 `await ws.send_user(user_id, type, payload)`.
 
+> NOTE (implementation, Phase 6): two points this section left open.
+> **1.** A user with `must_change_password` is refused the socket, closed `1008`, like any
+> other non-exempt surface. `requirements.md` > Permissions lists "Open WebSocket `/ws`" in
+> the table its must-change-password rule applies to, and the exemptions are named there as
+> `health`, `auth/me`, `auth/logout` and `auth/password` only.
+> **2.** The REST presence snapshot is `GET /api/v1/presence` → `{online_user_ids: [...]}`,
+> in `routers/presence.py` (the tree above lists only auth/me/settings/health), guarded by
+> `require_member`. It reads the in-process registry and touches no table — presence is never
+> persisted.
+
 ## UI behaviour
 
 Per `plan/design-system.md`. Foundation builds the frame, not the content.
