@@ -14,7 +14,15 @@ What it makes, and why this shape:
   without anyone having to break something to see it;
 * an **organiser** who is only a plain member of their own family, because that is the case a
   demo built from heads alone would never show;
-* one outstanding invite of each kind, so the invite block is not empty.
+* one outstanding invite of each kind, so the invite block is not empty;
+* the **three worked-example polls** from `plan/features/polls/requirements.md`, with
+  partial votes — so review and the family demo meet the feature's own reference case
+  rather than an empty screen.
+
+The destination poll's numbers are chosen so the thing the feature exists to show is
+visible on first load: **Cornwall and the Lake District have the same average, and only
+the spread tells them apart.** Two people have not voted at all and one has voted
+partially, so the non-responder block and the nudge button are both live.
 
 Home addresses are set directly rather than through the endpoint: there is no Google key in
 development, and the point of the demo data is the *placed* state, not a live geocode.
@@ -37,10 +45,15 @@ from app.core.config import settings  # noqa: E402
 from app.core.db import SessionFactory, engine  # noqa: E402
 from app.core.security import hash_password, hash_token  # noqa: E402
 from app.models import (  # noqa: E402
+    Comment,
     Family,
     FamilyMember,
     Invite,
+    Poll,
+    PollOption,
+    PollScore,
     Trip,
+    TripCategorySetting,
     TripOrganiser,
     User,
     UserSettings,
@@ -63,6 +76,196 @@ async def _person(
     await db.flush()
     db.add(UserSettings(user_id=user.id, live_location_enabled=sharing))
     return user
+
+
+async def _seed_polls(db, trip, people: dict[str, User]) -> None:
+    """The three polls from the worked example (`plan/features/polls/requirements.md`).
+
+    Scores are partial on purpose. A demo in which everyone has voted hides the two things
+    reviewers most need to see: the non-responder block with a live Nudge button, and the
+    hatched "not scored yet" cells that prove a silence is not being counted as a zero.
+    """
+    # The `poll` category's mode governs every poll. Set explicitly so the demo does not
+    # depend on whatever admin-console last left it at.
+    mode = await db.scalar(
+        select(TripCategorySetting).where(
+            TripCategorySetting.trip_id == trip.id,
+            TripCategorySetting.category == "poll",
+        )
+    )
+    if mode is None:
+        db.add(TripCategorySetting(trip_id=trip.id, category="poll", voting_mode="score"))
+    else:
+        mode.voting_mode = "score"
+
+    owner = people["admin"]
+
+    # --- 1. Where shall we go? — the reference case ------------------------------------
+    destinations = Poll(
+        trip_id=trip.id,
+        title="Where shall we go?",
+        description=(
+            "Score every option from 1 (really rather not) to 10 (yes please). "
+            "Only scores people actually cast count towards the average."
+        ),
+        kind="score_matrix",
+        created_by=owner.id,
+        allow_member_options=True,
+    )
+    db.add(destinations)
+    await db.flush()
+
+    located = {
+        "York": (53.9600, -1.0873),
+        "Cornwall": (50.2660, -5.0527),
+        "Somerset": (51.1050, -2.9262),
+        "Lake District": (54.4609, -3.0886),
+        "Peak District": (53.3403, -1.8120),
+    }
+    options: dict[str, PollOption] = {}
+    for index, (label, (lat, lng)) in enumerate(located.items()):
+        option = PollOption(
+            poll_id=destinations.id,
+            label=label,
+            lat=lat,
+            lng=lng,
+            sort=index,
+            created_by=owner.id,
+        )
+        db.add(option)
+        options[label] = option
+    await db.flush()
+
+    # Five scorers. Cornwall and the Lake District both average 7.4; Cornwall's spread is
+    # 0.5 and the Lake District's is 3.2, so the split flag fires on exactly one of them.
+    voters = ["admin", "alex", "jibby", "jas", "stu"]
+    matrix = {
+        "York":          [5, 6, 5, 6, 5],
+        "Cornwall":      [7, 8, 7, 8, 7],
+        "Somerset":      [4, 5, 6, 4, 5],
+        "Lake District": [10, 10, 10, 3, 4],
+        "Peak District": [6, 7, 5, 6, 7],
+    }
+    for label, scores in matrix.items():
+        for username, score in zip(voters, scores, strict=True):
+            db.add(
+                PollScore(
+                    poll_id=destinations.id,
+                    option_id=options[label].id,
+                    user_id=people[username].id,
+                    score=score,
+                )
+            )
+
+    # One partial responder: Chris has an opinion about two places and not the rest, which
+    # is what makes "partly done" visible next to "not started".
+    for label, score in (("Cornwall", 9), ("York", 3)):
+        db.add(
+            PollScore(
+                poll_id=destinations.id,
+                option_id=options[label].id,
+                user_id=people["chris"].id,
+                score=score,
+            )
+        )
+    # Alicia and Luis have not started at all.
+
+    db.add(
+        Comment(
+            subject_type="poll",
+            subject_id=destinations.id,
+            author_id=people["jas"].id,
+            body="The Lake District average looks fine until you see the spread — half of us love it.",
+        )
+    )
+    db.add(
+        Comment(
+            subject_type="poll",
+            subject_id=destinations.id,
+            author_id=people["alex"].id,
+            body="Cornwall is the safe pick. Nobody scored it below 7.",
+        )
+    )
+
+    # --- 2. How long shall we go for? — a single-choice poll ----------------------------
+    duration = Poll(
+        trip_id=trip.id,
+        title="How long shall we go for?",
+        description="One choice each.",
+        kind="options",
+        created_by=owner.id,
+    )
+    db.add(duration)
+    await db.flush()
+    durations = {}
+    for index, label in enumerate(("5 days", "7 days", "10 days")):
+        option = PollOption(poll_id=duration.id, label=label, sort=index, created_by=owner.id)
+        db.add(option)
+        durations[label] = option
+    await db.flush()
+
+    # The presence of the row is the choice; the stored 10 is never displayed.
+    for username, label in (
+        ("admin", "7 days"),
+        ("alex", "7 days"),
+        ("jibby", "10 days"),
+        ("jas", "7 days"),
+        ("chris", "5 days"),
+    ):
+        db.add(
+            PollScore(
+                poll_id=duration.id,
+                option_id=durations[label].id,
+                user_id=people[username].id,
+                score=10,
+            )
+        )
+
+    # --- 3. What do we want to do? — decided, and closed --------------------------------
+    interests = Poll(
+        trip_id=trip.id,
+        title="What do we want to do?",
+        description="Scoring these shapes what people suggest on the map later.",
+        kind="score_matrix",
+        created_by=owner.id,
+    )
+    db.add(interests)
+    await db.flush()
+    activities = {}
+    for index, label in enumerate(
+        ("Beaches", "Hiking", "Historic houses", "Food and drink", "Kid-friendly days out")
+    ):
+        option = PollOption(poll_id=interests.id, label=label, sort=index, created_by=owner.id)
+        db.add(option)
+        activities[label] = option
+    await db.flush()
+
+    interest_matrix = {
+        "Beaches":              [9, 8, 9, 7, 8],
+        "Hiking":               [6, 9, 4, 8, 5],
+        "Historic houses":      [4, 3, 7, 5, 6],
+        "Food and drink":       [8, 9, 8, 9, 9],
+        "Kid-friendly days out": [7, 6, 8, 7, 7],
+    }
+    for label, scores in interest_matrix.items():
+        for username, score in zip(voters, scores, strict=True):
+            db.add(
+                PollScore(
+                    poll_id=interests.id,
+                    option_id=activities[label].id,
+                    user_id=people[username].id,
+                    score=score,
+                )
+            )
+
+    # Decided and closed, so the archive presentation and the decision banner are both on
+    # screen without anyone having to close a poll to see them.
+    interests.decision_option_id = activities["Food and drink"].id
+    interests.decided_by = owner.id
+    interests.decided_at = datetime.now(UTC)
+    interests.status = "closed"
+    interests.closed_by = owner.id
+    interests.closed_at = datetime.now(UTC)
 
 
 async def main() -> None:
@@ -177,6 +380,21 @@ async def main() -> None:
             )
         )
 
+        await _seed_polls(
+            db,
+            trip,
+            {
+                "admin": admin,
+                "alex": alex,
+                "chris": chris,
+                "jibby": jibby,
+                "jas": jas,
+                "alicia": alicia,
+                "luis": luis,
+                "stu": stu,
+            },
+        )
+
         await db.commit()
 
     await engine.dispose()
@@ -191,7 +409,12 @@ async def main() -> None:
         f"  plain member                : chris / {DEMO_PASSWORD}\n"
         f"  organiser (plain member)    : stu / {DEMO_PASSWORD}\n"
         "  join invite   : /join/demo-join-the-jiangs\n"
-        "  new-family    : /join/demo-new-family"
+        "  new-family    : /join/demo-new-family\n"
+        "\n"
+        "  Polls: 'Where shall we go?' (open, 5 scorers + 1 partial + 2 not started —\n"
+        "  Cornwall and the Lake District both average 7.4, only the spread tells them\n"
+        "  apart), 'How long shall we go for?' (single choice), and 'What do we want to\n"
+        "  do?' (decided: Food and drink, closed)."
     )
 
 

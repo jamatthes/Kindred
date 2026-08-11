@@ -19,7 +19,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import aliased, selectinload
 
 from app import ws
@@ -43,12 +43,16 @@ from app.core.sessions import revoke_user_sessions
 from app.core.wordlist import generate_temporary_password
 from app.models import (
     SETTING_INSTANCE_NAME,
+    SUBJECT_POLL,
     SETTING_INVITE_ONLY,
     SETTING_REGISTRATION_OPEN,
     VOTING_CATEGORIES,
+    Comment,
     Family,
     FamilyMember,
     Invite,
+    Poll,
+    PollScore,
     Trip,
     TripCategorySetting,
     TripOrganiser,
@@ -253,11 +257,22 @@ async def _ensure_category_rows(db: DbDep, trip: Trip) -> list[TripCategorySetti
 async def _existing_vote_count(db: DbDep, trip: Trip, category: str) -> int:
     """How many votes already exist in a category — the number AC-5's confirm names.
 
-    Every source table belongs to a feature that has not shipped: `poll_scores` arrives with
-    `polls` (M2) and `suggestion_votes` with `map-suggestions` (M3). Zero is the honest
-    answer until then, and it is returned rather than the endpoint erroring, so the console
-    works from M1 onward. Each feature replaces its own branch here as part of its tasks.
+    The `poll` branch is real from M2. `suggestion_votes` still belongs to `map-suggestions`
+    (M3) and reads zero until then — returned rather than erroring, so the console works, and
+    each feature replaces its own branch here as part of its tasks.
     """
+    if category == "poll":
+        # Votes across every poll on this trip. The confirm's promise is that switching the
+        # mode keeps them, so the number has to be the real one for the warning to mean
+        # anything.
+        return (
+            await db.scalar(
+                select(func.count())
+                .select_from(PollScore)
+                .join(Poll, Poll.id == PollScore.poll_id)
+                .where(Poll.trip_id == trip.id)
+            )
+        ) or 0
     return 0
 
 
@@ -1003,12 +1018,38 @@ async def read_stats(db: DbDep, trip: ActiveTrip) -> StatsOut:
         )
     )
 
+    async def _polls(status: str) -> int:
+        return (
+            await db.scalar(
+                select(func.count())
+                .select_from(Poll)
+                .where(Poll.trip_id == current.id, Poll.status == status)
+            )
+        ) or 0
+
+    # Comments are polymorphic and carry no trip_id, so they are counted through their
+    # subject. Polls is the only subject type that exists at M2; `map-suggestions` and
+    # `itinerary-timeline` each add their own branch here.
+    comments = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Comment)
+            .join(
+                Poll,
+                and_(Comment.subject_type == SUBJECT_POLL, Comment.subject_id == Poll.id),
+            )
+            .where(Poll.trip_id == current.id)
+        )
+    ) or 0
+
     return StatsOut(
         families=families or 0,
         members=members or 0,
         invites_open=invites_open or 0,
-        # polls_open / polls_closed        -> `polls` (M2)
-        # suggestions_by_status, comments  -> `map-suggestions` / `voting-comments` (M3)
+        polls_open=await _polls("open"),
+        polls_closed=await _polls("closed"),
+        comments=comments,
+        # suggestions_by_status            -> `map-suggestions` (M3)
         # itinerary_items                  -> `itinerary-timeline` (M4)
         # checkins                         -> `holiday-stage` (M5)
         # notifications_unread             -> `notifications` (M5)
