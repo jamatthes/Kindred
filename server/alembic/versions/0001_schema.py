@@ -18,7 +18,8 @@ justify, because that is the part worth preserving.
 Contents:
 
 * **Identity** — `users`, `user_settings`, `sessions`, `login_attempts`
-* **Trip + configuration** — `trips`, `settings`, `trip_organisers`
+* **Trip + configuration** — `trips`, `settings`, `trip_organisers`,
+  `trip_category_settings`, `trip_stage_transitions`
 * **Families** — `families`, `family_members`, `invites`
 * **Platform** — `attachments`
 
@@ -51,6 +52,18 @@ INVITE_MODES = ("join", "create_family")
 
 #: The design palette defines eight slots (`--family-1…8`).
 MAX_COLOR_SLOTS = 8
+
+#: `trip_category_settings.category`. Five fixed kinds of thing a group votes on; `poll`
+#: governs every poll, because the mode is per category rather than per poll
+#: (`plan/features/admin-console/requirements.md`, the NOTE on AC-5).
+VOTING_CATEGORIES = ("poll", "region", "accommodation", "activity", "meal")
+
+#: `trip_category_settings.voting_mode`.
+VOTING_MODES = ("score", "thumbs")
+
+#: `trip_stage_transitions.direction`. Stored rather than derived: reading a row should not
+#: require knowing the stage machine to tell a correction from a normal advance.
+STAGE_DIRECTIONS = ("forward", "backward")
 
 
 def _timestamps() -> list[sa.Column]:
@@ -93,6 +106,10 @@ def upgrade() -> None:
         sa.Column("theme_pref", sa.String(length=16), server_default="system", nullable=False),
         sa.Column("locale", sa.String(length=16), server_default="en-GB", nullable=False),
         sa.Column("is_platform_admin", sa.Boolean(), server_default="false", nullable=False),
+        # Null until the first successful login. `admin-console` AC-6 asks "has this person
+        # ever got in?", which `created_at` cannot answer — an invited account that was never
+        # used looks identical to one used daily without this.
+        sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
         *_timestamps(),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -228,6 +245,69 @@ def upgrade() -> None:
         sa.UniqueConstraint("trip_id", "user_id", name="uq_trip_organisers_trip_user"),
     )
     op.create_index("ix_trip_organisers_trip_id", "trip_organisers", ["trip_id"], unique=False)
+
+    # How each kind of thing is voted on. One row per (trip, category), all five seeded when
+    # the trip is created, so no read ever has to invent a default and no UI ever renders a
+    # blank control. `admin-console` owns the endpoints.
+    op.create_table(
+        "trip_category_settings",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("trip_id", sa.UUID(), nullable=False),
+        sa.Column("category", sa.String(length=32), nullable=False),
+        sa.Column("voting_mode", sa.String(length=16), nullable=False),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint(
+            "category IN " + str(VOTING_CATEGORIES),
+            name="ck_trip_category_settings_category",
+        ),
+        sa.CheckConstraint(
+            "voting_mode IN " + str(VOTING_MODES),
+            name="ck_trip_category_settings_voting_mode",
+        ),
+        # The rule that makes the self-healing read safe: a missing row can be inserted
+        # without risking a second one racing in beside it.
+        sa.UniqueConstraint(
+            "trip_id", "category", name="uq_trip_category_settings_trip_category"
+        ),
+    )
+    op.create_index(
+        "ix_trip_category_settings_trip_id", "trip_category_settings", ["trip_id"], unique=False
+    )
+
+    # The one audit trail in v1 (`admin-console` design.md > out of scope): who moved the
+    # trip between stages, when, and in which direction. Append-only — nothing updates or
+    # deletes a row here, which is why it has a `created_at` and no `updated_at`.
+    op.create_table(
+        "trip_stage_transitions",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("trip_id", sa.UUID(), nullable=False),
+        sa.Column("from_stage", sa.String(length=16), nullable=False),
+        sa.Column("to_stage", sa.String(length=16), nullable=False),
+        sa.Column("direction", sa.String(length=8), nullable=False),
+        # Nullable: removing an account must not delete the record that it changed the stage.
+        # The history is about the trip, not about the person still existing.
+        sa.Column("changed_by", sa.UUID(), nullable=True),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["changed_by"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint(
+            "direction IN " + str(STAGE_DIRECTIONS),
+            name="ck_trip_stage_transitions_direction",
+        ),
+    )
+    # The history is always read newest-first for one trip; this is that query.
+    op.create_index(
+        "ix_trip_stage_transitions_trip_created",
+        "trip_stage_transitions",
+        ["trip_id", "created_at"],
+        unique=False,
+    )
 
     # --- families ----------------------------------------------------------------------------
     op.create_table(
@@ -411,6 +491,12 @@ def downgrade() -> None:
     op.drop_index("uq_families_trip_name_lower", table_name="families")
     op.drop_index("ix_families_trip_id", table_name="families")
     op.drop_table("families")
+
+    op.drop_index("ix_trip_stage_transitions_trip_created", table_name="trip_stage_transitions")
+    op.drop_table("trip_stage_transitions")
+
+    op.drop_index("ix_trip_category_settings_trip_id", table_name="trip_category_settings")
+    op.drop_table("trip_category_settings")
 
     op.drop_index("ix_trip_organisers_trip_id", table_name="trip_organisers")
     op.drop_table("trip_organisers")

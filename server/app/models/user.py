@@ -10,9 +10,18 @@ from __future__ import annotations
 
 import uuid
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -64,6 +73,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     locale: Mapped[str] = mapped_column(String(16), nullable=False, server_default="en-GB")
     is_platform_admin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
+    )
+    #: Null until the first successful login. `admin-console` AC-6 asks whether a person has
+    #: ever got in, which `created_at` cannot answer: an invited account that was never used
+    #: looks identical to one used daily. Written by foundation's login route.
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     #: Eager, and with an explicit ``foreign_keys``: `attachments` points back at `users`

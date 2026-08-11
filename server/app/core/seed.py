@@ -19,11 +19,13 @@ from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.security import hash_password
 from app.models import (
+    DEFAULT_VOTING_MODES,
     SETTING_INSTANCE_NAME,
     SETTING_INVITE_ONLY,
     SETTING_REGISTRATION_OPEN,
     Setting,
     Trip,
+    TripCategorySetting,
     User,
     UserSettings,
 )
@@ -37,7 +39,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     SETTING_INVITE_ONLY: True,
 }
 
-DEFAULT_TRIP_NAME = "Our trip"
+#: Deliberately empty. `Trip.setup_complete` is false while the name is blank, which is what
+#: sends the owner to the AC-0 setup screen on first login. Seeding a placeholder like "Our
+#: trip" would let the gate be skipped silently and leave the placeholder in the app header
+#: for everyone — a name nobody chose, on every screen.
+DEFAULT_TRIP_NAME = ""
 
 
 async def _seed_admin(db: AsyncSession) -> User | None:
@@ -81,12 +87,36 @@ async def _seed_trip(db: AsyncSession, owner: User | None) -> Trip | None:
         name=DEFAULT_TRIP_NAME,
         stage="planning",
         owner_user_id=owner.id if owner else None,
-        timezone=settings.tz,
+        # The container's TZ, which gives the setup screen a sensible default without
+        # satisfying `setup_complete` on its own: a timezone has a defensible default and a
+        # trip's name does not.
+        timezone=settings.tz or "UTC",
     )
     db.add(trip)
     await db.flush()
-    logger.info("Seeded trip %r in stage 'planning'.", trip.name)
+    await seed_category_settings(db, trip)
+    logger.info(
+        "Seeded an unnamed trip in stage 'planning' — the owner names it on first login."
+    )
     return trip
+
+
+async def seed_category_settings(db: AsyncSession, trip: Trip) -> None:
+    """Give a trip all five voting-mode rows.
+
+    Called at trip creation so no read ever has to invent a default and no voting UI ever
+    renders a blank control (`admin-console` AC-5). ``ON CONFLICT DO NOTHING`` makes it safe
+    to call on a trip that already has some or all of them, which is what the console's
+    self-healing read relies on.
+    """
+    for category, mode in DEFAULT_VOTING_MODES.items():
+        await db.execute(
+            pg_insert(TripCategorySetting)
+            .values(trip_id=trip.id, category=category, voting_mode=mode)
+            .on_conflict_do_nothing(
+                index_elements=[TripCategorySetting.trip_id, TripCategorySetting.category]
+            )
+        )
 
 
 async def _seed_settings(db: AsyncSession) -> None:

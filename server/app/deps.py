@@ -31,6 +31,7 @@ from app.models import (
     Trip,
     TripOrganiser,
     User,
+    is_owner_of,
 )
 from app.schemas.common import ApiError, forbidden, not_authenticated
 from app.schemas.family import Viewer, viewer_from
@@ -155,7 +156,7 @@ async def is_owner(user: User, trip: Trip | None) -> bool:
     satisfies every trip-level check. That is a property of the *installation*, not of the
     role hierarchy, which is why it sits here rather than in `trip_organisers`.
     """
-    return user.is_platform_admin or (trip is not None and trip.owner_user_id == user.id)
+    return is_owner_of(trip, user)
 
 
 async def is_organiser(db: AsyncSession, user: User, trip: Trip | None) -> bool:

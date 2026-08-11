@@ -214,6 +214,7 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
   usePresence(Boolean(user))
 
   const stage = user?.trip?.stage ?? 'planning'
+  const canSeeAdmin = Boolean(user?.is_owner || user?.is_organiser)
   const online = socketStatus === 'open'
 
   return (
@@ -239,14 +240,21 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
           </button>
         ))}
         <div className="rail__spacer" />
-        <button
-          type="button"
-          className="rail__btn"
-          disabled
-          title="Admin console — arrives with the admin-console feature"
-        >
-          <Icon name="admin" />
-        </button>
+        {/* AC-1: the entry exists for the owner and for organisers, and for nobody else.
+            Hiding it is a courtesy — every endpoint behind it is guarded server-side, and
+            someone typing the URL gets the access screen rather than a broken page. */}
+        {canSeeAdmin ? (
+          <button
+            type="button"
+            className={`rail__btn${activeNav === 'admin' ? ' is-active' : ''}`}
+            aria-label="Admin console"
+            aria-current={activeNav === 'admin' ? 'page' : undefined}
+            title="Admin console"
+            onClick={() => navigate({ name: 'admin' })}
+          >
+            <Icon name="admin" />
+          </button>
+        ) : null}
         <button
           type="button"
           className="rail__btn"
@@ -336,8 +344,28 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
               {item.label}
             </button>
           ))}
+          {canSeeAdmin ? (
+            <button
+              type="button"
+              className={`tabbar__tab${activeNav === 'admin' ? ' is-active' : ''}`}
+              aria-current={activeNav === 'admin' ? 'page' : undefined}
+              title="Admin console"
+              onClick={() => navigate({ name: 'admin' })}
+            >
+              <Icon name="admin" />
+              Admin
+            </button>
+          ) : null}
         </nav>
       </div>
+
+      {stage === 'end' ? (
+        // Persistent, not a toast: this is information that has to stay visible, and the
+        // controls it explains the absence of are gone for as long as it is here.
+        <div className="archive-banner" role="status">
+          This trip has finished — everything is read-only.
+        </div>
+      ) : null}
 
       {socketStatus === 'reconnecting' ? (
         <div className="reconnecting" role="status">

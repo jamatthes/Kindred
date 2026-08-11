@@ -39,6 +39,14 @@
 }
 .k-btn--secondary:hover:not([disabled]) { background: var(--color-surface-sunken); }
 
+.k-btn--danger {
+  background: var(--color-danger);
+  color: var(--color-text-on-status);
+}
+.k-btn--danger:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--color-danger) 85%, var(--color-text));
+}
+
 .k-btn--ghost { background: transparent; color: var(--color-text-muted); }
 .k-btn--ghost:hover:not([disabled]) { background: var(--color-surface-sunken); }
 

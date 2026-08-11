@@ -37,6 +37,10 @@
   --tabbar-height: 64px;
   --breakpoint-mobile: 768px;
   --topbar-search-width: 320px;
+  /* Admin console: the stage stepper's three columns and the stats grid's cells. Both are
+     "as many as fit, at least this wide", which is a component decision, not a spacing one. */
+  --stage-step-min: 180px;
+  --stat-cell-min: 160px;
   /* Comfortable measures: one column of prose, and one column of card. */
   --reading-measure: 720px;
   --card-measure-sm: 420px;

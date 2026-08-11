@@ -21,7 +21,7 @@ const required = (label: string) => (value: string) =>
   value.trim().length === 0 ? `${label} is required.` : null
 
 export default function LoginScreen() {
-  const { login } = useSession()
+  const { login, signedOutReason } = useSession()
   const [instance, setInstance] = useState<InstanceSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -76,6 +76,10 @@ export default function LoginScreen() {
         <p className="auth-sub">Sign in to plan the trip.</p>
 
         {error ? <Banner tone="error">{error}</Banner> : null}
+        {/* Why they are looking at this screen, when they did not choose to be. */}
+        {error === null && signedOutReason ? (
+          <Banner tone="info">{signedOutReason}</Banner>
+        ) : null}
 
         <TextField
           label="Username"

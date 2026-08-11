@@ -1,0 +1,103 @@
+/* The shared table pattern. Token-only; density comes from the spacing scale. */
+
+.dt {
+  /* The table scrolls inside its own container — the page never scrolls sideways. */
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-surface);
+}
+
+.dt__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+}
+
+.dt__caption {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dt__table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-surface-raised);
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0;
+}
+
+.dt__table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.dt__table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Sticky first column: the name is the thing you scroll sideways to keep. */
+.dt__sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-surface);
+}
+.dt__table th.dt__sticky-col {
+  z-index: 3;
+  background: var(--color-surface-raised);
+}
+
+.dt__numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dt__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: var(--hit-target);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: inherit;
+}
+.dt__sort:hover {
+  background: var(--color-surface-sunken);
+}
+
+.dt__arrow {
+  color: var(--color-text-faint);
+}
+
+.dt__row--clickable {
+  cursor: pointer;
+}
+.dt__row--clickable:hover td {
+  background: var(--color-surface-sunken);
+}
+
+.dt__empty {
+  padding: var(--space-4) var(--space-3);
+  color: var(--color-text-faint);
+  text-align: center;
+}
