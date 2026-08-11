@@ -64,7 +64,21 @@ family, and it must disappear along with the membership when they leave.
 > multi-trip support arrives, this becomes `(user_id, trip_id)` via `family_members.trip_id`
 > or a join through `families.trip_id` — flagged here so the change is a known one.
 
-### `invites` (exists)
+### `invites` (created here — see NOTE)
+
+> NOTE (implementation, Phase 1): `invites` and `attachments` are **created** by migration
+> `0002`, not altered. `plan/architecture.md` lists both in the schema, but foundation's
+> `0001` created only the tables it actually used, so neither existed. Consequences: the
+> columns `tasks.md` says to "add" to `invites` are part of the create, and there is no
+> plaintext `token` column to replace — the table is born storing only `token_hash`.
+> `attachments` is created with the columns `architecture.md` names plus `thumb_path` and
+> `byte_size`: avatars emit two renditions (256px and 64px) and `MemberOut` exposes both as
+> `avatar_url` and `avatar_thumb_url`, so the small one needs somewhere to live.
+
+> NOTE (implementation, Phase 1): `families.color` is **NOT NULL**. `0001` created it
+> nullable; a family with no colour slot cannot be drawn on the map or in any list, and the
+> `(trip_id, color)` unique index would not constrain nulls in any case. The table is empty
+> when `0002` runs — foundation seeds no family — so there is nothing to backfill.
 
 `family_id` (nullable — null means the invite creates a new family), `token`, `expires_at`,
 `created_by`, `used_by` (nullable).
