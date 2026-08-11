@@ -69,6 +69,18 @@ describe('light-theme token contrast (design-system contrast fixes)', () => {
   })
 })
 
+// Same regression guard as above, for the dark-theme AA failure the readout found next:
+// --color-danger (--red-400) on --color-danger-soft was 4.48:1. Literals mirror the
+// current dark-theme values in tokens.semantic.css / tokens.primitives.css — update both
+// together if either changes.
+describe('dark-theme token contrast (design-system contrast fixes)', () => {
+  it('--color-danger on --color-danger-soft clears AA', () => {
+    const ratio = contrastRatio('#E5786D', '#422A28') // token-check-ignore
+    expect(ratio).not.toBeNull()
+    expect(ratio!).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
 describe('aaLevel', () => {
   it('passes AA at 4.5:1 or above', () => {
     expect(aaLevel(4.5)).toBe('AA')

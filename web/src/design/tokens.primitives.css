@@ -48,7 +48,11 @@
   --amber-600: #B05109;
   --amber-400: #D9A441;
   --red-500: #B91C1C;
-  --red-400: #E5766B;
+  /* AA step for the dark theme's --color-danger, its only consumer. #E5786D on the dark
+     --color-danger-soft (#422A28) is 4.54:1; the previous #E5766B was 4.48:1. Same
+     hue/saturation, lightness lifted 0.4pt — the dark-theme counterpart of the
+     --green-600/--amber-600/--blue-600 light-theme steps above. */
+  --red-400: #E5786D;
   --blue-500: #2563EB;
   /* Same AA-on-soft-tint step as --green-600/--amber-600. Kept separate from --blue-500
      because that primitive is also --color-focus-ring's source, which this fix must not
