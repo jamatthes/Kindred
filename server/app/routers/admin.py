@@ -19,7 +19,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import aliased, selectinload
 
 from app import ws
@@ -34,14 +34,21 @@ from app.deps import (
     require_owner,
     require_stage,
 )
+from app.core import ratelimit
+from app.core.config import settings
 from app.core.security import hash_password
 from app.core.seed import seed_category_settings
+from app.core.settings_store import get_setting, set_setting
 from app.core.sessions import revoke_user_sessions
 from app.core.wordlist import generate_temporary_password
 from app.models import (
+    SETTING_INSTANCE_NAME,
+    SETTING_INVITE_ONLY,
+    SETTING_REGISTRATION_OPEN,
     VOTING_CATEGORIES,
     Family,
     FamilyMember,
+    Invite,
     Trip,
     TripCategorySetting,
     TripOrganiser,
@@ -52,24 +59,35 @@ from app.routers.families import (
     reject_leaving_the_family_headless,
     reject_touching_the_owner,
 )
+from app.services.google import (
+    ERROR_NO_API_KEY,
+    PROBE_HINTS,
+    ProbeProtocol,
+    get_probe,
+)
 from app.schemas.admin import (
     AdminMemberOut,
+    ApiStatusOut,
     CategorySettingOut,
     CategorySettingPublicOut,
     CategorySettingsPutIn,
     OrganiserActorOut,
     OrganiserGrantIn,
     OrganiserOut,
+    GoogleStatusOut,
+    InstanceSettingsIn,
+    InstanceSettingsOut,
     OverviewOut,
     ResetPasswordIn,
     ResetPasswordOut,
+    StatsOut,
     StageActorOut,
     StageTransitionOut,
     TripAdminOut,
     TripPatchIn,
     trip_admin_out,
 )
-from app.schemas.common import ApiError
+from app.schemas.common import CODE_RATE_LIMITED, ApiError
 from app.schemas.family import attachment_url, family_out, initials
 
 router = APIRouter(
@@ -763,3 +781,235 @@ async def demote_organiser(
     # open console tab go away live rather than on their next 403.
     await ws.broadcast(current.id, "organiser.demoted", {"user_id": str(user_id)})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Section 5: instance settings --------------------------------------------------------------
+
+
+#: `settings` keys this feature owns. The public read (`GET /settings`) exposes the same three
+#: without a session; this is the editor.
+async def _instance_settings(db: DbDep) -> InstanceSettingsOut:
+    return InstanceSettingsOut(
+        instance_name=str(await get_setting(db, SETTING_INSTANCE_NAME, "Kindred")),
+        registration_open=bool(await get_setting(db, SETTING_REGISTRATION_OPEN, False)),
+        invite_only=bool(await get_setting(db, SETTING_INVITE_ONLY, True)),
+    )
+
+
+@router.get("/settings", response_model=InstanceSettingsOut, summary="Instance settings")
+async def read_instance_settings(db: DbDep) -> InstanceSettingsOut:
+    """Readable by any organiser; writing is the owner's (see below)."""
+    return await _instance_settings(db)
+
+
+@router.patch(
+    "/settings",
+    response_model=InstanceSettingsOut,
+    summary="Edit instance settings",
+    dependencies=[Depends(require_owner)],
+)
+async def patch_instance_settings(
+    payload: InstanceSettingsIn, db: DbDep
+) -> InstanceSettingsOut:
+    """Owner only (ruling, 2026-08-11).
+
+    These are platform-level values, not trip data: the instance name is what the login
+    screen shows before anyone has a trip, and the registration policy decides who can exist
+    at all. That sits outside the cross-family *trip* powers an organiser holds, so the
+    console renders this section read-only for them with an explanatory caption.
+
+    No stage guard, for the same reason: an archived trip does not make the instance
+    unnameable.
+    """
+    changes = payload.model_dump(exclude_unset=True)
+
+    if changes.get("invite_only") is False:
+        # The field exists so the policy can widen later without a migration; the widening
+        # itself is not built, and pretending otherwise would leave an instance believing it
+        # accepts open registration when nothing implements it.
+        raise ApiError(
+            422,
+            "not_implemented",
+            "Open registration is not available in this version.",
+        )
+
+    for key, value in changes.items():
+        await set_setting(db, key, value)
+    await db.commit()
+    return await _instance_settings(db)
+
+
+# --- Section 6: Google API status ----------------------------------------------------------------
+
+
+#: The `settings` key holding the last probe result. A singleton blob, which is what
+#: `settings` is for.
+SETTING_GOOGLE_STATUS = "google_api_status"
+
+#: Rate-limit bucket for the probe. A fixed string rather than a username: the limit is one
+#: press per minute **per instance**, not per admin, because the cost it protects is Google's
+#: bill and that is shared.
+PROBE_RATE_KEY = "__google_probe__"
+PROBE_RATE_LIMIT = 1
+
+#: Display order and labels. Maps JS is first because it is the one a user notices missing.
+PROBE_LABELS: list[tuple[str, str, str]] = [
+    ("maps_js", "Maps JavaScript", "browser"),
+    ("places", "Places", "server"),
+    ("geocoding", "Geocoding", "server"),
+    ("distance_matrix", "Distance Matrix", "server"),
+    ("directions", "Directions", "server"),
+]
+
+
+def _google_status_out(blob: dict | None) -> GoogleStatusOut:
+    """Render the stored blob, or the never-checked state.
+
+    A corrupt or absent value is treated as "never checked" rather than as an error: the
+    section's job is to tell an admin what is working, and failing to render because a
+    previous result was malformed would be the least useful possible response.
+    """
+    stored = blob if isinstance(blob, dict) else {}
+    apis_blob = stored.get("apis") if isinstance(stored.get("apis"), dict) else {}
+
+    browser_key = bool(settings.google_maps_browser_key.strip())
+    server_key = bool(settings.google_maps_server_key.strip())
+
+    apis: list[ApiStatusOut] = []
+    for key, label, key_type in PROBE_LABELS:
+        if key == "maps_js":
+            # Not probed, and said so plainly: it is a browser-side loader restricted by HTTP
+            # referrer, and no server-side request can tell you whether it works.
+            apis.append(
+                ApiStatusOut(
+                    name=label,
+                    key_type="browser",
+                    status="configured" if browser_key else "unchecked",
+                    detail=None if browser_key else ERROR_NO_API_KEY,
+                    hint=None
+                    if browser_key
+                    else PROBE_HINTS.get(ERROR_NO_API_KEY),
+                )
+            )
+            continue
+
+        entry = apis_blob.get(key) if isinstance(apis_blob.get(key), dict) else {}
+        status_value = entry.get("status")
+        detail = entry.get("detail")
+        if status_value not in ("ok", "denied", "quota", "unreachable", "unchecked"):
+            status_value = "unchecked"
+            detail = None if server_key else ERROR_NO_API_KEY
+        apis.append(
+            ApiStatusOut(
+                name=label,
+                key_type=key_type,
+                status=status_value,
+                detail=detail,
+                hint=PROBE_HINTS.get(detail or "") or PROBE_HINTS.get(status_value),
+            )
+        )
+
+    checked_at = stored.get("checked_at")
+    return GoogleStatusOut(
+        checked_at=checked_at,
+        checked_by=stored.get("checked_by"),
+        browser_key_configured=browser_key,
+        server_key_configured=server_key,
+        apis=apis,
+    )
+
+
+@router.get(
+    "/google-status", response_model=GoogleStatusOut, summary="The last Google API check"
+)
+async def read_google_status(db: DbDep) -> GoogleStatusOut:
+    """Reads the stored result and makes **no** external call.
+
+    That is the whole point of storing it: the section is useful on every page load without
+    spending an API call, and the only thing that spends one is the button below.
+    """
+    return _google_status_out(await get_setting(db, SETTING_GOOGLE_STATUS, None))
+
+
+@router.post(
+    "/google-status/check",
+    response_model=GoogleStatusOut,
+    summary="Run the Google API check (makes real API calls)",
+)
+async def run_google_check(
+    db: DbDep, user: CurrentUser, probe: ProbeProtocol = Depends(get_probe)
+) -> GoogleStatusOut:
+    """AC-10. The one deliberate call to Google outside a caching path, behind a button.
+
+    Rate-limited to one press a minute for the whole instance, reusing foundation's limiter
+    with a fixed key: the cost being protected is the project's Google bill, which is shared,
+    so a per-admin limit would multiply by the number of admins.
+    """
+    if await ratelimit.count_recent_failures(db, username=PROBE_RATE_KEY) >= PROBE_RATE_LIMIT:
+        raise ApiError(
+            429,
+            CODE_RATE_LIMITED,
+            "The check can run once a minute. Try again shortly.",
+            headers={"Retry-After": str(ratelimit.retry_after_seconds())},
+        )
+    # Recorded as a "failure" because that is the column the limiter counts; the row means
+    # "a press happened", not "a press went wrong".
+    await ratelimit.record_attempt(db, username=PROBE_RATE_KEY, ip=None, succeeded=False)
+
+    results = await probe.probe()
+    blob = {
+        "checked_at": datetime.now(UTC).isoformat(),
+        "checked_by": str(user.id),
+        "apis": {
+            name: {"status": result.status, "detail": result.detail}
+            for name, result in results.items()
+        },
+    }
+    await set_setting(db, SETTING_GOOGLE_STATUS, blob)
+    await db.commit()
+    return _google_status_out(blob)
+
+
+# --- Section 7: stats ----------------------------------------------------------------------------
+
+
+@router.get("/stats", response_model=StatsOut, summary="Counts for this trip")
+async def read_stats(db: DbDep, trip: ActiveTrip) -> StatsOut:
+    """AC-11. One trip-scoped count per metric.
+
+    Metrics whose feature has not shipped read zero rather than erroring, so the console
+    works from M1 onward. Each is named with the feature that will replace it — the stub is
+    a to-do with an owner, not a permanent lie.
+    """
+    current = _require_trip(trip)
+
+    families = await db.scalar(
+        select(func.count()).select_from(Family).where(Family.trip_id == current.id)
+    )
+    members = await db.scalar(
+        select(func.count())
+        .select_from(FamilyMember)
+        .join(Family, Family.id == FamilyMember.family_id)
+        .where(Family.trip_id == current.id)
+    )
+    invites_open = await db.scalar(
+        select(func.count())
+        .select_from(Invite)
+        .where(
+            Invite.trip_id == current.id,
+            Invite.used_by.is_(None),
+            Invite.revoked_at.is_(None),
+            Invite.expires_at > datetime.now(UTC),
+        )
+    )
+
+    return StatsOut(
+        families=families or 0,
+        members=members or 0,
+        invites_open=invites_open or 0,
+        # polls_open / polls_closed        -> `polls` (M2)
+        # suggestions_by_status, comments  -> `map-suggestions` / `voting-comments` (M3)
+        # itinerary_items                  -> `itinerary-timeline` (M4)
+        # checkins                         -> `holiday-stage` (M5)
+        # notifications_unread             -> `notifications` (M5)
+    )

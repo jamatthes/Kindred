@@ -48,6 +48,10 @@ LOCALITY_COMPONENTS = ("postal_town", "locality", "administrative_area_level_2")
 
 GeocodeStatus = Literal["ok", "not_found", "error"]
 
+#: What the admin console's API health probe can report (AC-10). `unchecked` covers both
+#: "never run" and "no key configured"; the detail says which.
+ProbeStatus = Literal["ok", "denied", "quota", "unreachable", "unchecked"]
+
 #: `geocode_error` when no server key is configured. Setting one up is an admin task, so the
 #: family's address still saves and the main admin's console is where the fix is offered.
 ERROR_NO_API_KEY = "no_api_key"
@@ -223,3 +227,143 @@ class FakeGeocoder:
 def get_geocoder() -> GeocoderProtocol:
     """FastAPI dependency. Overridden with :class:`FakeGeocoder` in tests."""
     return Geocoder()
+
+
+# --- the admin console's API health probe (AC-10) ---------------------------------------------
+
+#: The four server-key APIs, each probed with the cheapest request that still proves the key
+#: is accepted and the API is enabled. Fixed inputs, so a probe costs the same every time and
+#: cannot be turned into a lookup service.
+PROBE_URLS: dict[str, tuple[str, dict[str, str]]] = {
+    "geocoding": (GEOCODE_URL, {"address": "10 Downing Street, London"}),
+    "distance_matrix": (
+        "https://maps.googleapis.com/maps/api/distancematrix/json",
+        {"origins": "51.5074,-0.1278", "destinations": "50.2660,-5.0527"},
+    ),
+    "directions": (
+        "https://maps.googleapis.com/maps/api/directions/json",
+        {"origin": "51.5074,-0.1278", "destination": "50.2660,-5.0527"},
+    ),
+    "places": (
+        "https://maps.googleapis.com/maps/api/place/details/json",
+        # A stable, well-known place id, and only the cheapest field.
+        {"place_id": "ChIJdd4hrwug2EcRmSrV3Vo6llI", "fields": "name"},
+    ),
+}
+
+#: Google's own status strings, mapped onto the five the console shows. `ZERO_RESULTS` is a
+#: working API that found nothing, which is a successful probe: the question is whether the
+#: key is accepted, not whether Downing Street exists.
+PROBE_STATUS_MAP: dict[str, ProbeStatus] = {
+    "OK": "ok",
+    "ZERO_RESULTS": "ok",
+    "REQUEST_DENIED": "denied",
+    "OVER_QUERY_LIMIT": "quota",
+    "OVER_DAILY_LIMIT": "quota",
+}
+
+#: The "usual cause" line shown inline under a failing row. Written once, server-side, so the
+#: explanation of a `denied` is the same wherever it appears.
+PROBE_HINTS: dict[str, str] = {
+    "denied": (
+        "The API may not be enabled in your Google Cloud project, or the key restriction "
+        "may exclude this server's IP."
+    ),
+    "quota": "The daily cap has been reached. Check the quota limits in Cloud Console.",
+    "unreachable": "The server could not reach Google. Check the container's network access.",
+    ERROR_NO_API_KEY: "No key is configured in `.env`.",
+}
+
+PROBE_TIMEOUT_SECONDS = 5.0
+
+
+@dataclass(frozen=True)
+class ProbeResult:
+    """One API's answer. `detail` is Google's own status string where there is one, so a
+    surprising failure can be looked up rather than guessed at."""
+
+    status: ProbeStatus
+    detail: str | None = None
+
+    @property
+    def hint(self) -> str | None:
+        return PROBE_HINTS.get(self.detail or "") or PROBE_HINTS.get(self.status)
+
+
+class ProbeProtocol(Protocol):
+    async def probe(self) -> dict[str, ProbeResult]:  # pragma: no cover - protocol
+        ...
+
+
+class GoogleProbe:
+    """The real prober. Four requests, five seconds each, no retries.
+
+    This is the one place in the product that calls Google outside a caching path, and it is
+    behind an explicit button press for exactly that reason (`plan/architecture.md`'s cost
+    rules; AC-10's NOTE). It is rate-limited to one press a minute by the router.
+    """
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = (
+            api_key if api_key is not None else settings.google_maps_server_key
+        )
+
+    async def probe(self) -> dict[str, ProbeResult]:
+        if not self._api_key.strip():
+            # No key, no calls. An unconfigured instance must not spend twenty seconds
+            # discovering that it is unconfigured.
+            return {
+                name: ProbeResult("unchecked", ERROR_NO_API_KEY) for name in PROBE_URLS
+            }
+
+        results: dict[str, ProbeResult] = {}
+        async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS) as client:
+            for name, (url, params) in PROBE_URLS.items():
+                # Each API is classified independently: one failure never masks another's
+                # success, and the whole press stays bounded at four × five seconds.
+                results[name] = await self._probe_one(client, url, params)
+        return results
+
+    async def _probe_one(
+        self, client: httpx.AsyncClient, url: str, params: dict[str, str]
+    ) -> ProbeResult:
+        try:
+            response = await client.get(url, params={**params, "key": self._api_key})
+        except httpx.TimeoutException:
+            return ProbeResult("unreachable", ERROR_TIMEOUT)
+        except httpx.HTTPError:
+            return ProbeResult("unreachable", ERROR_TRANSPORT)
+
+        if response.status_code != 200:
+            return ProbeResult("unreachable", f"http_{response.status_code}")
+
+        try:
+            payload = response.json()
+        except ValueError:
+            return ProbeResult("unreachable", "bad_response")
+
+        google_status = str(payload.get("status", "")) or "UNKNOWN"
+        # Classified from the status field rather than the payload: whether the key works is
+        # a different question from whether the answer was useful.
+        return ProbeResult(
+            PROBE_STATUS_MAP.get(google_status, "unreachable"), google_status
+        )
+
+
+@dataclass
+class FakeProbe:
+    """The test double. Returns whatever it was told to, and touches no network."""
+
+    results: dict[str, ProbeResult] = field(default_factory=dict)
+    calls: int = 0
+
+    async def probe(self) -> dict[str, ProbeResult]:
+        self.calls += 1
+        return self.results or {
+            name: ProbeResult("unchecked", ERROR_NO_API_KEY) for name in PROBE_URLS
+        }
+
+
+def get_probe() -> ProbeProtocol:
+    """FastAPI dependency. Overridden with :class:`FakeProbe` in tests."""
+    return GoogleProbe()
