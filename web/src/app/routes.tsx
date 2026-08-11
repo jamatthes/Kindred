@@ -26,6 +26,7 @@ import { FamilySetupScreen } from '../features/families/FamilySetupScreen'
 import { JoinScreen } from '../features/families/JoinScreen'
 import { ProfileScreen } from '../features/families/ProfileScreen'
 import { Home } from '../features/home/Home'
+import { Styleguide } from '../charts/Styleguide'
 
 /** Structural load: the shell's shape, not a spinner. */
 function ShellSkeleton() {
@@ -132,6 +133,11 @@ export function Routes() {
     case 'setup-family':
       return <FamilySetupScreen />
     case 'app':
+      // Internal, unlinked gallery (DS-13) — behind the authenticated branch, gated by
+      // path rather than a router entry (it is a developer surface, not a destination).
+      if (window.location.pathname === '/styleguide') {
+        return <Styleguide />
+      }
       return <AppRoutes />
   }
 }

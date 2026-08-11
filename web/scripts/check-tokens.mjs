@@ -6,7 +6,7 @@
  * the mechanical guard that stops Kindred repeating it, and it runs in CI rather than
  * relying on review to notice.
  *
- * Scope: `src/app/**` and `src/features/**` — the places components live. `src/design/**`
+ * Scope: `src/app/**`, `src/features/**` and `src/charts/**` — the places components live. `src/design/**`
  * is deliberately exempt: it is where literal values are *supposed* to be declared, and
  * `scripts/` is the generated-asset path documented in the PWA design.
  *
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const WEB_DIR = resolve(here, '..')
-const SCANNED = ['src/app', 'src/features']
+const SCANNED = ['src/app', 'src/features', 'src/charts']
 const EXTENSIONS = new Set(['.css', '.ts', '.tsx'])
 
 /**

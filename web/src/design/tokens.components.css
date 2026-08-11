@@ -8,6 +8,8 @@
    ========================================================================== */
 
 :root {
+  /* chart gallery: minimum card width before the grid wraps */
+  --chart-card-min-w: 300px;
   --button-radius: var(--radius-2);
   --button-height: 40px;
   --button-height-mobile: var(--hit-target);
