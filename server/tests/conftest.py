@@ -79,6 +79,7 @@ from app.core.sessions import create_session  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Base, Family, FamilyMember, Trip, User, UserSettings  # noqa: E402
 from app.routers.auth import CSRF_COOKIE_NAME  # noqa: E402
+from app.services.google import FakeGeocoder, get_geocoder  # noqa: E402
 
 #: Every table the suite truncates between tests.
 _ALL_TABLES = ", ".join(f'"{name}"' for name in Base.metadata.tables)
@@ -160,7 +161,22 @@ async def db() -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[httpx.AsyncClient]:
+def geocoder() -> Iterator[FakeGeocoder]:
+    """The geocoder every test runs against — installed for the whole test, always.
+
+    Autouse-adjacent by design: the override is applied by the `client` fixture below, so a
+    test that never mentions this fixture still cannot reach Google. `CLAUDE.md` requires the
+    suite never to touch the network, and a rule that depends on each test opting in is a
+    rule that will eventually be missed.
+    """
+    fake = FakeGeocoder()
+    app.dependency_overrides[get_geocoder] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_geocoder, None)
+
+
+@pytest.fixture
+async def client(geocoder: FakeGeocoder) -> AsyncIterator[httpx.AsyncClient]:
     """An ASGI client against the real app. `https` so `Secure` cookies are stored."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as c:

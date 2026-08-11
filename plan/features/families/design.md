@@ -404,6 +404,18 @@ async def geocode(address: str) -> GeocodeResult | None
 GeocodeResult = {lat, lng, formatted_address, locality}
 ```
 
+> NOTE (implementation, Phase 4): the return type is `GeocodeOutcome`
+> (`{status: "ok"|"not_found"|"error", result: GeocodeResult|None, error: str|None}`), not
+> `GeocodeResult | None`. The sketched signature cannot carry the third outcome this same
+> section requires: `None` would have to mean both "this is not a place" (`not_found` — check
+> what you typed) and "we could not reach Google" (`error` — retry later), which have
+> different copy, different retry semantics and different rows in the edge-case table.
+> `GeocodeResult` itself is unchanged. Google's own statuses map as: `OK` → `ok`,
+> `ZERO_RESULTS` → `not_found`, and everything else (`REQUEST_DENIED`, `OVER_QUERY_LIMIT`,
+> `INVALID_REQUEST`, `UNKNOWN_ERROR`) → `error` — those are conditions the operator fixes,
+> so telling the user their address is wrong would send them to repair something that is not
+> broken.
+
 Rules, following `plan/architecture.md` and `CLAUDE.md`:
 
 - Called **only** from the home-set and home-retry endpoints. Never from a list or render
