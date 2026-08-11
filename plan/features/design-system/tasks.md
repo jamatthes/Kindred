@@ -238,9 +238,26 @@ day/time editing and "give it a time" (M4), suggestion date windows (M3+). Build
 - [ ] `TimeField` — time-of-day entry snapping to the itinerary's 15-minute grid
       (`--daytrack-snap`), typeable ("14:30"), with a wheel/list on touch; pairs with
       `DatePicker` for the "give it a time" flow.
-- [ ] Both themes, token-only, keyboard complete (arrows move days, PgUp/Dn months, typed
-      entry always works), `--hit-target` on touch, and honest fallback: if JS fails, the
-      native input still submits.
+- [ ] **Range coupling (user ruling 2026-08-11):** when start and end are separate fields,
+      the end field's minimum is the chosen start date — earlier days render disabled and
+      unclickable — and opening the end picker **starts its calendar at the start date's
+      month**, never at today (observed bug: start=December, end picker opened at August).
+      Symmetrically, picking an end before re-opening start caps start's maximum. If a new
+      start lands after the current end, the end clears with an inline explanation rather
+      than silently holding an invalid range.
+- [ ] **Range interaction:** hover paints a live preview of the span; first click locks
+      start, second locks end; the edges stay adjustable without starting over. Two months
+      render side by side on desktop so a range crosses the boundary without paging.
+- [ ] **Presets, caller-supplied:** the component accepts quick-pick chips; trip creation
+      passes trip-shaped ones ("This weekend", "A week", "A fortnight" anchored on the
+      chosen start) — not analytics presets. Presets are one click, never mandatory.
+- [ ] **Mobile is not a shrunken popover:** below the tablet breakpoint the picker opens in
+      the existing `BottomSheet` as a full-height vertically scrolling calendar, today
+      anchored at the top.
+- [ ] Both themes, token-only, keyboard complete (arrows move days, PgUp/Dn months,
+      Shift+PgUp/Dn years, Enter confirms, Escape closes, typed entry always works),
+      `--hit-target` on touch, and honest fallback: if JS fails, the native input still
+      submits.
 - [ ] Styleguide section with all three, both themes, disabled/error states.
 - [ ] Swap into the admin console's trip dates (the only shipped consumer) without API change.
 
