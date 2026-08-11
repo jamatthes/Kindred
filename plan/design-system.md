@@ -138,8 +138,11 @@ type from semantic tokens; theme switch is free). Initial set:
   sheet up, pin drop); respect `prefers-reduced-motion`. Nothing decorative.
 - **Undo over confirm** for low-stakes destructive actions (delete own comment);
   real confirms reserved for admin-destructive ones (reject suggestion, change stage).
-- **Deferred deliberately:** command palette, drag-and-drop itinerary reordering (v1 uses
-  explicit controls), scroll-driven animations.
+- **Deferred deliberately:** command palette, drag-and-drop *list* reordering (agenda
+  lists use explicit controls), scroll-driven animations. Exception (2026-08-11): the
+  itinerary **day-timeline mode** is a sanctioned direct-manipulation surface — dragging
+  bars to change times is its core interaction, with mandatory keyboard parity (arrows
+  nudge, Shift+arrows resize). See `plan/features/itinerary-timeline/design.md`.
 
 ## Accessibility baseline
 

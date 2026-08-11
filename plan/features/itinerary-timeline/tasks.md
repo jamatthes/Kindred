@@ -234,14 +234,55 @@ confirm no raw hex appears anywhere in the component.
       for the main admin — absent, not disabled, for everyone else.
 - [ ] Remove opens a confirm dialog stating the suggestion returns to the approved pool.
 - [ ] A "schedule a suggestion" action listing only `approved` suggestions.
-- [ ] **No drag-and-drop.** Explicit controls only, per `design-system.md`. Leave a code comment
-      recording that this is a deliberate deferral, not an omission.
+- [ ] **No list drag-and-drop.** Explicit controls only in agenda mode, per
+      `design-system.md`. Leave a code comment recording that this is a deliberate
+      deferral, not an omission. (Time-editing by drag belongs to Phase 10b's timeline
+      mode, not this list.)
 - [ ] Empty states: no trip dates (admin action inline, explanatory line for others); dates but
       no items; a day with nothing planned (quiet — a free day is a legitimate plan).
 
 `Verify:` In the browser as the main admin, schedule two suggestions onto a day, reorder them
 with the move controls, and confirm a second signed-in member sees the new order without a
 refresh and sees no admin controls.
+
+---
+
+## Phase 10b — Day timeline mode (added 2026-08-11)
+
+Visual reference: `design-preview/screen-itinerary-timeline.html`. Spec: "Day view — two
+switchable modes" in `design.md`.
+
+- [ ] `Agenda | Timeline` segmented switcher in the day panel header; choice persisted
+      client-side per user (localStorage); mobile defaults to Agenda.
+  **Verify:** switch modes, reload — the choice sticks; selection survives the switch.
+- [ ] Lane-packing utility as a pure function (sort by start then duration, first free
+      lane), plus snap helper (15-min steps from `--daytrack-snap`).
+  **Verify:** Vitest covers overlap stacking, identical starts, instant items, and snap
+  rounding at both edges.
+- [ ] Track render: hour ticks (08:00–22:00 window, horizontal scroll beyond), category-
+      coloured bars with title+time when width allows, minimum bar width, untimed shelf
+      below, component tokens `--daytrack-h`, `--daytrack-bar-h`, `--daytrack-snap`.
+  **Verify:** a seeded day with two overlapping items renders in two lanes; token-only
+  styling in both themes.
+- [ ] Drive-leg connectors between consecutive located bars from `route_cache`; warning
+      tint when route duration exceeds the gap.
+  **Verify:** shrink a gap below the drive time in seed data — connector turns warning.
+- [ ] Now-cursor drifting on today's track, Holiday stage only; respects
+      `prefers-reduced-motion` (jumps instead of gliding).
+  **Verify:** stage=holiday + today shows the cursor; planning stage does not.
+- [ ] Admin drag/resize: pointer drag moves (duration preserved) and edge-resizes with
+      snapping; ghost bar + live time bubble during drag; drop commits
+      `PATCH /itinerary-items/{id}` optimistically with rollback; Undo toast restores
+      prior times; midnight clamp with explanatory toast; minimum duration of one snap
+      step; untimed shelf items draggable onto the track.
+  **Verify:** Playwright as main admin — drag a bar 30 min later, confirm the agenda
+      mode and a second member's view both show the new time without refresh; Undo
+      restores it.
+- [ ] Keyboard parity: arrows nudge by snap step, Shift+arrows resize, Enter opens the
+      item; announced to assistive tech.
+  **Verify:** move a bar entirely by keyboard; times persist identically to drag.
+- [ ] Read-only member mode: no handles, default cursor, no drag; identical layout.
+  **Verify:** as a member, bars render without handles and pointer drag does nothing.
 
 ---
 

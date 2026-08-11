@@ -46,8 +46,24 @@ Time lives in a bottom panel, per the Palantir-derived information architecture 
 **As the main admin, I can change the order of items within a day using explicit controls.**
 - Move up / move down controls on each item, plus a "move to day" action.
 - Reordering is immediate and visible to everyone.
-- NOTE: drag-and-drop is deliberately deferred per `plan/design-system.md`. v1 uses explicit
-  controls only. This is not an oversight and should not be "fixed" without a decision.
+- NOTE: *list* drag-and-drop is deliberately deferred per `plan/design-system.md`; the
+  agenda list uses explicit controls only. The day-timeline mode (T5b) is the sanctioned
+  drag surface — it changes item *times* by direct manipulation, not list order.
+
+### T5b — Edit times on the day timeline (added 2026-08-11)
+**As the main admin, I can switch the day view to a horizontal timeline and drag items to
+change their times.**
+- The day panel offers `Agenda | Timeline` modes; my choice is remembered on this device.
+- In Timeline mode, each timed item is a bar on an hour axis; gaps between items are
+  visible as empty track, and drive legs draw between located bars — tinted warning when
+  the drive is longer than the gap.
+- I can drag a bar to move it (15-minute snapping, duration kept) and drag its edges to
+  resize; a ghost + time bubble show the change before I drop; everyone else sees the
+  update live; a toast lets me Undo.
+- Keyboard: arrows nudge, Shift+arrows resize — full parity with dragging.
+- Untimed items sit in a shelf below; dragging one onto the track gives it a time.
+- Members see the identical timeline read-only. During Holiday, a now-cursor drifts
+  across today's track.
 
 ### T5 — See a single day in detail
 **As a member, I can view one day's plan in order.**
@@ -114,8 +130,9 @@ All checks are FastAPI dependencies. Frontend hiding is presentation only.
 
 ## Out of scope (v1)
 
-- **Drag-and-drop reordering.** Explicitly deferred in `design-system.md`; v1 uses explicit
-  move controls.
+- **List drag-and-drop reordering.** Deferred in `design-system.md`; the agenda list uses
+  explicit move controls. (Time-editing by drag lives in the day-timeline mode, T5b —
+  in scope.)
 - Per-family divergent itineraries (one family going to the beach while another goes hiking).
   v1 has one itinerary for the trip.
 - The "now / next up" mobile view — that belongs to `holiday-stage`.

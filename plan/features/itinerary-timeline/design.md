@@ -157,9 +157,11 @@ day only when the gap between neighbours is exhausted.
 Permission: `require_main_admin`. Stage: planning/holiday.
 Emits `itinerary.reordered` with the affected day's ordering.
 
-NOTE: this endpoint exists instead of a drag-and-drop bulk-reorder payload because
-`design-system.md` defers drag-and-drop to post-v1. Keeping the API shaped around explicit moves
-avoids building a bulk endpoint that nothing calls.
+NOTE: this endpoint exists instead of a drag-and-drop bulk-reorder payload because *list*
+drag-and-drop stays deferred per `design-system.md`. The day-timeline mode's drag editing
+(see "Day view — two switchable modes") changes item *times* through the ordinary
+`PATCH /itinerary-items/{id}` — it needs no bulk-reorder endpoint either, so the API shape
+holds for both modes.
 
 ### `DELETE /api/v1/itinerary/items/{id}`
 Removes the item and returns its suggestion's status from `scheduled` to `approved` — back into
@@ -269,10 +271,57 @@ on a timer, and is labelled with the current date and time in the trip's timezon
 Keyboard: left/right arrows move by day, shift+arrows by hour, Home/End jump to trip start/end.
 The scrubber is a labelled slider to assistive technology, not a bare div.
 
-### Day view
-Right side panel by default. Timed items in sequence with their times; untimed items in a
-clearly separated "sometime today" band. Between consecutive mapped items, a leg row shows drive
-duration and distance from `route_cache` — or "route unavailable" for a fallback leg.
+### Day view — two switchable modes (added 2026-08-11)
+
+The day panel header carries a segmented **`Agenda | Timeline`** switcher (design-system
+segmented pattern). The choice is UI state, persisted per user client-side (localStorage);
+no schema change. Mobile defaults to Agenda; desktop remembers the last choice. Both modes
+render the same selection state — switching never loses the selected item.
+
+**Agenda mode** (the original design, unchanged): timed items in sequence with their times;
+untimed items in a clearly separated "sometime today" band. Between consecutive mapped
+items, a leg row shows drive duration and distance from `route_cache` — or "route
+unavailable" for a fallback leg. Reordering uses explicit controls (no list drag).
+
+**Timeline mode** — a horizontal time-axis track, video-editor style (interaction
+reference: the legacy TimelineBoard scrubber; visual reference:
+`design-preview/screen-itinerary-timeline.html`):
+
+- **Axis:** hour ticks across a visible window, default 08:00–22:00; items outside the
+  window are reachable by horizontal scroll, and edge affordances indicate off-screen
+  items. Component tokens: `--daytrack-h`, `--daytrack-bar-h`, `--daytrack-snap` (15min).
+- **Bars:** each timed item is a rounded bar positioned/sized by start/end, filled with
+  its category colour (`--cat-*`), title + time inside when width allows (truncate
+  gracefully; minimum render width for near-instant items). Bar height ≥ `--hit-target`.
+- **Lane packing:** overlapping items stack into auto-assigned lanes — deterministic
+  interval packing (sort by start, then duration; first free lane wins). A pure,
+  unit-tested function.
+- **Gaps are the point:** empty track is visibly empty. Drive legs render as thin
+  connector segments between consecutive located bars; when
+  `route duration > gap between bars`, the connector tints `--color-warning` — an
+  impossible transition flags itself without any validation dialog.
+- **Untimed shelf:** "sometime today" items sit in a thin shelf below the track;
+  dragging one onto the track gives it a time.
+- **Now-cursor:** a vertical accent line drifts across the track — Holiday stage,
+  today's date only (same rule as the day-columns now marker).
+- **Editing (main admin only; stage guard planning/holiday):** drag a bar to move it
+  (duration preserved), drag either edge to resize; both snap to `--daytrack-snap`
+  (15 min). During drag: ghost bar at the original position and a live time bubble
+  ("12:30 → 13:00"). Drop commits `PATCH /api/v1/itinerary-items/{id}` with the new
+  times — optimistic UI, rollback on error, toast with **Undo** on success (restores
+  prior times via the same PATCH). Other members see bars move live over the existing
+  `itinerary.*` WS events. Members get the identical view read-only: no handles, no
+  drag cursor.
+- **Keyboard parity (required):** selected bar + arrow keys nudge by one snap step,
+  Shift+arrows resize, Enter opens the item — drag is never the only path.
+
+Edge cases:
+| Case | Behaviour |
+|---|---|
+| Bar dragged past midnight | Clamped to the day; a toast explains "use *move to day* to reschedule across days" |
+| Two admins drag the same bar concurrently | Last write wins; both converge via the WS broadcast (same precedent as poll cells) |
+| Untimed item dragged onto an occupied slot | Allowed — lane packing absorbs the overlap |
+| End dragged before start | Blocked at minimum duration (one snap step) |
 
 Each item shows its title, type icon, family colour accent from the linked suggestion's author,
 vote summary, and comment count, and links through to the suggestion's full record. Located
