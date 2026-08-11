@@ -86,7 +86,7 @@ Mutating routes additionally carry a stage guard as noted.
 |---|---|---|---|---|
 | GET | `/admin/trip` | — | `TripAdminOut` | `require_organiser` |
 | PATCH | `/admin/trip` | `{name?, start_date?, end_date?, timezone?}` | `TripAdminOut` | `require_organiser` + `require_stage("planning","holiday")` |
-| POST | `/admin/trip/stage` | `{to_stage, confirm: true}` | `TripAdminOut` | `require_organiser` — **no stage guard**, by design |
+| — | *(stage changes)* | | | see below — the console calls `PATCH /trips/{trip_id}/stage`, owned by `holiday-stage` |
 | GET | `/admin/trip/stage-history` | — | `[StageTransitionOut]` | `require_organiser` |
 
 `TripAdminOut`: `{id, name, stage, start_date, end_date, timezone, owner_user_id, can_advance_to, can_revert_to, blockers: [str], setup_complete: bool}`.
@@ -125,11 +125,15 @@ legal backward target or null; `blockers` lists machine-readable reasons the for
 unavailable (`missing_dates`). The frontend disables the control and shows the reason; the
 backend enforces the same rule, so the two cannot drift.
 
-`POST /admin/trip/stage` is deliberately exempt from `require_stage` — it is the carve-out
-named in `plan/architecture.md` ("End stage rejects all mutations except admin stage-change").
-It validates the transition itself: forward moves must follow
-`planning → holiday → end`; backward moves must follow `end → holiday → planning`; anything
-else is `409 illegal_transition`.
+**Stage transitions have exactly one endpoint** (ruling 2026-08-11, resolving a duplicate):
+`PATCH /api/v1/trips/{trip_id}/stage`, owned and implemented by `holiday-stage`
+(`require_organiser`, deliberately exempt from `require_stage` — the carve-out named in
+`plan/architecture.md`). It validates transitions itself: forward `planning → holiday → end`,
+backward `end → holiday → planning`, anything else `409 illegal_transition`. The console's
+stage stepper (Section 2) calls that endpoint; the previously sketched
+`POST /admin/trip/stage` does not exist. `can_advance_to`/`can_revert_to`/`blockers` on
+`TripAdminOut` remain this feature's — the console computes the affordances, holiday-stage
+executes the change.
 
 ### Category voting modes
 
@@ -155,8 +159,15 @@ served by a separate non-admin route owned by this feature:
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
 | GET | `/admin/overview` | `?q=` | `{families: [FamilyOut], members: [AdminMemberOut]}` | `require_organiser` |
-| POST | `/admin/users/{id}/reset-password` | `{confirm: true}` | `{temporary_password}` | `require_organiser` |
-| DELETE | `/admin/users/{id}` | — | `204` | `require_organiser` + `require_stage("planning","holiday")` |
+| POST | `/admin/users/{id}/reset-password` | `{confirm: true}` | `{temporary_password}` | `require_organiser` + **protected-target rule** |
+| DELETE | `/admin/users/{id}` | — | `204` | `require_organiser` + `require_stage("planning","holiday")` + **protected-target rule** |
+
+**Protected-target rule** (ruling 2026-08-11): when the target of a reset or removal is the
+**owner or another organiser**, `require_organiser` is not enough — the caller must be the
+owner (`403 target_protected` otherwise). Nobody resets the owner's password or removes the
+owner at all (`409 cannot_target_owner`); an organiser targeting a fellow organiser is refused
+for the same reason the organiser list itself is owner-only. Ordinary members remain
+organiser-manageable.
 
 `AdminMemberOut`: `{user_id, username, first_name, last_name, display_name, initials, avatar_thumb_url, family: {id, name, color}|null, family_role, is_owner, is_organiser, must_change_password, last_login_at, created_at}`.
 
@@ -203,7 +214,12 @@ requires attribution to survive. The user record is retained with no family, whi
 | Method | Path | Request | Response | Guards |
 |---|---|---|---|---|
 | GET | `/admin/settings` | — | `{instance_name, registration_open, invite_only}` | `require_organiser` |
-| PATCH | `/admin/settings` | `{instance_name?, registration_open?, invite_only?}` | same | `require_organiser` |
+| PATCH | `/admin/settings` | `{instance_name?, registration_open?, invite_only?}` | same | `require_owner` |
+
+Reading is organiser-visible; **writing is owner-only** (ruling 2026-08-11): instance
+settings are platform-level, not trip-level, so they sit outside the "cross-family trip
+powers" an organiser holds. The console renders the section read-only with an explanatory
+caption for organisers.
 
 No stage guard: instance settings are not trip data. `invite_only` accepts only `true` in v1;
 `false` is rejected with `422` and a message that open registration is not implemented. The

@@ -43,6 +43,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      # Crash recovery after an unclean shutdown (machine sleep, Docker killed) can spend
+      # minutes in fsync before accepting connections — especially on the Windows bind
+      # mount above. Without a grace window the stack refuses to start in exactly the
+      # situation where patience would fix it (observed 2026-08-11).
+      start_period: 180s
 
   api:
     build:
