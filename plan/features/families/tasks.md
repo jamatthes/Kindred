@@ -396,3 +396,33 @@ Seeds, checked end to end against a scratch database: the plain first-run seed g
 `change_password` → `setup_trip` → `setup_family`; a DEMO-seeded database, where the admin is
 already head of The Parkers, still lands them at `app`, with zero memberless families. Neither
 seed script needed a change.
+
+## Revision 2026-08-11 — 24-colour palette, founder colour picker, overflow wheel
+
+The user's ruling, executed on `feat/family-colors`. Requirements and design were updated
+first (`docs(families): 24-colour palette, founder colour picker, overflow wheel`), then:
+
+- [x] Tokens: `--family-9…24` added to `tokens.primitives.css` / `tokens.semantic.css` (light
+      and dark), slots 1-8 byte-identical to before.
+- [x] Schema (`0001_schema.py`, edited in place): `families.color` made nullable; new
+      `families.color_custom` (text, nullable); `ck_families_color_range` widened to
+      `BETWEEN 1 AND 24`; new `ck_families_color_xor` — exactly one of `color`/`color_custom`
+      set. Mirrored in `models/family.py`, `MAX_COLOR_SLOTS` raised to 24.
+- [x] `GET /families/palette` — taken-slot visibility reachable without `require_member`, so a
+      pending founder can see it before `POST /families/mine`.
+- [x] `POST /families/mine` and `PATCH /families/{id}` accept `color` or `color_custom`;
+      `color_custom` accepted only when `next_free_color` returns `None` for the trip
+      (`422 custom_color_not_allowed` otherwise); both together is `422 invalid_color_choice`.
+- [x] `familyColor(family)` (`web/src/design/familyColor.ts`) — the one helper every rendering
+      call site uses; `IdentityBadge`'s colour prop takes the resolved CSS string.
+- [x] `ColorPicker` component (`web/src/design/ColorPicker.tsx`): 24-swatch grid, arrow-key
+      navigation, disabled+labelled taken swatches, default pre-selects the first free slot,
+      switches to a native colour wheel when the server reports the palette exhausted. Used by
+      both `FamilySetupScreen` and `FamilyPanel`.
+- [x] Tests: server — uniqueness/409 race, exhaustion-then-custom-accepted (24 families
+      created to open the 25th's gate), custom-while-room-free refused, manager-only PATCH
+      permission matrix, WS broadcast on colour change. Web — picker rendering, keyboard nav,
+      default preselect, wheel-only-when-exhausted, `familyColor` resolving both cases.
+
+**Verify:** `cd server && pytest`, `cd web && npm run verify`, `cd web && npm run e2e` — see
+the final report for exact counts.
