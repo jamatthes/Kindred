@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError } from '../../app/apiClient'
 import { Banner, Button, TextField } from '../../app/ui/primitives'
+import { DateRangePicker, TRIP_PRESETS } from '../../app/ui/pickers/DateRangePicker'
 import type { TripAdmin } from '../../app/types'
 import { adminApi } from './api'
 import type { TripPatch } from './api'
@@ -131,26 +132,29 @@ export function TripForm({
         autoComplete="off"
       />
 
-      <div className="trip-form__dates">
-        <TextField
-          label="Start date"
-          type="date"
-          value={startDate}
-          onChange={(event) => setStartDate(event.target.value)}
-          error={fieldErrors.start_date}
-          disabled={busy || readOnly}
-          hint={datesOptionalHint ? 'You can decide this later.' : undefined}
-        />
-        <TextField
-          label="End date"
-          type="date"
-          value={endDate}
-          onChange={(event) => setEndDate(event.target.value)}
-          error={fieldErrors.end_date}
-          disabled={busy || readOnly}
-          hint={datesOptionalHint ? 'You can decide this later.' : undefined}
-        />
-      </div>
+      {/* Design-system Phase 11. Two bare native date inputs used to sit here, and they
+          carried the coupling bug the 2026-08-11 ruling was written about: a December start,
+          and the end field's calendar opened on today's month with every impossible day
+          live. The component owns that coupling now. The form still holds two plain ISO
+          strings and still PATCHes exactly the same two fields — no API change. */}
+      <DateRangePicker
+        legend="Trip dates"
+        value={{ start: startDate, end: endDate }}
+        onChange={(next, meta) => {
+          setStartDate(next.start)
+          setEndDate(next.end)
+          if (meta.clearedEnd) {
+            // The picker explains the clearing inline; a stale server complaint about the
+            // old end date is no longer about anything.
+            setFieldErrors(({ end_date: _cleared, ...rest }) => rest)
+          }
+        }}
+        presets={TRIP_PRESETS}
+        startError={fieldErrors.start_date}
+        endError={fieldErrors.end_date}
+        disabled={busy || readOnly}
+        hint={datesOptionalHint ? 'You can decide this later.' : undefined}
+      />
       {!startDate && !endDate && !datesOptionalHint ? (
         // In Planning, no dates is the normal state — not an error, and not a blank either.
         <p className="trip-form__placeholder">Dates not decided yet.</p>

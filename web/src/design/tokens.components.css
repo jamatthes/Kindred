@@ -52,6 +52,22 @@
      in JavaScript — keep the two in step. */
   --breakpoint-panel: 900px;
 
+  /* --- Date & time pickers (app/ui/pickers) -------------------------------
+     `--daytrack-snap` is the itinerary grid's step, in minutes and unitless: CSS has no
+     minute unit, and both the day track and TimeField need to divide by the number rather
+     than print it. `design/snap.ts` carries the same value for the arithmetic side. */
+  --daytrack-snap: 15;
+  /* A day cell matches the table row height, and is never smaller than a finger on touch. */
+  --picker-day-size: 40px;
+  /* Below this a month starts clipping two-digit dates against its weekday headers. */
+  --picker-month-min: 240px;
+  --picker-popover-max-w: 620px;
+  --picker-list-max-h: 320px;
+  --picker-list-min-w: 140px;
+  /* Below this a picker opens in the BottomSheet. Mirrored in
+     `design/breakpoints.ts` > PICKER_SHEET_QUERY — keep the two in step. */
+  --breakpoint-picker-sheet: 900px;
+
   /* --- Families (features/families) --------------------------------------
      A family card holds a name, a member count and up to a handful of member rows;
      below this it starts wrapping names, which is the point it stops being glanceable. */

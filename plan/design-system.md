@@ -138,6 +138,14 @@ type from semantic tokens; theme switch is free). Initial set:
 - **Forms:** all six field states styled from day one (default/hover/focus/filled/error/
   disabled); validate on blur, re-validate on change after first error; error text
   beneath field, never only color. Focus states visible for keyboard nav everywhere.
+- **Dates and times (added 2026-08-11):** shared `DateRangePicker` / `DatePicker` /
+  `TimeField` components (design-system feature, Phase 11) — typed entry is always the
+  accessible base, the calendar/wheel is enhancement; range selection in two clicks;
+  trip-aware day strip for scheduling inside the trip's span; times snap to
+  `--daytrack-snap`. Native inputs remain the base the calendar enhances. No third-party
+  picker dependency. **Built** in `web/src/app/ui/pickers/` — see the design-system feature's
+  `tasks.md` Phase 11 for the range-coupling ruling and the implementation notes; the admin
+  console's trip dates are the first consumer, and `/styleguide` shows all three.
 - **Loading:** skeletons for structural loads (map panel, lists), spinners only for
   sub-second inline waits; optimistic UI for votes/comments with rollback on WS error.
 - **Empty states:** every list/map state designed ("No suggestions yet — drop the first
