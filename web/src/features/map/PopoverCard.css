@@ -1,0 +1,95 @@
+.k-popover {
+  width: var(--popover-width);
+  background: var(--color-surface);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--shadow-popover);
+  border: 1px solid var(--color-border);
+  padding: var(--space-3);
+}
+
+.k-popover__title {
+  font-size: var(--text-body);
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.k-popover__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.k-popover__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: var(--chip-radius);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+.k-popover__chip--status-shortlisted,
+.k-popover__chip--status-scheduled {
+  background: color-mix(in srgb, var(--color-info) var(--mix-tint-weak), var(--color-surface));
+  color: var(--color-info);
+}
+.k-popover__chip--status-approved {
+  background: color-mix(in srgb, var(--color-success) var(--mix-tint-weak), var(--color-surface));
+  color: var(--color-success);
+}
+.k-popover__chip--status-rejected {
+  background: color-mix(in srgb, var(--color-danger) var(--mix-tint-weak), var(--color-surface));
+  color: var(--color-danger);
+}
+
+.k-popover__votes {
+  margin-bottom: var(--space-2);
+}
+
+.k-popover__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.k-popover__distances {
+  margin-bottom: var(--space-3);
+}
+
+.k-popover__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.k-popover__btn {
+  height: var(--popover-btn-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--button-radius);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+}
+
+.k-popover__btn--primary {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+}
+.k-popover__btn--primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.k-popover__btn--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}

@@ -1,0 +1,61 @@
+.k-pin {
+  width: var(--pin-size);
+  height: var(--pin-size);
+  border-radius: 50% 50% 50% 4px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-on-status);
+  box-shadow: var(--shadow-card);
+  border: var(--pin-border-width) solid var(--color-surface);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.k-pin:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.k-pin__icon {
+  width: var(--pin-icon-size);
+  height: var(--pin-icon-size);
+}
+
+.k-pin__status-glyph {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: var(--pin-glyph-size);
+  height: var(--pin-glyph-size);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 10px;
+  line-height: var(--pin-glyph-size);
+  text-align: center;
+  border: 1px solid var(--color-border);
+}
+
+/* Status treatment — colour is never the only carrier; the glyph above always accompanies. */
+.k-pin--shortlisted .k-pin__status-glyph {
+  color: var(--color-warning);
+}
+.k-pin--approved .k-pin__status-glyph {
+  color: var(--color-success);
+}
+.k-pin--rejected {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+.k-pin--rejected .k-pin__status-glyph {
+  color: var(--color-danger);
+}
+.k-pin--scheduled .k-pin__status-glyph {
+  color: var(--color-info);
+}
+
+.k-pin.is-selected {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 1px;
+}
