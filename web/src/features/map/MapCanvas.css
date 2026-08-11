@@ -1,0 +1,22 @@
+.k-map-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Neutral map surface — theme-aware without being either theme's actual accent, since
+     the real tiles (Google's, at M3) render here, not a Kindred colour. */
+  background: color-mix(in srgb, var(--color-surface-raised) 55%, var(--color-surface-sunken));
+}
+
+/* Applied by FakeMapProvider.mount directly (it owns this element, not React), kept here
+   so the fake and any future provider agree on where the base surface style lives. */
+.k-fake-map-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.k-fake-map-markers {
+  position: absolute;
+  inset: 0;
+}
