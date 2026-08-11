@@ -31,10 +31,16 @@ export const familiesApi = {
   list: () => api.get<Family[]>('/families'),
   read: (id: string) => api.get<FamilyDetail>(`/families/${id}`),
 
-  create: (body: { name: string; color?: number; home_address?: string }) =>
-    api.post<FamilyDetail>('/families', body),
+  // REMOVED 2026-08-11 with the route: `create`, over the bare `POST /families`. It was the
+  // only way to make a family nobody was in, which is what FM-1 now forbids. A family arrives
+  // when its head accepts a new-family invite (`invitesApi.create` with `family_id: null`),
+  // or when the owner names their own at setup.
 
-  /** The family setup screen's only write (FM-13). */
+  /**
+   * The family setup screen's only write (FM-13), and now the only call in the client that
+   * creates a family. Two kinds of caller reach it — someone who accepted a new-family
+   * invite, and the owner during their own onboarding — with the same body.
+   */
   createMine: (body: { name: string; home_address?: string }) =>
     api.post<FamilyDetail>('/families/mine', body),
 

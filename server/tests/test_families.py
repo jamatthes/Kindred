@@ -18,7 +18,7 @@ import uuid
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Family, FamilyMember, Trip, User, UserSettings
@@ -47,64 +47,73 @@ async def owner(db: AsyncSession, trip: Trip) -> User:
     return user
 
 
-# --- FM-1: create --------------------------------------------------------------------------
+# --- FM-1: a family is only ever born with a head (revised 2026-08-11) ---------------------
+#
+# The bare `POST /families` is gone. What it used to test — colour allocation, the duplicate
+# name, the ninth family — is tested against `POST /families/mine` in `test_family_setup.py`,
+# which is now the only route that creates a family at all. What is tested here is that it is
+# the only one.
 
 
-async def test_an_organiser_creates_a_family_and_it_gets_colour_one(
+async def test_the_bare_create_route_is_gone(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
 ) -> None:
+    """`405`, not `403` or `404`: `GET /families` still answers on this path.
+
+    A `404` would read as "wrong URL, try another one"; `405` says the path is real and this
+    verb is not, which is exactly the situation.
+    """
     await login_as(client, db, main_admin)
-    response = await client.post(FAMILIES, json={"name": "The Parkers"})
-    assert response.status_code == 201
-    body = response.json()
-    assert body["name"] == "The Parkers"
-    assert body["color"] == 1
-    assert body["member_count"] == 0
-    assert body["geocode_status"] == "pending"
+    assert (await client.post(FAMILIES, json={"name": "The Parkers"})).status_code == 405
 
 
-async def test_the_second_family_gets_colour_two(
-    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
+async def test_the_owner_cannot_create_a_family_either(
+    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, owner: User
 ) -> None:
-    await login_as(client, db, main_admin)
-    await client.post(FAMILIES, json={"name": "The Parkers"})
-    second = await client.post(FAMILIES, json={"name": "The Jiangs"})
-    assert second.json()["color"] == 2
+    """The capability was withdrawn from the role that had the most of it, on purpose.
+
+    The owner's route to a family of their own is their setup step (FM-13); their route to
+    anyone else's is a new-family invite (FM-6). Neither makes a family they are not in.
+    """
+    await login_as(client, db, owner)
+    assert (await client.post(FAMILIES, json={"name": "Owned"})).status_code == 405
+    assert await db.scalar(select(func.count()).select_from(Family)) == 0
 
 
-async def test_a_requested_colour_that_is_taken_is_refused_by_name(
-    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
+async def test_no_route_leaves_a_family_with_nobody_in_it(
+    client: httpx.AsyncClient,
+    db: AsyncSession,
+    trip: Trip,
+    main_admin: User,
+    family_admin: tuple[User, Family],
 ) -> None:
-    """Refused rather than silently substituted: they picked that colour on purpose."""
+    """The invariant, fired at every route that could plausibly break it.
+
+    Three ways a family could end up empty, and each is refused by a different rule: creating
+    one without a member (the route is gone), removing the last member (they are the head, and
+    a head is handed on rather than removed), and demoting them (the same rule). A fourth —
+    deleting a family that still has members — is refused so that the tidy-up click and the
+    revoke-a-group's-access click cannot be the same click.
+    """
+    head, family = family_admin
     await login_as(client, db, main_admin)
-    await client.post(FAMILIES, json={"name": "The Parkers"})
-    clash = await client.post(FAMILIES, json={"name": "The Jiangs", "color": 1})
-    assert clash.status_code == 409
-    assert code(clash) == "color_taken"
-    assert "The Parkers" in clash.json()["detail"]["message"]
 
+    attempts = [
+        await client.post(FAMILIES, json={"name": "Nobody's"}),
+        await client.delete(f"{FAMILIES}/{family.id}/members/{head.id}"),
+        await client.patch(
+            f"{FAMILIES}/{family.id}/members/{head.id}", json={"role": "member"}
+        ),
+        await client.delete(f"{FAMILIES}/{family.id}"),
+    ]
+    assert all(r.status_code >= 400 for r in attempts), [r.status_code for r in attempts]
 
-async def test_a_duplicate_name_is_refused_case_insensitively(
-    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
-) -> None:
-    await login_as(client, db, main_admin)
-    await client.post(FAMILIES, json={"name": "The Parkers"})
-    clash = await client.post(FAMILIES, json={"name": "the parkers"})
-    assert clash.status_code == 409
-    assert code(clash) == "name_taken"
-
-
-async def test_a_ninth_family_is_refused_with_no_colour_slots(
-    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
-) -> None:
-    """FM Out of scope: "More than eight families ... refused with a clear message rather
-    than silently reusing a colour"."""
-    await login_as(client, db, main_admin)
-    for slot in range(1, 9):
-        assert (await client.post(FAMILIES, json={"name": f"Family {slot}"})).status_code == 201
-    ninth = await client.post(FAMILIES, json={"name": "Family 9"})
-    assert ninth.status_code == 409
-    assert code(ninth) == "no_color_slots"
+    memberless = await db.scalar(
+        select(func.count())
+        .select_from(Family)
+        .where(~select(FamilyMember.id).where(FamilyMember.family_id == Family.id).exists())
+    )
+    assert memberless == 0
 
 
 async def test_a_head_cannot_create_a_family(
@@ -112,27 +121,7 @@ async def test_a_head_cannot_create_a_family(
 ) -> None:
     user, _ = family_admin
     await login_as(client, db, user)
-    response = await client.post(FAMILIES, json={"name": "Mine now"})
-    assert response.status_code == 403
-    assert code(response) == "forbidden"
-
-
-async def test_the_trip_owner_counts_as_an_organiser(
-    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, owner: User
-) -> None:
-    await login_as(client, db, owner)
-    assert (await client.post(FAMILIES, json={"name": "Owned"})).status_code == 201
-
-
-async def test_creating_a_family_in_the_end_stage_is_refused(
-    client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
-) -> None:
-    trip.stage = "end"
-    await db.commit()
-    await login_as(client, db, main_admin)
-    response = await client.post(FAMILIES, json={"name": "Too late"})
-    assert response.status_code == 409
-    assert code(response) == "stage_forbidden"
+    assert (await client.post(FAMILIES, json={"name": "Mine now"})).status_code == 405
 
 
 # --- FM-4: read ----------------------------------------------------------------------------

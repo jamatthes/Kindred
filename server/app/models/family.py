@@ -74,7 +74,11 @@ INVITE_EXPIRY_CHOICES = (24, 168, 720)
 
 #: `invites.mode`. What the invite is *for*, stated rather than inferred — see migration
 #: `0003` for why a nullable `family_id` could not carry it.
-INVITE_MODES = ("join", "create_family")
+#:
+#: Named rather than spelled out at each site because the onboarding gate now asks the same
+#: question (`app/core/onboarding.py`), and a typo there would silently refuse every founder.
+INVITE_MODE_CREATE_FAMILY = "create_family"
+INVITE_MODES = ("join", INVITE_MODE_CREATE_FAMILY)
 
 
 class Family(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -265,7 +269,7 @@ class Invite(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     @property
     def creates_family(self) -> bool:
         """A new-family invite (FM-6) rather than a join-this-family one (FM-5)."""
-        return self.mode == "create_family"
+        return self.mode == INVITE_MODE_CREATE_FAMILY
 
     @property
     def family_missing(self) -> bool:

@@ -15,6 +15,7 @@ stranger rather than for the actor.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -23,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.sessions import create_session
 from app.main import app
-from app.models import Family, Trip, User, UserSettings
+from app.models import Family, Invite, Trip, User, UserSettings
 from tests.conftest import add_member, login_as, make_family, make_user
 from tests.wsharness import ASGIWebSocketClient
 
@@ -111,16 +112,34 @@ async def test_the_family_payload_contains_no_address_field(
 async def test_creating_a_family_is_announced(
     client: httpx.AsyncClient,
     db: AsyncSession,
-    main_admin: User,
+    trip: Trip,
     watcher: tuple[User, Family],
 ) -> None:
+    """Through `POST /families/mine` — the only route that creates a family since 2026-08-11
+    (`families` FM-1). The event is unchanged; what changed is that it can no longer announce
+    a family with nobody in it, so `member.joined` always follows it."""
     observer, _ = watcher
+    founder = await make_user(db, "wsfounder")
+    db.add(
+        Invite(
+            trip_id=trip.id,
+            mode="create_family",
+            token_hash="hash-wsfounder",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+            used_by=founder.id,
+            used_at=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+
     socket = await _socket(db, observer)
     try:
-        await login_as(client, db, main_admin)
-        await client.post(FAMILIES, json={"name": "The Newcomers"})
+        await login_as(client, db, founder)
+        await client.post(f"{FAMILIES}/mine", json={"name": "The Newcomers"})
         frame = await _next(socket, "family.created")
         assert frame["payload"]["family"]["name"] == "The Newcomers"
+        joined = await _next(socket, "member.joined")
+        assert joined["payload"]["member"]["username"] == "wsfounder"
     finally:
         await socket.disconnect()
 

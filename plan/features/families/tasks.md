@@ -368,3 +368,31 @@ FM-15 each map to at least one test or a documented manual step above.
   `avatar_thumb_url` fields, and writes none of them. If a control that changes who appears on
   the map ever needs to exist on the map itself, it belongs here and is linked to from there —
   a permission edited in two places will diverge.
+
+## Revision 2026-08-11 — the owner's family setup, and no memberless families
+
+The user's ruling, executed after the feature had shipped. Requirements and design were updated
+first (`docs(families): owner takes the family setup step; no memberless families`), then:
+
+- [x] `is_pending_family` admits the trip's owner with no family, in addition to a founder
+      holding a consumed `create_family` invite. The platform-admin carve-out is gone.
+- [x] The same predicate keys the invite half on `invites.mode`, not on `family_id is null`,
+      so deleting a family cannot convert its members' consumed join invites into licences to
+      found one.
+- [x] `require_pending_family` takes the active trip, so the dependency and the gate resolve
+      ownership identically — otherwise the owner reaches a screen whose submit is refused.
+- [x] Gate order asserted as a sequence on a truly fresh install:
+      `change_password` → `setup_trip` → `setup_family` → `app`.
+- [x] `POST /families` (the bare create) removed — router, `FamilyCreateIn`, the client's
+      `familiesApi.create`, the `CreateFamilyForm` dialog, and the `Or add one myself` action
+      on the new-family invite card. The families empty state now offers the invite.
+- [x] Tests: setup-as-owner creates one family with them as head and their own sharing on; a
+      second attempt is refused; the bare create answers `405` for owner, organiser and head;
+      an enumeration test asserts no route leaves a family with nobody in it; a removed member
+      still resolves to `app` rather than to family setup.
+
+**Verify:** `cd server && pytest` — 485 passed. `cd web && npm run verify` — green.
+Seeds, checked end to end against a scratch database: the plain first-run seed gates the owner
+`change_password` → `setup_trip` → `setup_family`; a DEMO-seeded database, where the admin is
+already head of The Parkers, still lands them at `app`, with zero memberless families. Neither
+seed script needed a change.

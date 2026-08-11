@@ -17,7 +17,8 @@ Ownership, which is deliberately split three ways:
 ===============  ===============================================================
 `change_password`  foundation (F-5) — the seeded password must be replaced
 `setup_trip`       `admin-console` (AC-0) — the main admin names the trip
-`setup_family`     `families` (FM-13) — a new family's admin names their family
+`setup_family`     `families` (FM-13) — a new family's head names their family, and so does
+                   the trip's owner, without an invite (revised 2026-08-11)
 `app`              nobody; it is the absence of the other three
 ===============  ===============================================================
 
@@ -32,44 +33,64 @@ from typing import Literal
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FamilyMember, Invite, Trip, User, is_owner_of
+from app.models import (
+    INVITE_MODE_CREATE_FAMILY,
+    FamilyMember,
+    Invite,
+    Trip,
+    User,
+    is_owner_of,
+)
 
 NextStep = Literal["change_password", "setup_trip", "setup_family", "app"]
 
 
-async def is_pending_family(db: AsyncSession, user: User) -> bool:
-    """True for someone who accepted a `create_family` invite and has not finished setup.
+async def is_pending_family(
+    db: AsyncSession, user: User, trip: Trip | None = None
+) -> bool:
+    """True for someone who still owes the family setup step (FM-13).
 
     The predicate, stated once, because two things depend on it agreeing with itself: this
     gate, and `require_pending_family` — the single dependency that lets such a caller reach
     `POST /families/mine` while `require_member` refuses them everywhere else
     (`plan/architecture.md`; `plan/features/families/design.md`).
 
-    Three conditions, all required:
+    **Being in no family is necessary for everybody**, so a member can never acquire a second
+    family this way and the owner's admission is not a standing licence to found them. On top
+    of that, one of two things must be true:
 
-    * they are in no family (so a member cannot acquire a second one this way);
-    * an invite records them in `used_by` (so someone removed from the trip cannot re-admit
-      themselves — their old membership row is gone, but no invite names them as unused);
-    * that invite has `family_id is null` (so a family-scoped invite does not become a
-      licence to found a family).
+    * **an invited founder** — an invite records them in `used_by` (so someone removed from the
+      trip cannot re-admit themselves: their membership row is gone, but no invite names them)
+      and that invite has `mode = 'create_family'` (so a join invite is not a licence to found
+      a family);
+    * **the trip's owner** — revised 2026-08-11 per the user's ruling. Nobody invites the owner
+      to their own instance, so ownership is the evidence that stands in for the invite. This
+      function previously returned `False` for the platform admin outright, on the grounds that
+      a family setup screen "would lock them out of their own instance on first boot" — which
+      was true only while `POST /families/mine` also refused them. Admitting them to the route
+      is the other half, and without it the owner reached the app with no family and no
+      legitimate way to get one.
+
+    The invite half keys on `mode`, not on `family_id is null`. Those stopped being the same
+    question when `family_id` became `ON DELETE SET NULL`: deleting a family nulls the column
+    on the consumed join invites of everyone who was in it, which under the old test would have
+    handed each of them a licence to found a family — issued by an unrelated deletion.
     """
-    if user.is_platform_admin:
-        # The seeded admin has no family and never accepted an invite. Sending them to a
-        # family setup screen would lock them out of their own instance on first boot.
-        return False
-
     has_family = await db.scalar(
         select(exists().where(FamilyMember.user_id == user.id))
     )
     if has_family:
         return False
 
+    if is_owner_of(trip, user):
+        return True
+
     return bool(
         await db.scalar(
             select(
                 exists().where(
                     Invite.used_by == user.id,
-                    Invite.family_id.is_(None),
+                    Invite.mode == INVITE_MODE_CREATE_FAMILY,
                 )
             )
         )
@@ -109,11 +130,23 @@ async def resolve_next_step(
     Order matters and is asserted by tests: a user who must change their password sees that
     and nothing else, even if they would otherwise owe a setup step. Reversing any two of
     these would let someone past a gate the product means to be closed.
+
+    The owner of a fresh install now owes three of the four in turn — `change_password`,
+    `setup_trip`, `setup_family`, then `app` — and `setup_trip` precedes `setup_family` for a
+    reason stronger than taste: a family is created *on* a trip, and `POST /families/mine`
+    answers `409 no_trip` without one. Sending the owner to family setup first would be a
+    screen that cannot be completed.
+
+    `app` is the absence of the other three, and as of 2026-08-11 it is reached family-less by
+    exactly one kind of session: someone **removed** from their family, or whose family was
+    deleted. They are not sent to family setup — they were never invited to found a family, and
+    a setup screen there would let anyone removed from the trip re-admit themselves.
+    `require_member` refuses them every route and the app renders "you are not on this trip".
     """
     if user.must_change_password:
         return "change_password"
     if await needs_trip_setup(db, user, trip):
         return "setup_trip"
-    if await is_pending_family(db, user):
+    if await is_pending_family(db, user, trip):
         return "setup_family"
     return "app"
