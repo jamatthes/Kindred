@@ -1,0 +1,30 @@
+# Kindred — deployment stack.
+#
+# PARTIAL: foundation Phase 2 needs a database to run migrations against, so only `postgres`
+# is defined so far. Phase 8 (`plan/features/foundation/tasks.md`) adds the `api` and `caddy`
+# services, the healthcheck-gated dependency and the restart policies.
+#
+# Config comes from `deploy/.env` (copy `deploy/.env.example`). Never commit `.env`.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kindred}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-kindred}
+      TZ: ${TZ:-Europe/London}
+    ports:
+      # Exposed for local development (alembic, pytest) against the container.
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kindred} -d ${POSTGRES_DB:-kindred}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

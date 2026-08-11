@@ -61,6 +61,8 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 - **families** — trip_id, name, color (token slot, used for map pins/labels), home_address (text), home_lat/home_lng (nullable until geocoded), home_geocoded_at
 - **family_members** — family_id, user_id, role (`admin`/`member`) — the per-family admin
 - **invites** — family_id (nullable = invite creates a new family), token, expires_at, created_by, used_by (nullable)
+- **sessions** — user_id, token_hash (sha256 of the opaque cookie value; the raw value is never stored), csrf_token, expires_at, revoked_at (nullable), user_agent (nullable), ip (inet, nullable), last_seen_at, created_at. No `updated_at` — `last_seen_at` is the mutable column, touched at most once a minute. Valid when `revoked_at is null and expires_at > now()`. Indexed on user_id and expires_at; token_hash unique. Expired rows removed by a lazy sweep on login, not a scheduler. *foundation*
+- **login_attempts** — username (lowercased; recorded even when no such user exists), ip (inet, nullable), succeeded, created_at. No `updated_at` — rows are append-only. Indexed on created_at and on (username, created_at) / (ip, created_at). A login is refused when either the username or the IP has ≥ `RATE_LIMIT_LOGIN_PER_MINUTE` failures in the trailing 60 seconds; a success clears that username's recent failures; rows older than an hour are swept lazily on login. *foundation*
 
 ### Trip + configuration
 - **trips** — name, stage (`planning`/`holiday`/`end`), start_date/end_date (nullable in planning), owner_user_id (main admin), timezone
@@ -96,8 +98,8 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 These originated as PROPOSED ADDITION items in `plan/features/*/design.md` and are approved;
 the feature docs carry the rationale.
 
-- **sessions** (new table) — server-side sessions (revocation on password reset). *foundation*
-- **login_attempts** (new table) — login rate limiting. *foundation*
+- ~~**sessions** (new table) — server-side sessions (revocation on password reset). *foundation*~~ — **implemented** in migration `0001_foundation`; specified in full under Identity above.
+- ~~**login_attempts** (new table) — login rate limiting. *foundation*~~ — **implemented** in migration `0001_foundation`; specified in full under Identity above.
 - **trip_stage_transitions** (new table) — audit of who changed stage and when. *admin-console*
 - **notification_preferences** (new table) — user_id, category, enabled; absent row = enabled. *notifications*
 - **users.last_login_at** — admin console visibility. *admin-console*

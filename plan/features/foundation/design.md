@@ -38,6 +38,16 @@ Kindred/
     └── .env.example
 ```
 
+> NOTE (implementation, Phase 2): two files exist that the tree above does not name.
+> `models/family.py` holds the bare `families` / `family_members` tables — the tree lists
+> `models/` as "base.py, user.py, session.py, trip.py, setting.py", but those tables are
+> required by `require_member` (see the ordering-dependency NOTE below) and did not belong in
+> any of the five. `core/db.py` holds the async engine, the session factory and the `get_db`
+> request dependency. It is deliberately **not** called `get_session`: in this codebase a
+> "session" is an authenticated user session (`core/sessions.py`, the `sessions` table), and
+> `deps.get_session` is the dependency that loads one from the cookie. The database handle is
+> `db` throughout.
+
 Server stack: FastAPI, SQLAlchemy 2 (async, declarative with `Mapped[...]`), Alembic,
 asyncpg, Pydantic v2, `argon2-cffi`, pytest + `httpx.AsyncClient`.
 Web stack: React + Vite + TypeScript, Tailwind 4 (`@theme` bound to the semantic tokens),
