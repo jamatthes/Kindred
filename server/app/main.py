@@ -23,6 +23,7 @@ from app.core.csrf import CSRFMiddleware
 from app.core.migrations import run_migrations
 from app.core.seed import run_seed
 from app.routers import (
+    attachments,
     auth,
     families,
     health,
@@ -129,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(presence.router, prefix=API_PREFIX)
     app.include_router(families.router, prefix=API_PREFIX)
     app.include_router(invites.router, prefix=API_PREFIX)
+    app.include_router(attachments.router, prefix=API_PREFIX)
 
     # Not under API_PREFIX: Caddy proxies `/ws` separately (plan/architecture.md).
     app.include_router(ws.router)

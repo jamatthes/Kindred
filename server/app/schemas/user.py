@@ -74,6 +74,24 @@ class UserOut(BaseModel):
     trip: TripBrief | None = None
 
 
+class ProfilePatchIn(BaseModel):
+    """`PATCH /me` — my own name (FM-11).
+
+    All three optional, PATCH semantics: an omitted field is left alone. `display_name` is
+    seeded from the other two at registration and separately editable afterwards, so a member
+    who goes by something other than their given name can say so without breaking their
+    initials badge.
+
+    Deliberately absent: `username` (not editable in v1) and anything belonging to another
+    user — editing someone else's name is `admin-console`'s, and there is no field here that
+    could reach one.
+    """
+
+    first_name: str | None = Field(default=None, min_length=1, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    display_name: str | None = Field(default=None, max_length=120)
+
+
 class PreferencesOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
