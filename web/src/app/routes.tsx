@@ -25,6 +25,7 @@ import { FamiliesScreen } from '../features/families/FamiliesScreen'
 import { FamilySetupScreen } from '../features/families/FamilySetupScreen'
 import { JoinScreen } from '../features/families/JoinScreen'
 import { ProfileScreen } from '../features/families/ProfileScreen'
+import { PollsScreen } from '../features/polls/PollsScreen'
 import { Home } from '../features/home/Home'
 import { AdminConsole } from '../features/admin/AdminConsole'
 import { TripSetupScreen } from '../features/admin/TripSetupScreen'
@@ -76,6 +77,12 @@ function AppRoutes() {
       return (
         <Shell activeNav="families">
           <FamiliesScreen selectedId={route.familyId} />
+        </Shell>
+      )
+    case 'polls':
+      return (
+        <Shell activeNav="polls">
+          <PollsScreen selectedId={route.pollId} />
         </Shell>
       )
     case 'profile':
