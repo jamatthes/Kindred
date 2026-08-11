@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app import ws
 from app.deps import (
@@ -31,6 +31,7 @@ from app.deps import (
     is_owner,
     require_member,
     require_organiser,
+    require_owner,
     require_stage,
 )
 from app.core.security import hash_password
@@ -56,6 +57,9 @@ from app.schemas.admin import (
     CategorySettingOut,
     CategorySettingPublicOut,
     CategorySettingsPutIn,
+    OrganiserActorOut,
+    OrganiserGrantIn,
+    OrganiserOut,
     OverviewOut,
     ResetPasswordIn,
     ResetPasswordOut,
@@ -579,4 +583,183 @@ async def remove_user(
         await ws.broadcast(current.id, "member.removed", payload)
         await ws.send_user(target.id, "member.removed", payload)
     await _end_their_session(target.id, "removed_from_trip")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Section 8: organisers (AC-13, owner only) ------------------------------------------------
+
+
+def _organiser_out(
+    user: User,
+    membership: FamilyMember | None,
+    family: Family | None,
+    granted_by: User | None,
+    created_at,
+) -> OrganiserOut:
+    return OrganiserOut(
+        user_id=user.id,
+        display_name=user.display_name,
+        initials=initials(user),
+        avatar_thumb_url=attachment_url(user.avatar, thumb=True),
+        family=family_out(family) if family is not None else None,
+        family_role=membership.role if membership is not None else None,
+        granted_by=(
+            OrganiserActorOut(user_id=granted_by.id, display_name=granted_by.display_name)
+            if granted_by is not None
+            else None
+        ),
+        created_at=created_at,
+    )
+
+
+async def _load_organisers(db: DbDep, trip: Trip) -> list[OrganiserOut]:
+    granter = aliased(User)
+    rows = (
+        (
+            await db.execute(
+                select(TripOrganiser, User, FamilyMember, Family, granter)
+                .join(User, User.id == TripOrganiser.user_id)
+                .outerjoin(FamilyMember, FamilyMember.user_id == User.id)
+                .outerjoin(Family, Family.id == FamilyMember.family_id)
+                .outerjoin(granter, granter.id == TripOrganiser.granted_by)
+                .where(TripOrganiser.trip_id == trip.id)
+                .order_by(TripOrganiser.created_at)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    return [
+        _organiser_out(user, membership, family, granted_by, grant.created_at)
+        for grant, user, membership, family, granted_by in rows
+    ]
+
+
+@router.get(
+    "/organisers",
+    response_model=list[OrganiserOut],
+    summary="Who else can do what an organiser can do",
+)
+async def read_organisers(db: DbDep, trip: ActiveTrip) -> list[OrganiserOut]:
+    """Readable by any organiser, not just the owner.
+
+    Seeing who else holds the role is not itself a power — an organiser who could not see the
+    list would still be working alongside them, just less able to tell who to ask. Appointing
+    and demoting are the owner's, and those are the next two routes.
+    """
+    return await _load_organisers(db, _require_trip(trip))
+
+
+@router.post(
+    "/organisers",
+    response_model=OrganiserOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Appoint an organiser",
+    dependencies=[Depends(require_owner), Depends(require_stage("planning", "holiday"))],
+)
+async def appoint_organiser(
+    payload: OrganiserGrantIn, response: Response, db: DbDep, user: CurrentUser, trip: ActiveTrip
+) -> OrganiserOut:
+    """AC-13. Owner only — there is no organiser-facing path to this route anywhere.
+
+    Idempotent: appointing someone who is already an organiser returns the existing row with
+    `200`. A `409` would be a worse answer to a request whose desired end state already holds,
+    and the console's search list is built from the member universe, which a second admin may
+    have changed under the caller a second ago.
+    """
+    current = _require_trip(trip)
+    target = await _load_target(db, payload.user_id)
+
+    if bool(target.is_platform_admin) or current.owner_user_id == target.id:
+        # The owner already holds every organiser power; a row would imply the role could be
+        # taken away from them, which it cannot.
+        raise ApiError(
+            409, "cannot_appoint_owner", "The trip's owner already has every organiser power."
+        )
+
+    membership = await db.scalar(
+        select(FamilyMember).where(FamilyMember.user_id == target.id)
+    )
+    if membership is None:
+        # The appointment list is drawn from the trip's members; someone with no family has
+        # not been invited onto this trip, and there would be nobody to search for.
+        raise ApiError(
+            422, "not_on_trip", "Only someone already on the trip can be made an organiser."
+        )
+
+    existing = await db.scalar(
+        select(TripOrganiser).where(
+            TripOrganiser.trip_id == current.id, TripOrganiser.user_id == target.id
+        )
+    )
+    if existing is not None:
+        response.status_code = status.HTTP_200_OK
+        return (await _one_organiser(db, current, target.id)) or _organiser_out(
+            target, membership, None, None, existing.created_at
+        )
+
+    db.add(
+        TripOrganiser(trip_id=current.id, user_id=target.id, granted_by=user.id)
+    )
+    await db.commit()
+
+    out = await _one_organiser(db, current, target.id)
+    assert out is not None  # noqa: S101 - just inserted in this transaction
+    # Every client: the appointee's own nav rail grows an `Admin` entry without a reload, and
+    # everyone else's member list learns the label.
+    await ws.broadcast(
+        current.id,
+        "organiser.appointed",
+        {"user_id": str(target.id), "granted_by": str(user.id)},
+    )
+    return out
+
+
+async def _one_organiser(db: DbDep, trip: Trip, user_id: uuid.UUID) -> OrganiserOut | None:
+    for row in await _load_organisers(db, trip):
+        if row.user_id == user_id:
+            return row
+    return None
+
+
+@router.delete(
+    "/organisers/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Demote an organiser",
+    dependencies=[Depends(require_owner), Depends(require_stage("planning", "holiday"))],
+)
+async def demote_organiser(
+    user_id: uuid.UUID, db: DbDep, trip: ActiveTrip
+) -> Response:
+    """AC-13. Deliberately narrow: this writes one row and nothing else.
+
+    It does **not** touch `family_members.role`, and it does **not** revoke sessions or emit
+    `session.revoked`. A demoted organiser keeps their family role, keeps their session, and
+    simply stops passing `require_organiser` on their next request — because this is a
+    permission change, not an access revocation. Forcing a re-login would tell them they had
+    been thrown out of the trip, which is not what happened.
+    """
+    current = _require_trip(trip)
+
+    if current.owner_user_id == user_id:
+        # The owner is never a row here, so there is nothing to delete and the request is a
+        # misunderstanding worth naming rather than a 404.
+        raise ApiError(
+            409, "cannot_demote_owner", "The trip's owner is not an organiser to remove."
+        )
+
+    grant = await db.scalar(
+        select(TripOrganiser).where(
+            TripOrganiser.trip_id == current.id, TripOrganiser.user_id == user_id
+        )
+    )
+    if grant is None:
+        raise ApiError(404, "not_found", "That person is not an organiser.")
+
+    await db.delete(grant)
+    await db.commit()
+
+    # Every client, and the demoted user's own especially: their `Admin` nav entry and any
+    # open console tab go away live rather than on their next 403.
+    await ws.broadcast(current.id, "organiser.demoted", {"user_id": str(user_id)})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
