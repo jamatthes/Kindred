@@ -1,8 +1,17 @@
 /**
- * Placeholder root. Phase 7 of `plan/features/foundation/tasks.md` replaces this with the
- * real app shell (`src/app/shell.tsx`), routing, session bootstrap and the login screens.
- * Foundation phases 1-6 ship the scaffold only — no UI.
+ * Composition root: the providers every screen depends on, then the route gate.
  */
+
+import { SessionProvider } from './app/session'
+import { ToastProvider } from './app/ui/toast'
+import { Routes } from './app/routes'
+
 export default function App() {
-  return <div id="app-root" />
+  return (
+    <ToastProvider>
+      <SessionProvider>
+        <Routes />
+      </SessionProvider>
+    </ToastProvider>
+  )
 }

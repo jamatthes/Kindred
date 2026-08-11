@@ -1,0 +1,92 @@
+/* ============================================================================
+   Auth screens — login and the forced password change.
+   Centred single-column card on --color-bg, per the foundation design.
+   ========================================================================== */
+
+.auth-screen {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+}
+
+.auth-wordmark {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: var(--text-sub);
+  color: var(--color-accent);
+  letter-spacing: -0.02em;
+  line-height: var(--leading-tight);
+  text-align: center;
+  margin-bottom: var(--space-2);
+}
+
+.auth-title {
+  font-size: var(--text-sub);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+
+.auth-sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: var(--space-1) 0 var(--space-4);
+}
+
+.auth-rules {
+  list-style: none;
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.auth-rules li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+}
+.auth-rules li::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-faint);
+  flex: none;
+}
+
+.auth-foot {
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+.auth-linkbtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-family: var(--font-sans);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+.auth-linkbtn:hover { color: var(--color-accent-hover); }

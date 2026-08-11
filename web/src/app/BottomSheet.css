@@ -1,0 +1,100 @@
+/* ============================================================================
+   Bottom sheet — the mobile side panel. Snap points at ~40% and ~90%.
+   ========================================================================== */
+
+.sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  background: var(--color-overlay);
+  cursor: pointer;
+  animation: sheet-fade var(--duration-base) var(--ease-standard);
+}
+
+.sheet {
+  position: relative;
+  background: var(--color-surface);
+  border-top-left-radius: var(--radius-3);
+  border-top-right-radius: var(--radius-3);
+  box-shadow: var(--shadow-sheet);
+  display: flex;
+  flex-direction: column;
+  animation: sheet-up var(--duration-base) var(--ease-standard);
+  transition: height var(--duration-base) var(--ease-standard);
+}
+.sheet--peek { height: 40%; }
+.sheet--full { height: 90%; }
+
+/* The handle is a real button: dragging is a nicety, tapping is the contract, and
+   both are at least a finger tall. */
+.sheet__handle {
+  height: var(--hit-target);
+  border: none;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet__grip {
+  width: var(--space-5);
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.sheet__title {
+  flex: 1;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+.sheet__close {
+  width: var(--hit-target);
+  height: var(--hit-target);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.sheet__close:hover { background: var(--color-surface-sunken); }
+
+.sheet__body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-3);
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Reduced motion: the sheet appears, it does not slide. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation: sheet-fade var(--duration-fast) var(--ease-standard); }
+}

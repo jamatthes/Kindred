@@ -1,0 +1,317 @@
+/* ============================================================================
+   App shell.
+   Desktop: slim nav rail → main (~62%) → right side-panel slot (~38%), with a
+   collapsed bottom timeline slot. Mobile: bottom tab bar, full-bleed main, and
+   the bottom sheet in place of the side panel.
+   Class names and proportions follow the approved mockups in `design-preview/`.
+   ========================================================================== */
+
+.shell {
+  display: flex;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+}
+
+/* ------------------------------- nav rail -------------------------------- */
+.rail {
+  width: var(--rail-width);
+  flex: none;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-3) 0;
+  gap: var(--space-2);
+}
+.rail__logo {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-2);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: var(--text-lg);
+  font-family: var(--font-brand);
+  margin-bottom: var(--space-3);
+  flex: none;
+}
+.rail__btn {
+  width: var(--hit-target);
+  height: var(--hit-target);
+  border-radius: var(--radius-2);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+}
+.rail__btn:hover:not(:disabled) { background: var(--color-surface-sunken); }
+.rail__btn.is-active { background: var(--color-accent-soft); color: var(--color-accent); }
+.rail__btn:disabled { color: var(--color-text-faint); cursor: not-allowed; }
+.rail__spacer { flex: 1; }
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-on-accent);
+  background: var(--color-text-faint);
+  flex: none;
+}
+
+/* ------------------------------ main column ------------------------------ */
+.shell__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* -------------------------------- top bar -------------------------------- */
+.topbar {
+  height: var(--topbar-height);
+  flex: none;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+}
+.topbar__wordmark {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: var(--text-sub);
+  color: var(--color-accent);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.topbar__trip {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar__grow { flex: 1; }
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px var(--space-3);
+  border-radius: var(--chip-radius);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  white-space: nowrap;
+}
+.stage-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+.stage-chip--holiday { background: var(--color-success-soft); color: var(--color-success); }
+.stage-chip--end { background: var(--color-surface-sunken); color: var(--color-text-muted); }
+
+.topbar__search {
+  width: 320px;
+  height: var(--button-height);
+  border-radius: var(--chip-radius);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+.topbar__search::placeholder { color: var(--color-text-faint); }
+.topbar__search:disabled { color: var(--color-text-faint); cursor: not-allowed; }
+
+.icon-btn {
+  width: var(--button-height);
+  height: var(--button-height);
+  border-radius: var(--radius-2);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex: none;
+}
+.icon-btn:hover:not(:disabled) { background: var(--color-surface-sunken); }
+.icon-btn:disabled { color: var(--color-text-faint); cursor: not-allowed; }
+
+/* presence stack: one avatar per family, overlapping. Full colour when a family
+   has someone online, desaturated when nobody is. */
+.presence-stack { display: flex; align-items: center; flex: none; }
+.presence-stack__av {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  color: var(--color-text-on-accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  border: 2px solid var(--color-surface);
+  margin-left: -8px;
+}
+.presence-stack__av:first-child { margin-left: 0; }
+.presence-stack__av.is-offline { filter: grayscale(1) opacity(0.5); }
+
+/* theme control — three-way, icon plus accessible name */
+.theme-control {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--chip-radius);
+  overflow: hidden;
+  flex: none;
+}
+.theme-control button {
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  padding: 0 var(--space-2);
+  height: 32px;
+  min-width: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.theme-control button.is-on { background: var(--color-text); color: var(--color-bg); }
+
+/* ------------------------------- workspace ------------------------------- */
+.workspace { flex: 1; display: flex; min-height: 0; }
+.workspace__main { flex: 1; min-width: 0; overflow: auto; }
+
+/* The 62/38 split. Empty in M0 — laid out now so features drop in without a
+   layout rewrite. */
+.side-panel {
+  width: var(--panel-width);
+  max-width: var(--panel-max-width);
+  flex: none;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  overflow: auto;
+}
+
+/* Bottom timeline slot, collapsed until the itinerary feature fills it. */
+.timeline-slot {
+  height: var(--space-5);
+  flex: none;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+/* ------------------------------ home region ------------------------------ */
+.home {
+  padding: var(--space-5) var(--space-4);
+  max-width: 720px;
+  margin: 0 auto;
+}
+.home__title {
+  font-size: var(--text-heading);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+.home__sub { color: var(--color-text-muted); margin-top: var(--space-2); }
+.home__card {
+  margin-top: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+}
+.home__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+}
+.home__row + .home__row { border-top: 1px solid var(--color-border); }
+.home__row .label { color: var(--color-text-muted); width: 140px; flex: none; }
+
+/* --------------------------- reconnecting chip ---------------------------
+   Only rendered after the second consecutive failure, so a one-second blip is
+   never announced. */
+.reconnecting {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: var(--space-3);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border-radius: var(--chip-radius);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
+}
+
+/* ------------------------------- bottom tabs -----------------------------
+   Mobile only. Every target is at least --hit-target tall. */
+.tabbar {
+  display: none;
+  height: var(--tabbar-height);
+  flex: none;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.tabbar__tab {
+  flex: 1;
+  min-height: var(--hit-target);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-family: var(--font-sans);
+}
+.tabbar__tab.is-active { color: var(--color-accent); }
+.tabbar__tab:disabled { color: var(--color-text-faint); opacity: 0.6; cursor: not-allowed; }
+
+/* --------------------------------- mobile -------------------------------- */
+@media (max-width: 767px) {
+  .rail { display: none; }
+  .tabbar { display: flex; }
+  .side-panel { display: none; }  /* the bottom sheet takes its place */
+  .timeline-slot { display: none; }
+  .topbar { padding: 0 var(--space-3); gap: var(--space-2); }
+  .topbar__search { display: none; }
+  .topbar__trip { font-size: var(--text-body); }
+  .home { padding: var(--space-4) var(--space-3); }
+  .home__title { font-size: var(--text-sub); }
+}

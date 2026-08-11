@@ -1,0 +1,187 @@
+/* ============================================================================
+   Shared UI primitives. Tokens only — no literal colours, no off-scale spacing.
+   Single-use knobs are declared here next to the component that owns them, which
+   is where layer 3 of the token system says they belong.
+   ========================================================================== */
+
+/* ------------------------------- button ---------------------------------- */
+.k-btn {
+  height: var(--button-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--button-radius);
+  border: 1px solid transparent;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.k-btn--block { width: 100%; }
+.k-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+.k-btn--primary {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+}
+.k-btn--primary:hover:not([disabled]) { background: var(--color-accent-hover); }
+.k-btn--primary:active:not([disabled]) { background: var(--color-accent-active); }
+
+.k-btn--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.k-btn--secondary:hover:not([disabled]) { background: var(--color-surface-sunken); }
+
+.k-btn--ghost { background: transparent; color: var(--color-text-muted); }
+.k-btn--ghost:hover:not([disabled]) { background: var(--color-surface-sunken); }
+
+/* Touch targets are never below 44px on a phone. */
+@media (max-width: 767px) {
+  .k-btn { height: var(--button-height-mobile); }
+}
+
+/* -------------------------------- field ----------------------------------
+   All six states are styled from day one: default, hover, focus, filled,
+   error, disabled. */
+.k-field { display: block; margin-bottom: var(--space-3); }
+.k-field__label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+.k-field__input {
+  width: 100%;
+  height: var(--field-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--field-radius);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-body);
+  font-family: var(--font-sans);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.k-field__input::placeholder { color: var(--color-text-faint); }
+.k-field__input:hover:not(:disabled):not(:focus) { border-color: var(--color-text-faint); }
+.k-field__input:focus {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+  border-color: var(--color-focus-ring);
+}
+/* Filled: a value present is worth showing as settled, not as empty. */
+.k-field__input:not(:placeholder-shown) { background: var(--color-surface-raised); }
+.k-field__input:disabled {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+.k-field--error .k-field__input { border-color: var(--color-danger); }
+.k-field--error .k-field__input:focus { outline-color: var(--color-danger); }
+
+.k-field__hint {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  margin-top: var(--space-1);
+}
+/* Error text sits beneath the field and carries an icon: colour is never the only
+   carrier of meaning. */
+.k-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  margin-top: var(--space-1);
+}
+
+/* ------------------------------- spinner ---------------------------------
+   Sub-second inline waits only; structural loads use a skeleton. */
+.k-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  border: 2px solid color-mix(in srgb, currentColor var(--mix-tint-strong), transparent);
+  border-top-color: currentColor;
+  animation: k-spin 700ms linear infinite;
+  flex: none;
+}
+@keyframes k-spin { to { transform: rotate(360deg); } }
+
+/* ------------------------------- banners ---------------------------------- */
+.k-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-2);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
+.k-banner--error {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.k-banner--info {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+/* -------------------------------- toast -----------------------------------
+   Transient confirmation of the user's own action. Never used for information
+   that has to persist. */
+.k-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.k-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-text);
+  color: var(--color-bg);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--chip-radius);
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  animation: k-toast-in var(--duration-base) var(--ease-standard);
+}
+@keyframes k-toast-in {
+  from { opacity: 0; transform: translateY(var(--space-2)); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ------------------------------ skeletons ---------------------------------
+   Structural loads (the shell while auth/me resolves). */
+.k-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton) 0%,
+    var(--color-skeleton-sheen) 50%,
+    var(--color-skeleton) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-2);
+  animation: k-sheen 1200ms var(--ease-standard) infinite;
+}
+@keyframes k-sheen {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
