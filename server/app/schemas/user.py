@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ThemePref = Literal["light", "dark", "system"]
 Stage = Literal["planning", "holiday", "end"]
-FamilyRole = Literal["admin", "member"]
+#: Family-level roles (revised 2026-08-11). Orthogonal to the trip-level owner/organiser pair.
+FamilyRole = Literal["head", "spouse", "member"]
 #: The onboarding gate (F-13). Resolved in `app/core/onboarding.py`; the client routes on
 #: this field alone and never recomputes the precedence.
 NextStep = Literal["change_password", "setup_trip", "setup_family", "app"]

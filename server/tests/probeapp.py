@@ -1,7 +1,7 @@
 """A test-only app exposing one route per permission dependency.
 
 Phase 5 shipped these as real `/_probe` routes in the served app; Phase 8 removed them, as
-planned. The *coverage* must not go with them: `require_stage` and `require_family_admin`
+planned. The *coverage* must not go with them: `require_stage`, `require_family_head_or_spouse` and `require_owner`
 have no feature route to exercise them until M1 features land, and a dependency with no
 allow/deny test is exactly what F-9 forbids.
 
@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from app.deps import (
     enforce_password_change,
-    require_main_admin,
+    require_organiser,
+    require_owner,
     require_member,
     require_stage,
 )
@@ -33,6 +34,7 @@ router = APIRouter(
 
 MEMBER = f"{API_PREFIX}/_probe/member"
 MAIN_ADMIN = f"{API_PREFIX}/_probe/main-admin"
+OWNER = f"{API_PREFIX}/_probe/owner"
 STAGE = f"{API_PREFIX}/_probe/stage"
 CSRF = f"{API_PREFIX}/_probe/csrf"
 
@@ -42,8 +44,16 @@ async def probe_member() -> dict[str, bool]:
     return {"ok": True}
 
 
-@router.get("/main-admin", dependencies=[Depends(require_main_admin)])
+@router.get("/main-admin", dependencies=[Depends(require_organiser)])
 async def probe_main_admin() -> dict[str, bool]:
+    """The owner or an organiser — what the pre-2026-08-11 docs called the main admin."""
+    return {"ok": True}
+
+
+@router.get("/owner", dependencies=[Depends(require_owner)])
+async def probe_owner() -> dict[str, bool]:
+    """The owner alone. `admin-console` guards organiser management with this and nothing
+    else; there is no feature route to exercise it until then."""
     return {"ok": True}
 
 

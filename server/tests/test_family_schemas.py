@@ -35,13 +35,14 @@ def _viewer(
     *,
     family: Family | None = None,
     role: str | None = None,
-    main_admin: bool = False,
+    organiser: bool = False,
 ) -> Viewer:
     return Viewer(
         user_id=user.id,
         family_id=family.id if family else None,
-        is_main_admin=main_admin,
-        is_family_admin=role == "admin",
+        is_owner=organiser,
+        is_organiser=organiser,
+        manages_own_family=role in ("head", "spouse"),
     )
 
 
@@ -112,7 +113,7 @@ async def placed_family(db: AsyncSession, trip: Trip) -> tuple[Family, User]:
     """A family with a fully geocoded home, and one member of it."""
     family = await make_family(db, trip, "Parkers", color=1)
     user = await make_user(db, "parker")
-    await add_member(db, family, user, role="admin")
+    await add_member(db, family, user, role="head")
     family.home_address = "12 Elm Row, Bristol BS1 4AA"
     family.home_lat = 51.4545
     family.home_lng = -2.5879
@@ -136,7 +137,7 @@ async def test_a_member_of_the_family_sees_the_full_address(
     db: AsyncSession, placed_family: tuple[Family, User]
 ) -> None:
     family, user = placed_family
-    detail = family_detail_out(family, _viewer(user, family=family, role="admin"))
+    detail = family_detail_out(family, _viewer(user, family=family, role="head"))
     assert ADDRESS_KEYS <= tuple(_keys(detail)) or set(ADDRESS_KEYS) <= _keys(detail)
     assert detail.home_address == "12 Elm Row, Bristol BS1 4AA"
 
@@ -145,7 +146,7 @@ async def test_the_main_admin_sees_any_familys_full_address(
     db: AsyncSession, placed_family: tuple[Family, User], main_admin: User
 ) -> None:
     family, _ = placed_family
-    detail = family_detail_out(family, _viewer(main_admin, main_admin=True))
+    detail = family_detail_out(family, _viewer(main_admin, organiser=True))
     assert set(ADDRESS_KEYS) <= _keys(detail)
     assert detail.home_lat == pytest.approx(51.4545)
 
@@ -157,9 +158,9 @@ async def test_another_familys_member_gets_no_address_key_at_all(
     family, _ = placed_family
     other_family = await make_family(db, trip, "Riveras", color=2)
     outsider = await make_user(db, "rivera")
-    await add_member(db, other_family, outsider, role="admin")
+    await add_member(db, other_family, outsider, role="head")
 
-    detail = family_detail_out(family, _viewer(outsider, family=other_family, role="admin"))
+    detail = family_detail_out(family, _viewer(outsider, family=other_family, role="head"))
     assert _keys(detail).isdisjoint(ADDRESS_KEYS)
 
 
@@ -196,7 +197,7 @@ async def sharing_family(db: AsyncSession, trip: Trip) -> tuple[Family, User, Us
     family = await make_family(db, trip, "Jiangs", color=3)
     admin = await make_user(db, "jiangadmin")
     sharer = await make_user(db, "jiangsharer")
-    await add_member(db, family, admin, role="admin")
+    await add_member(db, family, admin, role="head")
     await add_member(db, family, sharer, role="member")
     settings = sharer.settings
     settings.live_location_enabled = True
@@ -213,7 +214,7 @@ async def test_their_own_family_admin_sees_a_members_consent(
     sharing_family: tuple[Family, User, User],
 ) -> None:
     family, admin, _ = sharing_family
-    detail = family_detail_out(family, _viewer(admin, family=family, role="admin"))
+    detail = family_detail_out(family, _viewer(admin, family=family, role="head"))
     assert _member_named(detail, "jiangsharer").location_sharing_enabled is True
 
 
@@ -241,9 +242,9 @@ async def test_another_familys_admin_sees_no_consent_at_all(
     family, _, _ = sharing_family
     other = await make_family(db, trip, "Riveras", color=4)
     stranger = await make_user(db, "stranger")
-    await add_member(db, other, stranger, role="admin")
+    await add_member(db, other, stranger, role="head")
 
-    detail = family_detail_out(family, _viewer(stranger, family=other, role="admin"))
+    detail = family_detail_out(family, _viewer(stranger, family=other, role="head"))
     assert all(m.location_sharing_enabled is None for m in detail.members)
 
 
@@ -251,7 +252,7 @@ async def test_the_main_admin_sees_consent_in_any_family(
     sharing_family: tuple[Family, User, User], main_admin: User
 ) -> None:
     family, _, _ = sharing_family
-    detail = family_detail_out(family, _viewer(main_admin, main_admin=True))
+    detail = family_detail_out(family, _viewer(main_admin, organiser=True))
     assert _member_named(detail, "jiangsharer").location_sharing_enabled is True
 
 
@@ -259,7 +260,7 @@ async def test_the_family_admin_is_listed_first(
     sharing_family: tuple[Family, User, User],
 ) -> None:
     family, admin, _ = sharing_family
-    detail = family_detail_out(family, _viewer(admin, family=family, role="admin"))
+    detail = family_detail_out(family, _viewer(admin, family=family, role="head"))
     assert detail.members[0].username == "jiangadmin"
     assert detail.member_count == 2
 
@@ -269,7 +270,7 @@ async def test_an_avatar_is_served_from_both_renditions(
 ) -> None:
     family = await make_family(db, trip, "Withpics", color=5)
     user = await make_user(db, "haspic")
-    await add_member(db, family, user, role="admin")
+    await add_member(db, family, user, role="head")
     attachment = Attachment(
         subject_type="user",
         subject_id=user.id,
@@ -291,7 +292,7 @@ async def test_an_avatar_is_served_from_both_renditions(
     family = await db.get(Family, family_id)
 
     viewer = Viewer(
-        user_id=user_id, family_id=family_id, is_main_admin=False, is_family_admin=True
+        user_id=user_id, family_id=family_id, is_owner=False, is_organiser=False, manages_own_family=True
     )
     detail = family_detail_out(family, viewer)
     member = detail.members[0]
@@ -304,7 +305,7 @@ async def test_no_avatar_leaves_both_urls_null_and_initials_standing(
 ) -> None:
     """FM-14: the badge has no broken state — without a picture there are initials."""
     family, admin, _ = sharing_family
-    detail = family_detail_out(family, _viewer(admin, family=family, role="admin"))
+    detail = family_detail_out(family, _viewer(admin, family=family, role="head"))
     member = detail.members[0]
     assert member.avatar_url is None and member.avatar_thumb_url is None
     assert member.initials == "J"

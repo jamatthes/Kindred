@@ -51,7 +51,7 @@ async def two_families(db: AsyncSession, trip: Trip) -> tuple[Family, User, Fami
     """The Parkers, with a placed home and a sharing member; and an unrelated Rivera."""
     parkers = await make_family(db, trip, "Parkers", color=1)
     parker = await make_user(db, "parker")
-    await add_member(db, parkers, parker, role="admin")
+    await add_member(db, parkers, parker, role="head")
     parkers.home_address = "12 Elm Row, Bristol BS1 4AA"
     parkers.home_lat = 51.4545
     parkers.home_lng = -2.5879
@@ -63,7 +63,7 @@ async def two_families(db: AsyncSession, trip: Trip) -> tuple[Family, User, Fami
 
     riveras = await make_family(db, trip, "Riveras", color=2)
     rivera = await make_user(db, "rivera")
-    await add_member(db, riveras, rivera, role="admin")
+    await add_member(db, riveras, rivera, role="head")
     await db.commit()
     return parkers, parker, riveras, rivera
 

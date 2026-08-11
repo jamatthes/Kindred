@@ -38,7 +38,7 @@ async def household(db: AsyncSession, trip: Trip) -> tuple[Family, User, User]:
     family = await make_family(db, trip, "Household", color=1)
     admin = await make_user(db, "houseadmin")
     quiet = await make_user(db, "quietone")
-    await add_member(db, family, admin, role="admin")
+    await add_member(db, family, admin, role="head")
     await add_member(db, family, quiet, role="member")
     return family, admin, quiet
 
@@ -64,7 +64,7 @@ def _mutations(family: Family, target: User) -> list[tuple[str, str, dict | None
         ("PATCH", f"{base}/location-policy", {"sharing_allowed": True}),
         ("PATCH", f"{base}/location-policy", {"member_default": True}),
         ("PATCH", f"{base}/location-policy", {"sharing_allowed": True, "member_default": True}),
-        ("PATCH", f"{base}/members/{target.id}", {"role": "admin"}),
+        ("PATCH", f"{base}/members/{target.id}", {"role": "spouse"}),
         ("PATCH", f"{base}/members/{target.id}", {"location_sharing_allowed": True}),
         # Not in `MemberPatchIn`. If one of these ever starts being honoured, this test is
         # where it shows up.

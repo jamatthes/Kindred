@@ -32,6 +32,9 @@ depends_on: str | Sequence[str] | None = None
 
 GEOCODE_STATUSES = ("pending", "ok", "not_found", "error")
 
+#: `family_members.role`, revised 2026-08-11: `admin` renamed to `head`, `spouse` added.
+FAMILY_ROLES = ("head", "spouse", "member")
+
 
 def upgrade() -> None:
     # --- attachments -------------------------------------------------------------------
@@ -154,6 +157,51 @@ def upgrade() -> None:
     op.drop_index("ix_family_members_user_id", table_name="family_members")
     op.create_index("uq_family_members_user_id", "family_members", ["user_id"], unique=True)
 
+    # `admin` becomes `head`, and `spouse` joins it (roles revised 2026-08-11). Foundation
+    # writes no membership rows, so this UPDATE is a no-op on a real install; it is here so
+    # the migration is correct for a database that already has data.
+    op.execute("UPDATE family_members SET role = 'head' WHERE role = 'admin'")
+    op.alter_column("family_members", "role", server_default="member")
+    op.create_check_constraint(
+        "ck_family_members_role", "family_members", "role IN " + str(FAMILY_ROLES)
+    )
+    # **Exactly one head per family.** Two heads plus the spouse asymmetry — neither able to
+    # act on the other — is a deadlock nobody inside the family can unpick, and zero heads can
+    # only be repaired by an organiser. A partial unique index says so in the one place that
+    # cannot be bypassed.
+    op.create_index(
+        "uq_family_members_one_head",
+        "family_members",
+        ["family_id"],
+        unique=True,
+        postgresql_where=sa.text("role = 'head'"),
+    )
+
+    # --- trip_organisers ---------------------------------------------------------------
+    # The owner delegates every cross-family power except the power to delegate (FM-17).
+    # Created here because this feature's permission dependencies read it from the first
+    # route; the endpoints that write it belong to `admin-console`.
+    op.create_table(
+        "trip_organisers",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("trip_id", sa.UUID(), nullable=False),
+        sa.Column("user_id", sa.UUID(), nullable=False),
+        # Nullable: deleting the account that made a grant must not take the grant with it.
+        sa.Column("granted_by", sa.UUID(), nullable=True),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        # No `updated_at`. The row's existence *is* the grant, so there is nothing to mutate
+        # — revoking is a delete.
+        sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["granted_by"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("trip_id", "user_id", name="uq_trip_organisers_trip_user"),
+    )
+    op.create_index("ix_trip_organisers_trip_id", "trip_organisers", ["trip_id"], unique=False)
+
     # --- invites -----------------------------------------------------------------------
     op.create_table(
         "invites",
@@ -192,11 +240,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_trip_organisers_trip_id", table_name="trip_organisers")
+    op.drop_table("trip_organisers")
+
     op.drop_index("ix_invites_trip_id", table_name="invites")
     op.drop_index("ix_invites_expires_at", table_name="invites")
     op.drop_index("ix_invites_family_id", table_name="invites")
     op.drop_table("invites")
 
+    op.drop_index("uq_family_members_one_head", table_name="family_members")
+    op.drop_constraint("ck_family_members_role", "family_members", type_="check")
+    op.execute("UPDATE family_members SET role = 'admin' WHERE role IN ('head', 'spouse')")
     op.drop_index("uq_family_members_user_id", table_name="family_members")
     op.create_index("ix_family_members_user_id", "family_members", ["user_id"], unique=False)
     op.drop_column("family_members", "location_sharing_allowed")

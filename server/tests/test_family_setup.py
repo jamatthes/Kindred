@@ -137,7 +137,7 @@ async def test_auth_me_reports_the_gate(
 # --- the route ----------------------------------------------------------------------------
 
 
-async def test_a_pending_founder_creates_exactly_one_family_and_becomes_its_admin(
+async def test_a_pending_founder_creates_exactly_one_family_and_becomes_its_head(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, pending: User
 ) -> None:
     await login_as(client, db, pending)
@@ -147,7 +147,7 @@ async def test_a_pending_founder_creates_exactly_one_family_and_becomes_its_admi
     body = response.json()
     assert body["name"] == "The Newtons"
     assert body["color"] == 1
-    assert [m["role"] for m in body["members"]] == ["admin"]
+    assert [m["role"] for m in body["members"]] == ["head"]
 
     assert await db.scalar(select(func.count()).select_from(Family)) == 1
     assert await db.scalar(select(func.count()).select_from(FamilyMember)) == 1
@@ -177,7 +177,7 @@ async def test_the_gate_opens_once_setup_is_finished(
     me = (await client.get("/api/v1/auth/me")).json()
     assert me["next_step"] == "app"
     assert me["family"]["name"] == "The Newtons"
-    assert me["family"]["role"] == "admin"
+    assert me["family"]["role"] == "head"
     assert (await client.get("/api/v1/families")).status_code == 200
 
 

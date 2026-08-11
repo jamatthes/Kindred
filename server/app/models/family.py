@@ -35,6 +35,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
     select,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,8 +46,20 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:  # `user` imports this module for nothing, so the runtime import would cycle
     from app.models.user import User
 
-#: `family_members.role`. The per-family admin is distinct from the platform/main admin.
-FAMILY_ROLES = ("admin", "member")
+#: `family_members.role` (revised 2026-08-11). Family-level roles, entirely independent of the
+#: trip-level ones — the trip's owner and its organisers are also an ordinary head, spouse or
+#: member of their own family, and hold no family powers elsewhere except the cross-family
+#: ones their trip role gives them.
+FAMILY_ROLES = ("head", "spouse", "member")
+
+#: A spouse holds the head's powers over the family. The single exception is evaluated against
+#: the **target** of an action rather than the actor's role — see :func:`spouse_may_act_on`.
+ROLE_HEAD = "head"
+ROLE_SPOUSE = "spouse"
+ROLE_MEMBER = "member"
+
+#: Roles that may manage the family they belong to.
+FAMILY_MANAGER_ROLES = (ROLE_HEAD, ROLE_SPOUSE)
 
 #: `families.geocode_status`. `pending` means never attempted, which is why a family that has
 #: had its address cleared goes back to it rather than to `not_found`.
@@ -168,11 +181,40 @@ class FamilyMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         # every permission check, which is why this is a database constraint and not a
         # convention.
         Index("uq_family_members_user_id", "user_id", unique=True),
+        # **Exactly one head per family.** Two heads, neither able to act on the other under
+        # the spouse asymmetry, is a deadlock nobody inside the family can unpick; zero heads
+        # can only be repaired by an organiser. Both states are unreachable from here.
+        Index(
+            "uq_family_members_one_head",
+            "family_id",
+            unique=True,
+            postgresql_where=text("role = 'head'"),
+        ),
+        CheckConstraint(f"role IN {FAMILY_ROLES}", name="ck_family_members_role"),
     )
 
     @property
-    def is_admin(self) -> bool:
-        return self.role == "admin"
+    def is_head(self) -> bool:
+        return self.role == ROLE_HEAD
+
+    @property
+    def manages_family(self) -> bool:
+        """Head or spouse — the two roles that run a family (FM-9, FM-16)."""
+        return self.role in FAMILY_MANAGER_ROLES
+
+
+def spouse_may_act_on(actor: FamilyMember, target: FamilyMember) -> bool:
+    """The spouse asymmetry, in one place (`plan/features/families/design.md`).
+
+    A spouse has the head's powers over their family, with one exception: they may not remove
+    the head, change the head's role, or change the head's visibility switches. Two people who
+    can each remove the other is a family that can lock itself out in one click.
+
+    Expressed against the **target** rather than the actor's role, and as a single predicate,
+    because the alternative is three route-specific checks and a fourth route that forgets.
+    A spouse acting on any other member — or on themselves — is unaffected.
+    """
+    return not (actor.role == ROLE_SPOUSE and target.role == ROLE_HEAD)
 
 
 class Invite(UUIDPrimaryKeyMixin, TimestampMixin, Base):

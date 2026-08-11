@@ -7,6 +7,7 @@ the full metadata (``alembic/env.py`` imports this module for exactly that reaso
 from app.models.attachment import ATTACHMENT_SUBJECT_TYPES, Attachment
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.family import (
+    FAMILY_MANAGER_ROLES,
     FAMILY_ROLES,
     GEOCODE_STATUSES,
     INVITE_EXPIRY_CHOICES,
@@ -14,6 +15,9 @@ from app.models.family import (
     LOCATION_BLOCKED_FAMILY,
     LOCATION_BLOCKED_MEMBER,
     MAX_COLOR_SLOTS,
+    ROLE_HEAD,
+    ROLE_MEMBER,
+    ROLE_SPOUSE,
     Family,
     FamilyMember,
     Invite,
@@ -21,6 +25,7 @@ from app.models.family import (
     is_invite_usable,
     location_block_reason,
     next_free_color,
+    spouse_may_act_on,
 )
 from app.models.session import LoginAttempt, Session
 from app.models.setting import (
@@ -30,10 +35,12 @@ from app.models.setting import (
     Setting,
 )
 from app.models.trip import STAGES, Trip
+from app.models.trip_organiser import TripOrganiser
 from app.models.user import THEME_PREFS, User, UserSettings
 
 __all__ = [
     "ATTACHMENT_SUBJECT_TYPES",
+    "FAMILY_MANAGER_ROLES",
     "FAMILY_ROLES",
     "GEOCODE_STATUSES",
     "INVITE_EXPIRY_CHOICES",
@@ -41,6 +48,9 @@ __all__ = [
     "LOCATION_BLOCKED_FAMILY",
     "LOCATION_BLOCKED_MEMBER",
     "MAX_COLOR_SLOTS",
+    "ROLE_HEAD",
+    "ROLE_MEMBER",
+    "ROLE_SPOUSE",
     "SETTING_INSTANCE_NAME",
     "SETTING_INVITE_ONLY",
     "SETTING_REGISTRATION_OPEN",
@@ -56,6 +66,7 @@ __all__ = [
     "Setting",
     "TimestampMixin",
     "Trip",
+    "TripOrganiser",
     "UUIDPrimaryKeyMixin",
     "User",
     "UserSettings",
@@ -63,4 +74,5 @@ __all__ = [
     "is_invite_usable",
     "location_block_reason",
     "next_free_color",
+    "spouse_may_act_on",
 ]

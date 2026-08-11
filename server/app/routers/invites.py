@@ -43,12 +43,15 @@ from app.deps import (
     SessionDep,
     client_ip,
     enforce_password_change,
+    is_organiser,
     load_membership,
-    require_family_admin,
-    require_main_admin,
+    require_family_head_or_spouse,
+    require_organiser,
     require_stage,
 )
 from app.models import (
+    FAMILY_MANAGER_ROLES,
+    ROLE_MEMBER,
     SETTING_INSTANCE_NAME,
     Family,
     FamilyMember,
@@ -143,27 +146,27 @@ async def list_invites(
     trip: ActiveTrip,
     family_id: uuid.UUID | None = None,
 ) -> list[InviteOut]:
-    """FM-5: a family admin sees their own family's invites; the main admin sees them all.
+    """FM-5: a head or spouse sees their own family's invites; an organiser sees them all.
 
     The scope is *narrowed for the caller* rather than refused, because "list invites" means
-    something different depending on who is asking, and a 403 for a family admin who omitted
-    the query parameter would be an obstacle rather than a protection. A family admin asking
-    for another family's list explicitly still gets a 403.
+    something different depending on who is asking, and a 403 for a head who omitted the query
+    parameter would be an obstacle rather than a protection. A head asking for another
+    family's list explicitly still gets a 403.
     """
     if trip is None:
         return []
 
-    is_main_admin = user.is_platform_admin or trip.owner_user_id == user.id
+    organiser = await is_organiser(db, user, trip)
     membership = await load_membership(db, user.id, trip.id)
     own_family_id = membership[0].id if membership else None
-    is_family_admin = membership is not None and membership[1].role == "admin"
+    manages_family = membership is not None and membership[1].role in FAMILY_MANAGER_ROLES
 
-    if family_id is not None and not is_main_admin:
-        if not is_family_admin or family_id != own_family_id:
+    if family_id is not None and not organiser:
+        if not manages_family or family_id != own_family_id:
             raise forbidden("You can only see your own family's invites.")
-    elif family_id is None and not is_main_admin:
-        if not is_family_admin:
-            raise forbidden("Only a family admin can see invites.")
+    elif family_id is None and not organiser:
+        if not manages_family:
+            raise forbidden("Only a family's head or spouse can see invites.")
         family_id = own_family_id
 
     stmt = select(Invite).where(Invite.trip_id == trip.id).order_by(Invite.created_at.desc())
@@ -189,10 +192,11 @@ async def create_invite(
 ) -> InviteCreatedOut:
     """FM-5 and FM-6. The permission depends on the body, which is why it is resolved here.
 
-    `family_id` non-null is "join my family" and needs `require_family_admin(family_id)`.
-    `family_id` null is "create a new family" and needs `require_main_admin` — **a family
-    admin can never invite into another family, nor mint a family-founding link**, and those
-    are the same rule seen from two sides.
+    `family_id` non-null is "join my family" and needs
+    `require_family_head_or_spouse(family_id)`. `family_id` null is "create a new family" and
+    needs `require_organiser` — **neither a head nor a spouse can ever invite into another
+    family, nor mint a family-founding link**, and those are the same rule seen from two
+    sides.
 
     A dependency cannot make this choice, because it does not see the body. The check is
     therefore in the handler, but it is still the same two dependency functions doing the
@@ -203,12 +207,12 @@ async def create_invite(
 
     family: Family | None = None
     if payload.family_id is None:
-        await require_main_admin(user, trip)
+        await require_organiser(db, user, trip)
     else:
         family = await db.get(Family, payload.family_id)
         if family is None or family.trip_id != trip.id:
             raise ApiError(404, "not_found", "That family does not exist.")
-        await require_family_admin(payload.family_id)(db, user, trip)
+        await require_family_head_or_spouse(payload.family_id)(db, user, trip)
 
     raw = generate_token()
     invite = Invite(
@@ -250,11 +254,11 @@ async def revoke_invite(
 
     if invite.family_id is None:
         # Covers both a `create_family` invite and a `join` invite orphaned by a family
-        # deletion. Only the main admin can delete a family, so they are the right person to
+        # deletion. Only an organiser can delete a family, so they are the right person to
         # tidy up after one either way.
-        await require_main_admin(user, trip)
+        await require_organiser(db, user, trip)
     else:
-        await require_family_admin(invite.family_id)(db, user, trip)
+        await require_family_head_or_spouse(invite.family_id)(db, user, trip)
 
     if invite.used_by is not None:
         # Revoking an accepted invite would imply it could un-create the account it created.
@@ -414,7 +418,7 @@ async def accept_invite(
 
     user_settings = UserSettings(user_id=user.id)
     if family is not None:
-        db.add(FamilyMember(family_id=family.id, user_id=user.id, role="member"))
+        db.add(FamilyMember(family_id=family.id, user_id=user.id, role=ROLE_MEMBER))
         # The one-time seed (FM-15). Read here and never again: changing the family default
         # later does not rewrite this person. Two gates still stand between it and a marker —
         # the browser's permission prompt and `holiday-stage`'s one-time disclosure.

@@ -2,8 +2,11 @@
 
 Happy path, permission-denied and stage-guard for every route, plus the guard rails named in
 `plan/features/families/design.md`'s edge-case table by their exact codes: `name_taken`,
-`color_taken`, `no_color_slots`, `family_not_empty`, `last_family_admin`,
-`main_admin_protected`, `already_has_family`.
+`color_taken`, `no_color_slots`, `family_not_empty`, `head_required`, `owner_protected`,
+`already_has_family`.
+
+Roles here are the revised ones (2026-08-11): owner / organiser at trip level, head of family
+/ spouse / member inside one. `test_family_permissions.py` covers the spouse asymmetry.
 
 The codes are asserted rather than the messages: `plan/features/foundation/design.md` makes
 `code` the contract and `message` free to reword.
@@ -33,9 +36,9 @@ def code(response: httpx.Response) -> str:
 
 @pytest.fixture
 async def owner(db: AsyncSession, trip: Trip) -> User:
-    """The trip's owner — a main admin by ownership rather than by the platform flag.
+    """The trip's owner by ownership rather than by the platform flag.
 
-    Used deliberately in places, because `require_main_admin` accepts either and a test that
+    Used deliberately in places, because `require_organiser` accepts either and a test that
     only ever uses `is_platform_admin` would not notice if one of the two stopped working.
     """
     user = await make_user(db, "tripowner")
@@ -47,7 +50,7 @@ async def owner(db: AsyncSession, trip: Trip) -> User:
 # --- FM-1: create --------------------------------------------------------------------------
 
 
-async def test_the_main_admin_creates_a_family_and_it_gets_colour_one(
+async def test_an_organiser_creates_a_family_and_it_gets_colour_one(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
 ) -> None:
     await login_as(client, db, main_admin)
@@ -72,7 +75,7 @@ async def test_the_second_family_gets_colour_two(
 async def test_a_requested_colour_that_is_taken_is_refused_by_name(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
 ) -> None:
-    """Refused rather than silently substituted: the admin picked that colour on purpose."""
+    """Refused rather than silently substituted: they picked that colour on purpose."""
     await login_as(client, db, main_admin)
     await client.post(FAMILIES, json={"name": "The Parkers"})
     clash = await client.post(FAMILIES, json={"name": "The Jiangs", "color": 1})
@@ -104,7 +107,7 @@ async def test_a_ninth_family_is_refused_with_no_colour_slots(
     assert code(ninth) == "no_color_slots"
 
 
-async def test_a_family_admin_cannot_create_a_family(
+async def test_a_head_cannot_create_a_family(
     client: httpx.AsyncClient, db: AsyncSession, family_admin: tuple[User, Family]
 ) -> None:
     user, _ = family_admin
@@ -114,7 +117,7 @@ async def test_a_family_admin_cannot_create_a_family(
     assert code(response) == "forbidden"
 
 
-async def test_the_trip_owner_counts_as_the_main_admin(
+async def test_the_trip_owner_counts_as_an_organiser(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, owner: User
 ) -> None:
     await login_as(client, db, owner)
@@ -178,7 +181,7 @@ async def test_reading_one_family_includes_its_members(
     await login_as(client, db, user)
     body = (await client.get(f"{FAMILIES}/{family.id}")).json()
     assert [m["username"] for m in body["members"]] == ["familyadmin"]
-    assert body["members"][0]["role"] == "admin"
+    assert body["members"][0]["role"] == "head"
     assert body["members"][0]["initials"] == "F"
 
 
@@ -193,7 +196,7 @@ async def test_reading_an_unknown_family_is_a_404(
 # --- FM-2: rename and recolour -------------------------------------------------------------
 
 
-async def test_a_family_admin_renames_their_own_family(
+async def test_a_head_renames_their_own_family(
     client: httpx.AsyncClient, db: AsyncSession, family_admin: tuple[User, Family]
 ) -> None:
     user, family = family_admin
@@ -203,7 +206,7 @@ async def test_a_family_admin_renames_their_own_family(
     assert response.json()["name"] == "Renamed"
 
 
-async def test_a_family_admin_cannot_rename_another_family(
+async def test_a_head_cannot_rename_another_family(
     client: httpx.AsyncClient,
     db: AsyncSession,
     trip: Trip,
@@ -226,7 +229,7 @@ async def test_a_plain_member_cannot_rename_their_own_family(
     ).status_code == 403
 
 
-async def test_the_main_admin_can_rename_any_family(
+async def test_an_organiser_can_rename_any_family(
     client: httpx.AsyncClient, db: AsyncSession, main_admin: User, member: tuple[User, Family]
 ) -> None:
     _, family = member
@@ -438,7 +441,7 @@ async def test_setting_a_home_in_the_end_stage_is_refused(
 # --- FM-10: delete -------------------------------------------------------------------------
 
 
-async def test_the_main_admin_deletes_an_empty_family(
+async def test_an_organiser_deletes_an_empty_family(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
 ) -> None:
     empty = await make_family(db, trip, "Nobody", color=6)
@@ -461,7 +464,7 @@ async def test_deleting_a_family_with_members_is_refused(
     assert code(response) == "family_not_empty"
 
 
-async def test_a_family_admin_cannot_delete_their_own_family(
+async def test_a_head_cannot_delete_their_own_family(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, family_admin: tuple[User, Family]
 ) -> None:
     user, family = family_admin
@@ -476,62 +479,75 @@ async def test_a_family_admin_cannot_delete_their_own_family(
 async def household(
     db: AsyncSession, trip: Trip
 ) -> tuple[Family, User, User]:
-    """A family with an admin and one ordinary member."""
+    """A family with a head and one ordinary member."""
     family = await make_family(db, trip, "Household", color=4)
     admin = await make_user(db, "houseadmin")
     other = await make_user(db, "houseother")
-    await add_member(db, family, admin, role="admin")
+    await add_member(db, family, admin, role="head")
     await add_member(db, family, other, role="member")
     return family, admin, other
 
 
-async def test_a_family_admin_promotes_a_member(
+async def test_a_head_promotes_a_member_to_spouse(
     client: httpx.AsyncClient, db: AsyncSession, household: tuple[Family, User, User]
 ) -> None:
+    """FM-16 — a second adult with the head's powers over the family."""
     family, admin, other = household
     await login_as(client, db, admin)
     response = await client.patch(
-        f"{FAMILIES}/{family.id}/members/{other.id}", json={"role": "admin"}
+        f"{FAMILIES}/{family.id}/members/{other.id}", json={"role": "spouse"}
     )
     assert response.status_code == 200
-    assert response.json()["role"] == "admin"
+    assert response.json()["role"] == "spouse"
 
 
-async def test_demoting_the_only_admin_is_refused(
+async def test_demoting_the_head_is_refused_because_a_family_needs_one(
     client: httpx.AsyncClient, db: AsyncSession, household: tuple[Family, User, User]
 ) -> None:
+    """A family always has exactly one head, so the answer is a transfer, not a vacancy."""
     family, admin, _ = household
     await login_as(client, db, admin)
     response = await client.patch(
         f"{FAMILIES}/{family.id}/members/{admin.id}", json={"role": "member"}
     )
     assert response.status_code == 409
-    assert code(response) == "last_family_admin"
+    assert code(response) == "head_required"
 
 
-async def test_demoting_an_admin_is_fine_once_there_are_two(
+async def test_handing_the_head_role_on_is_one_action(
     client: httpx.AsyncClient, db: AsyncSession, household: tuple[Family, User, User]
 ) -> None:
+    """The incoming head takes the role and the outgoing one becomes a spouse, together.
+
+    Two statements would leave a window with two heads or none — and the partial unique index
+    would reject the first of them anyway.
+    """
     family, admin, other = household
     await login_as(client, db, admin)
-    await client.patch(f"{FAMILIES}/{family.id}/members/{other.id}", json={"role": "admin"})
     response = await client.patch(
-        f"{FAMILIES}/{family.id}/members/{admin.id}", json={"role": "member"}
+        f"{FAMILIES}/{family.id}/members/{other.id}", json={"role": "head"}
     )
     assert response.status_code == 200
+    assert response.json()["role"] == "head"
+
+    roles = {
+        m["username"]: m["role"]
+        for m in (await client.get(f"{FAMILIES}/{family.id}")).json()["members"]
+    }
+    assert roles == {"houseother": "head", "houseadmin": "spouse"}
 
 
-async def test_removing_the_only_admin_is_refused(
+async def test_removing_the_head_is_refused(
     client: httpx.AsyncClient, db: AsyncSession, household: tuple[Family, User, User]
 ) -> None:
     family, admin, _ = household
     await login_as(client, db, admin)
     response = await client.delete(f"{FAMILIES}/{family.id}/members/{admin.id}")
     assert response.status_code == 409
-    assert code(response) == "last_family_admin"
+    assert code(response) == "head_required"
 
 
-async def test_a_family_admin_removes_a_member(
+async def test_a_head_removes_a_member(
     client: httpx.AsyncClient, db: AsyncSession, household: tuple[Family, User, User]
 ) -> None:
     family, admin, other = household
@@ -555,39 +571,41 @@ async def test_a_removed_members_account_survives(
     assert await db.get(User, other.id) is not None
 
 
-async def test_the_main_admin_cannot_be_removed(
+async def test_the_owner_cannot_be_removed(
     client: httpx.AsyncClient,
     db: AsyncSession,
     trip: Trip,
     main_admin: User,
 ) -> None:
+    """FM-9/FM-10. Their family role here is `spouse`, so it is the owner protection doing
+    the refusing rather than the head-required rule."""
     family = await make_family(db, trip, "Bosses", color=3)
     helper = await make_user(db, "helper")
-    await add_member(db, family, main_admin, role="admin")
-    await add_member(db, family, helper, role="admin")
+    await add_member(db, family, helper, role="head")
+    await add_member(db, family, main_admin, role="spouse")
     await login_as(client, db, main_admin)
 
     response = await client.delete(f"{FAMILIES}/{family.id}/members/{main_admin.id}")
     assert response.status_code == 403
-    assert code(response) == "main_admin_protected"
+    assert code(response) == "owner_protected"
 
 
-async def test_the_main_admin_cannot_be_demoted(
+async def test_the_owner_cannot_be_demoted(
     client: httpx.AsyncClient, db: AsyncSession, trip: Trip, main_admin: User
 ) -> None:
     family = await make_family(db, trip, "Bosses", color=3)
     helper = await make_user(db, "helper")
-    await add_member(db, family, main_admin, role="admin")
-    await add_member(db, family, helper, role="admin")
+    await add_member(db, family, helper, role="head")
+    await add_member(db, family, main_admin, role="spouse")
     await login_as(client, db, main_admin)
 
     response = await client.patch(
         f"{FAMILIES}/{family.id}/members/{main_admin.id}", json={"role": "member"}
     )
-    assert code(response) == "main_admin_protected"
+    assert code(response) == "owner_protected"
 
 
-async def test_a_family_admin_cannot_touch_another_familys_members(
+async def test_a_head_cannot_touch_another_familys_members(
     client: httpx.AsyncClient,
     db: AsyncSession,
     household: tuple[Family, User, User],

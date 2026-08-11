@@ -4,10 +4,11 @@ Two facts in this feature are private, and both are enforced **here**, in the se
 rather than by the frontend choosing what to render:
 
 1. **A family's full home address** — street address, coordinates and the geocode timestamp —
-   is for members of that family and the main admin. Everyone else gets the coarse locality
-   and nothing more (FM-4).
-2. **Whether a person has consented to share their location** is itself private. A member of
-   another family sees a marker or no marker, and cannot tell "not sharing" from "app closed"
+   is for members of that family, the trip's owner and its organisers. Everyone else gets the
+   coarse locality and nothing more (FM-4).
+2. **Whether a person has consented to share their location** is itself private. It reaches
+   that member, their family's head or spouse, and an organiser. A member of another family
+   sees a marker or no marker, and cannot tell "not sharing" from "app closed"
    (`plan/features/families/design.md`).
 
 Both are decided by :func:`family_detail_out` and :func:`member_out`, which are the only two
@@ -35,10 +36,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import Attachment, Family, FamilyMember, User
+from app.models import FAMILY_MANAGER_ROLES, Attachment, Family, FamilyMember, User
 
 GeocodeStatus = Literal["pending", "ok", "not_found", "error"]
-FamilyRole = Literal["admin", "member"]
+#: Family-level roles (revised 2026-08-11). Independent of the trip-level owner/organiser
+#: pair, which travels on `MemberOut` as two separate booleans.
+FamilyRole = Literal["head", "spouse", "member"]
 
 #: Where the attachments router serves files from. Kept next to the serialiser because the
 #: URL shape and the row it is built from have to agree.
@@ -107,39 +110,52 @@ def derive_display_name(first_name: str, last_name: str) -> str:
 
 @dataclass(frozen=True)
 class Viewer:
-    """The caller, reduced to the four facts the entitlement rules actually depend on.
+    """The caller, reduced to the facts the entitlement rules actually depend on.
 
     A frozen value rather than the `User` row, so a serialiser cannot reach past what it is
     entitled to consult and, say, decide something from `is_platform_admin` directly.
+
+    Trip roles and family roles are separate fields because they are separate things: the
+    owner is also an ordinary head, spouse or member of their own family, and being an
+    organiser grants nothing *inside* another family beyond the cross-family powers.
     """
 
     user_id: uuid.UUID
     #: The family the caller belongs to, or ``None`` mid-onboarding.
     family_id: uuid.UUID | None
-    #: Platform admin or the trip's owner. Sees every family's address (FM-10).
-    is_main_admin: bool
-    #: Admin **of their own family** — not of any family.
-    is_family_admin: bool
+    #: The trip's owner. Implies `is_organiser`; kept distinct because organiser management is
+    #: the owner's alone (FM-17).
+    is_owner: bool
+    #: Owner or appointed organiser. Sees every family's address (FM-10).
+    is_organiser: bool
+    #: Head **or spouse** of their own family — the two roles that run a family (FM-16).
+    manages_own_family: bool
 
     def sees_full_address(self, family: Family) -> bool:
-        """FM-4: their own family's address, or any if they are the main admin."""
-        return self.is_main_admin or self.family_id == family.id
+        """FM-4: their own family's address, or any family's if they are an organiser."""
+        return self.is_organiser or self.family_id == family.id
 
     def sees_consent_of(self, member: FamilyMember) -> bool:
-        """The member themselves, their family admin, or the main admin."""
-        if self.is_main_admin or member.user_id == self.user_id:
+        """The member themselves, their family's head or spouse, or an organiser."""
+        if self.is_organiser or member.user_id == self.user_id:
             return True
-        return self.is_family_admin and self.family_id == member.family_id
+        return self.manages_own_family and self.family_id == member.family_id
 
 
 def viewer_from(
-    user: User, *, family_id: uuid.UUID | None, role: str | None, is_main_admin: bool
+    user: User,
+    *,
+    family_id: uuid.UUID | None,
+    role: str | None,
+    is_owner: bool,
+    is_organiser: bool,
 ) -> Viewer:
     return Viewer(
         user_id=user.id,
         family_id=family_id,
-        is_main_admin=is_main_admin,
-        is_family_admin=role == "admin",
+        is_owner=is_owner,
+        is_organiser=is_organiser,
+        manages_own_family=role in FAMILY_MANAGER_ROLES,
     )
 
 
@@ -181,7 +197,11 @@ class MemberOut(BaseModel):
     initials: str
     role: FamilyRole
     joined_at: datetime
-    is_main_admin: bool
+    #: Trip-level, and orthogonal to `role`: the owner and organisers are also an ordinary
+    #: head, spouse or member of their own family. Two booleans rather than one, because
+    #: appointing organisers is the owner's alone (FM-17) and the UI has to be able to tell.
+    is_owner: bool = False
+    is_organiser: bool = False
     #: The family admin's per-member switch. A permission, not a consent.
     location_sharing_allowed: bool
     #: The member's **own** consent. ``None`` unless the caller is that member, their family
@@ -297,7 +317,8 @@ def member_out(
     member: FamilyMember,
     viewer: Viewer,
     *,
-    main_admin_ids: frozenset[uuid.UUID] = frozenset(),
+    owner_ids: frozenset[uuid.UUID] = frozenset(),
+    organiser_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> MemberOut:
     """One member, with their consent state redacted unless the caller is entitled to it."""
     user = member.user
@@ -312,7 +333,8 @@ def member_out(
         initials=initials(user),
         role=member.role,
         joined_at=member.created_at,
-        is_main_admin=user.is_platform_admin or user.id in main_admin_ids,
+        is_owner=user.id in owner_ids,
+        is_organiser=user.id in owner_ids or user.id in organiser_ids,
         location_sharing_allowed=member.location_sharing_allowed,
         location_sharing_enabled=(
             _consent_of(member) if viewer.sees_consent_of(member) else None
@@ -349,7 +371,8 @@ def family_detail_out(
     family: Family,
     viewer: Viewer,
     *,
-    main_admin_ids: frozenset[uuid.UUID] = frozenset(),
+    owner_ids: frozenset[uuid.UUID] = frozenset(),
+    organiser_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> FamilyDetailOut:
     """The full shape, with the address fields present **only** for an entitled caller.
 
@@ -366,7 +389,9 @@ def family_detail_out(
             "home_geocoded_at": family.home_geocoded_at,
         }
 
-    members = sorted(family.members, key=lambda m: (m.role != "admin", m.created_at))
+    # Head first, then spouses, then everyone else — the order a family reads itself in.
+    order = {"head": 0, "spouse": 1, "member": 2}
+    members = sorted(family.members, key=lambda m: (order.get(m.role, 9), m.created_at))
     return FamilyDetailOut(
         id=family.id,
         name=family.name,
@@ -378,6 +403,9 @@ def family_detail_out(
         geocode_error=family.geocode_error,
         location_sharing_allowed=family.location_sharing_allowed,
         member_location_default=family.member_location_default,
-        members=[member_out(m, viewer, main_admin_ids=main_admin_ids) for m in members],
+        members=[
+            member_out(m, viewer, owner_ids=owner_ids, organiser_ids=organiser_ids)
+            for m in members
+        ],
         **private,
     )

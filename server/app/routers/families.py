@@ -3,15 +3,15 @@
 Two rules run through every route here and are worth stating once:
 
 **Permissions are dependencies, never handler-body checks** (`CLAUDE.md`). A route declares
-`require_family_admin_of` and `require_stage("planning", "holiday")` and then trusts them.
+`require_family_manager` and `require_stage("planning", "holiday")` and then trusts them.
 The End stage is read-only because every mutating route carries the stage guard, not because
 anything in this file mentions `end`.
 
-**A family admin can only ever narrow visibility.** No request body reachable by any role in
-this router writes `user_settings.live_location_enabled` for another user. The single write to
-that column in the whole feature is the seed in `POST /families/mine`, where the caller is
-setting their own. That invariant is what keeps `holiday-stage`'s promise — "nobody, main
-admin included, can turn on another person's live-location sharing" — true now that family
+**A head or spouse can only ever narrow visibility.** No request body reachable by any role
+in this router writes `user_settings.live_location_enabled` for another user. The single write
+to that column in the whole feature is the seed in `POST /families/mine`, where the caller is
+setting their own. That invariant is what keeps `holiday-stage`'s promise — "nobody, the
+owner included, can turn on another person's live-location sharing" — true now that family
 policy exists alongside consent. `tests/test_location_policy.py` enumerates the routes and
 asserts it rather than trusting this paragraph.
 
@@ -40,20 +40,26 @@ from app.deps import (
     DbDep,
     ViewerDep,
     enforce_password_change,
-    require_family_admin_of,
-    require_main_admin,
+    is_organiser,
+    require_family_manager,
+    require_organiser,
     require_member,
     require_pending_family,
     require_stage,
 )
 from app.models import (
     MAX_COLOR_SLOTS,
+    ROLE_HEAD,
+    ROLE_MEMBER,
+    ROLE_SPOUSE,
     Family,
     FamilyMember,
     Trip,
+    TripOrganiser,
     User,
     UserSettings,
     next_free_color,
+    spouse_may_act_on,
 )
 from app.schemas.common import ApiError, forbidden
 from app.schemas.family import (
@@ -114,19 +120,36 @@ async def _load_family(db: AsyncSession, family_id: uuid.UUID) -> Family:
     return family
 
 
-def _main_admin_ids(trip: Trip | None) -> frozenset[uuid.UUID]:
-    """The trip owner, for `MemberOut.is_main_admin`.
-
-    Platform admins are recognised from their own flag inside the serialiser; this covers the
-    other half of `require_main_admin`'s definition.
-    """
+def _owner_ids(trip: Trip | None) -> frozenset[uuid.UUID]:
+    """The trip's owner, for `MemberOut.is_owner`."""
     if trip is None or trip.owner_user_id is None:
         return frozenset()
     return frozenset({trip.owner_user_id})
 
 
-def _detail(family: Family, viewer: Viewer, trip: Trip | None) -> FamilyDetailOut:
-    return family_detail_out(family, viewer, main_admin_ids=_main_admin_ids(trip))
+async def _organiser_ids(db: AsyncSession, trip: Trip | None) -> frozenset[uuid.UUID]:
+    """Everyone the owner has appointed (FM-17).
+
+    Fetched once per request rather than per member row: a family list would otherwise issue a
+    query per person to answer a question with the same answer every time.
+    """
+    if trip is None:
+        return frozenset()
+    rows = await db.scalars(
+        select(TripOrganiser.user_id).where(TripOrganiser.trip_id == trip.id)
+    )
+    return frozenset(rows.all())
+
+
+async def _detail(
+    db: AsyncSession, family: Family, viewer: Viewer, trip: Trip | None
+) -> FamilyDetailOut:
+    return family_detail_out(
+        family,
+        viewer,
+        owner_ids=_owner_ids(trip),
+        organiser_ids=await _organiser_ids(db, trip),
+    )
 
 
 # --- guard rails --------------------------------------------------------------------------
@@ -159,7 +182,7 @@ async def _claim_color(
 ) -> int:
     """The requested slot if free, else the lowest free one, else `409 no_color_slots`.
 
-    A requested-but-taken slot is an error rather than a silent substitution: the main admin
+    A requested-but-taken slot is an error rather than a silent substitution: whoever asked
     picked that colour on purpose (FM-1), and quietly giving them a different one would be
     the kind of help nobody asked for. The message names the family holding it.
     """
@@ -185,34 +208,79 @@ async def _claim_color(
     return slot
 
 
-def _reject_removing_the_main_admin(member: FamilyMember, trip: Trip | None) -> None:
-    """FM-9/FM-10: the main admin cannot be removed or demoted through this feature."""
-    is_main = member.user.is_platform_admin or (
+def _reject_touching_the_owner(member: FamilyMember, trip: Trip | None) -> None:
+    """FM-9/FM-10: the trip's owner cannot be removed or demoted through this feature."""
+    is_trip_owner = member.user.is_platform_admin or (
         trip is not None and trip.owner_user_id == member.user_id
     )
-    if is_main:
+    if is_trip_owner:
         raise ApiError(
             403,
-            "main_admin_protected",
-            "The trip's main admin cannot be removed or demoted here.",
+            "owner_protected",
+            "The trip's owner cannot be removed or demoted here.",
         )
 
 
-def _reject_losing_the_last_admin(family: Family, member: FamilyMember) -> None:
-    """FM-9: promote someone else first.
+def _reject_leaving_the_family_headless(member: FamilyMember) -> None:
+    """A family always has exactly one head (FM-16).
 
-    Checked for both removal and demotion, because they are the same mistake: a family with
-    nobody able to administer it can only be repaired by the main admin, and a family that
-    has just lost its only admin is exactly the family least likely to know that.
+    So a head is never *demoted* or *removed* — the role is handed on, which is a transfer and
+    is offered as one. A family that has just lost its only head is exactly the family least
+    able to notice, and only an organiser could repair it.
     """
-    if member.role != "admin":
+    if member.role != ROLE_HEAD:
         return
-    remaining = [m for m in family.members if m.role == "admin" and m.id != member.id]
-    if not remaining:
+    raise ApiError(
+        409,
+        "head_required",
+        "A family needs a head. Hand the role to someone else first — that will make you a "
+        "spouse in the same step.",
+    )
+
+
+async def _reject_spouse_acting_on_head(
+    db: AsyncSession, actor: User, family: Family, target: FamilyMember, trip: Trip | None
+) -> None:
+    """The spouse asymmetry (FM-16), applied against the **target** of the action.
+
+    A spouse holds the head's powers over the family, so they reach this route legitimately;
+    the one thing they may not do is act on the head. Enforced here rather than in the
+    dependency because a role-level refusal would lock a spouse out of the nine-tenths of the
+    route that is theirs.
+
+    Organisers are exempt: they are not spouses, and FM-10 gives them every family's powers.
+    """
+    if await is_organiser(db, actor, trip):
+        return
+    actor_membership = next((m for m in family.members if m.user_id == actor.id), None)
+    if actor_membership is None:
+        return
+    if not spouse_may_act_on(actor_membership, target):
         raise ApiError(
-            409,
-            "last_family_admin",
-            "Promote someone else to family admin first — a family needs at least one.",
+            403,
+            "head_protected",
+            "Only the head of the family, or the trip's organisers, can change that.",
+        )
+
+
+async def _reject_spouse_changing_a_role(
+    db: AsyncSession, actor: User, family: Family, trip: Trip | None
+) -> None:
+    """FM-16: a spouse may run the family, but not change who runs it.
+
+    Separate from :func:`_reject_spouse_acting_on_head` because it is a different rule with a
+    different reason: that one protects the head *as a target*, this one keeps the composition
+    of the family's leadership in the head's hands whoever the target is. A spouse promoting a
+    third adult would let them outvote the arrangement the head made.
+    """
+    if await is_organiser(db, actor, trip):
+        return
+    actor_membership = next((m for m in family.members if m.user_id == actor.id), None)
+    if actor_membership is not None and actor_membership.role == ROLE_SPOUSE:
+        raise ApiError(
+            403,
+            "spouse_cannot_promote",
+            "Only the head of the family, or the trip's organisers, can change roles.",
         )
 
 
@@ -252,7 +320,7 @@ async def list_families(db: DbDep, trip: ActiveTrip) -> list[FamilyOut]:
 async def read_family(
     family_id: uuid.UUID, db: DbDep, viewer: ViewerDep, trip: ActiveTrip
 ) -> FamilyDetailOut:
-    return _detail(await _load_family(db, family_id), viewer, trip)
+    return await _detail(db, await _load_family(db, family_id), viewer, trip)
 
 
 @router.get(
@@ -265,7 +333,7 @@ async def list_members(
     family_id: uuid.UUID, db: DbDep, viewer: ViewerDep, trip: ActiveTrip
 ) -> list[MemberOut]:
     family = await _load_family(db, family_id)
-    return _detail(family, viewer, trip).members
+    return (await _detail(db, family, viewer, trip)).members
 
 
 # --- writes -------------------------------------------------------------------------------
@@ -275,7 +343,7 @@ async def list_members(
     "",
     **FAMILY_DETAIL_RESPONSE,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_main_admin), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_organiser), PLANNING_OR_HOLIDAY],
     summary="Create a family (main admin)",
 )
 async def create_family(
@@ -302,7 +370,7 @@ async def create_family(
     await db.commit()
     family = await _load_family(db, family.id)
     await ws.broadcast(trip.id, "family.created", {"family": _wire(family)})
-    return _detail(family, viewer, trip)
+    return await _detail(db, family, viewer, trip)
 
 
 @router.post(
@@ -349,7 +417,7 @@ async def create_my_family(
     family = Family(trip_id=trip.id, name=payload.name.strip(), color=color)
     db.add(family)
     await db.flush()
-    db.add(FamilyMember(family_id=family.id, user_id=user.id, role="admin"))
+    db.add(FamilyMember(family_id=family.id, user_id=user.id, role=ROLE_HEAD))
 
     settings = await db.scalar(select(UserSettings).where(UserSettings.user_id == user.id))
     if settings is None:
@@ -363,9 +431,13 @@ async def create_my_family(
     await db.commit()
     family = await _load_family(db, family.id)
     viewer = Viewer(
-        user_id=user.id, family_id=family.id, is_main_admin=False, is_family_admin=True
+        user_id=user.id,
+        family_id=family.id,
+        is_owner=False,
+        is_organiser=False,
+        manages_own_family=True,
     )
-    detail = _detail(family, viewer, trip)
+    detail = await _detail(db, family, viewer, trip)
     await ws.broadcast(trip.id, "family.created", {"family": _wire(family)})
     await broadcast_member_joined(db, family.id, user.id, trip)
     return detail
@@ -374,7 +446,7 @@ async def create_my_family(
 @router.patch(
     "/{family_id}",
     **FAMILY_DETAIL_RESPONSE,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Rename or recolour a family",
 )
 async def update_family(
@@ -399,13 +471,13 @@ async def update_family(
     await db.commit()
     family = await _load_family(db, family_id)
     await ws.broadcast(family.trip_id, "family.updated", {"family": _wire(family)})
-    return _detail(family, viewer, trip)
+    return await _detail(db, family, viewer, trip)
 
 
 @router.patch(
     "/{family_id}/location-policy",
     **FAMILY_DETAIL_RESPONSE,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Who in this family may appear on the map",
 )
 async def update_location_policy(
@@ -434,13 +506,13 @@ async def update_location_policy(
     # `family.updated` is what makes a policy change take effect without a reload: a marker
     # that should no longer be visible must not linger for a refresh interval.
     await ws.broadcast(family.trip_id, "family.updated", {"family": _wire(family)})
-    return _detail(family, viewer, trip)
+    return await _detail(db, family, viewer, trip)
 
 
 @router.delete(
     "/{family_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_main_admin), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_organiser), PLANNING_OR_HOLIDAY],
     summary="Delete an empty family (main admin)",
 )
 async def delete_family(family_id: uuid.UUID, db: DbDep) -> Response:
@@ -495,7 +567,7 @@ async def _apply_geocode(
 @router.put(
     "/{family_id}/home",
     **FAMILY_DETAIL_RESPONSE,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Set this family's home address",
 )
 async def set_home(
@@ -521,13 +593,13 @@ async def set_home(
         family = await _load_family(db, family_id)
         await ws.broadcast(family.trip_id, "family.updated", {"family": _wire(family)})
 
-    return _detail(family, viewer, trip)
+    return await _detail(db, family, viewer, trip)
 
 
 @router.post(
     "/{family_id}/home/geocode",
     **FAMILY_DETAIL_RESPONSE,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Try placing this family's home again",
 )
 async def retry_geocode(
@@ -550,13 +622,13 @@ async def retry_geocode(
     await db.commit()
     family = await _load_family(db, family_id)
     await ws.broadcast(family.trip_id, "family.updated", {"family": _wire(family)})
-    return _detail(family, viewer, trip)
+    return await _detail(db, family, viewer, trip)
 
 
 @router.delete(
     "/{family_id}/home",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Clear this family's home address",
 )
 async def clear_home(family_id: uuid.UUID, db: DbDep) -> Response:
@@ -590,7 +662,7 @@ def _find_member(family: Family, user_id: uuid.UUID) -> FamilyMember:
 @router.patch(
     "/{family_id}/members/{user_id}",
     response_model=MemberOut,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Change a member's role or map visibility",
 )
 async def update_member(
@@ -598,31 +670,59 @@ async def update_member(
     user_id: uuid.UUID,
     payload: MemberPatchIn,
     db: DbDep,
+    user: CurrentUser,
     viewer: ViewerDep,
     trip: ActiveTrip,
 ) -> MemberOut:
-    """FM-9 and the per-member half of FM-15.
+    """FM-9, FM-16, and the per-member half of FM-15.
 
-    `location_sharing_allowed` here is the family admin's **permission**; it never touches
+    `location_sharing_allowed` here is the head or spouse's **permission**; it never touches
     `user_settings.live_location_enabled`, which is the member's **consent**. Collapsing the
-    two would let an admin revoke someone's own choice by flipping a switch twice.
+    two would let them revoke someone's own choice by flipping a switch twice.
+
+    `role` does three things, and only one of them is a plain assignment:
+
+    * `member` ⇄ `spouse` — promotion and demotion (FM-16);
+    * `head` — a **transfer**: the incoming head takes the role and the outgoing one becomes a
+      spouse, in one transaction. Two statements would leave a window with two heads or none,
+      and the partial unique index would reject the first of them anyway;
+    * demoting the head directly — refused. A family always has exactly one head, so the
+      answer is to hand the role on, and the message says so.
     """
     family = await _load_family(db, family_id)
     member = _find_member(family, user_id)
     changes = payload.model_dump(exclude_unset=True, exclude_none=True)
 
+    # The spouse asymmetry covers *every* field on this route, not just `role`: a spouse must
+    # not be able to switch the head off the map either.
+    await _reject_spouse_acting_on_head(db, user, family, member, trip)
+
     if "role" in changes and changes["role"] != member.role:
-        if changes["role"] == "member":
-            _reject_removing_the_main_admin(member, trip)
-            _reject_losing_the_last_admin(family, member)
-        member.role = changes["role"]
+        # FM-16: promotion and demotion belong to the head, the owner, or an organiser. A
+        # spouse who could promote would be able to appoint a confederate and outvote the
+        # arrangement the head made — and one who could take the head role would be demoting
+        # the head by a side door, which is the very thing the asymmetry forbids.
+        await _reject_spouse_changing_a_role(db, user, family, trip)
+        requested = changes["role"]
+        if requested == ROLE_HEAD:
+            outgoing = next((m for m in family.members if m.role == ROLE_HEAD), None)
+            # Order matters against the partial unique index: vacate the role before filling
+            # it, in one transaction, so there is never a moment with two heads.
+            if outgoing is not None:
+                outgoing.role = ROLE_SPOUSE
+                await db.flush()
+            member.role = ROLE_HEAD
+        else:
+            _reject_touching_the_owner(member, trip)
+            _reject_leaving_the_family_headless(member)
+            member.role = requested
 
     if "location_sharing_allowed" in changes:
         member.location_sharing_allowed = changes["location_sharing_allowed"]
 
     await db.commit()
     family = await _load_family(db, family_id)
-    detail = _detail(family, viewer, trip)
+    detail = await _detail(db, family, viewer, trip)
     out = next(m for m in detail.members if m.user_id == user_id)
 
     # Broadcast the *room's* view of this member, not the caller's: `member.updated` reaches
@@ -630,7 +730,10 @@ async def update_member(
     await ws.broadcast(
         family.trip_id,
         "member.updated",
-        {"family_id": str(family_id), "member": _member_wire(family, user_id, trip)},
+        {
+            "family_id": str(family_id),
+            "member": _member_wire(family, user_id, trip, await _organiser_ids(db, trip)),
+        },
     )
     return out
 
@@ -638,11 +741,15 @@ async def update_member(
 @router.delete(
     "/{family_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_family_admin_of), PLANNING_OR_HOLIDAY],
+    dependencies=[Depends(require_family_manager), PLANNING_OR_HOLIDAY],
     summary="Remove someone from a family",
 )
 async def remove_member(
-    family_id: uuid.UUID, user_id: uuid.UUID, db: DbDep, trip: ActiveTrip
+    family_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: DbDep,
+    user: CurrentUser,
+    trip: ActiveTrip,
 ) -> Response:
     """FM-9. Their account survives; their votes, comments and suggestions stay attributed.
 
@@ -652,8 +759,9 @@ async def remove_member(
     """
     family = await _load_family(db, family_id)
     member = _find_member(family, user_id)
-    _reject_removing_the_main_admin(member, trip)
-    _reject_losing_the_last_admin(family, member)
+    await _reject_spouse_acting_on_head(db, user, family, member, trip)
+    _reject_touching_the_owner(member, trip)
+    _reject_leaving_the_family_headless(member)
 
     trip_id = family.trip_id
     await db.delete(member)
@@ -708,7 +816,9 @@ async def broadcast_member_updated(
         "member.updated",
         {
             "family_id": str(member.family_id),
-            "member": _member_wire(member.family, user_id, trip),
+            "member": _member_wire(
+                member.family, user_id, trip, await _organiser_ids(db, trip)
+            ),
         },
     )
 
@@ -723,11 +833,19 @@ async def broadcast_member_joined(
     await ws.broadcast(
         trip.id,
         "member.joined",
-        {"family_id": str(family_id), "member": _member_wire(family, user_id, trip)},
+        {
+            "family_id": str(family_id),
+            "member": _member_wire(family, user_id, trip, await _organiser_ids(db, trip)),
+        },
     )
 
 
-def _member_wire(family: Family, user_id: uuid.UUID, trip: Trip | None) -> dict:
+def _member_wire(
+    family: Family,
+    user_id: uuid.UUID,
+    trip: Trip | None,
+    organiser_ids: frozenset[uuid.UUID] = frozenset(),
+) -> dict:
     """The socket payload for a member, with consent redacted for the room.
 
     Built with a viewer entitled to nothing, so `location_sharing_enabled` is null. A
@@ -735,9 +853,13 @@ def _member_wire(family: Family, user_id: uuid.UUID, trip: Trip | None) -> dict:
     guarantee that is to serialise it as a stranger rather than to remember to delete a key.
     """
     stranger = Viewer(
-        user_id=uuid.UUID(int=0), family_id=None, is_main_admin=False, is_family_admin=False
+        user_id=uuid.UUID(int=0),
+        family_id=None,
+        is_owner=False,
+        is_organiser=False,
+        manages_own_family=False,
     )
     member = _find_member(family, user_id)
-    return member_out(member, stranger, main_admin_ids=_main_admin_ids(trip)).model_dump(
-        mode="json"
-    )
+    return member_out(
+        member, stranger, owner_ids=_owner_ids(trip), organiser_ids=organiser_ids
+    ).model_dump(mode="json")

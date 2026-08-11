@@ -77,7 +77,15 @@ from app.core.db import SessionFactory, engine  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.core.sessions import create_session  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Base, Family, FamilyMember, Trip, User, UserSettings  # noqa: E402
+from app.models import (  # noqa: E402
+    Base,
+    Family,
+    FamilyMember,
+    Trip,
+    TripOrganiser,
+    User,
+    UserSettings,
+)
 from app.routers.auth import CSRF_COOKIE_NAME  # noqa: E402
 from app.services.google import FakeGeocoder, get_geocoder  # noqa: E402
 
@@ -247,6 +255,7 @@ async def make_family(db: AsyncSession, trip: Trip, name: str, color: int = 1) -
 async def add_member(
     db: AsyncSession, family: Family, user: User, role: str = "member"
 ) -> FamilyMember:
+    """Add a membership. ``role`` is one of `head` / `spouse` / `member`."""
     member = FamilyMember(family_id=family.id, user_id=user.id, role=role)
     db.add(member)
     await db.commit()
@@ -278,14 +287,49 @@ async def login_as(client: httpx.AsyncClient, db: AsyncSession, user: User) -> s
 
 @pytest.fixture
 async def main_admin(db: AsyncSession) -> User:
+    """The platform admin — the bootstrap bypass, which satisfies every trip-level check.
+
+    Kept under its foundation-era name so existing tests read unchanged. For a trip-level role
+    held by an ordinary account, see `organiser` below.
+    """
     return await make_user(db, "mainadmin", is_platform_admin=True)
 
 
 @pytest.fixture
+async def organiser(db: AsyncSession, trip: Trip) -> tuple[User, Family]:
+    """Someone the owner appointed (FM-17), who is also an ordinary member of their own family.
+
+    Deliberately a *member* of their family rather than its head: the two kinds of role are
+    independent, and a fixture that conflated them would let a test pass for the wrong reason.
+    """
+    user = await make_user(db, "organiser")
+    family = await make_family(db, trip, "Organisers", color=7)
+    await add_member(db, family, user, role="member")
+    db.add(TripOrganiser(trip_id=trip.id, user_id=user.id))
+    await db.commit()
+    return user, family
+
+
+@pytest.fixture
+async def spouse_household(db: AsyncSession, trip: Trip) -> tuple[Family, User, User, User]:
+    """A family with a head, a spouse and a plain member — the FM-16 asymmetry fixture."""
+    family = await make_family(db, trip, "Twoadults", color=6)
+    head = await make_user(db, "thehead")
+    spouse = await make_user(db, "thespouse")
+    child = await make_user(db, "thechild")
+    await add_member(db, family, head, role="head")
+    await add_member(db, family, spouse, role="spouse")
+    await add_member(db, family, child, role="member")
+    return family, head, spouse, child
+
+
+@pytest.fixture
 async def family_admin(db: AsyncSession, trip: Trip) -> tuple[User, Family]:
+    """The head of their own family. Named `family_admin` for continuity with foundation's
+    tests; the role it writes is `head` (roles revised 2026-08-11)."""
     user = await make_user(db, "familyadmin")
     family = await make_family(db, trip, "Adminsons", color=1)
-    await add_member(db, family, user, role="admin")
+    await add_member(db, family, user, role="head")
     return user, family
 
 

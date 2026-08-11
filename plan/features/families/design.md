@@ -771,6 +771,7 @@ request fails.
 | Remove or demote the head of family | `409` code `head_required`; the message says to transfer the role first. A family always has exactly one head |
 | Transfer the head role | `PATCH .../members/{id}` with `role: "head"`. One transaction: the incoming head becomes `head` and the outgoing one becomes `spouse` |
 | Spouse tries to remove, demote or switch off the head | `403` code `head_protected`; the UI never showed the control |
+| Spouse tries to change **any** role, including taking `head` themselves | `403` code `spouse_cannot_promote`. A separate rule from the one above, with a separate code: that one protects the head *as a target*, this one keeps the composition of the family's leadership in the head's hands whoever the target is. Taking `head` would demote the incumbent by a side door |
 | Remove or demote the trip's owner | `403` code `owner_protected` |
 | A head or spouse acts on another family | `403 forbidden`; the UI never showed the control |
 | An organiser tries to appoint or remove an organiser | `403` code `owner_only` (route lives in `admin-console`) |

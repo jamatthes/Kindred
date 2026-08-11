@@ -115,10 +115,10 @@ async def test_require_main_admin_denies_a_family_admin(
 async def test_require_family_admin_allows_that_familys_admin(
     db: AsyncSession, family_admin: tuple[User, Family], trip: Trip
 ) -> None:
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     user, family = family_admin
-    assert await require_family_admin(family.id)(db, user, trip) is user
+    assert await require_family_head_or_spouse(family.id)(db, user, trip) is user
 
 
 async def test_require_family_admin_denies_an_admin_of_another_family(
@@ -126,13 +126,13 @@ async def test_require_family_admin_denies_an_admin_of_another_family(
 ) -> None:
     from fastapi import HTTPException
 
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     user, _ = family_admin
     other = await make_family(db, trip, "Others", color=3)
 
     with pytest.raises(HTTPException) as raised:
-        await require_family_admin(other.id)(db, user, trip)
+        await require_family_head_or_spouse(other.id)(db, user, trip)
     assert raised.value.status_code == 403
     assert raised.value.detail["code"] == "forbidden"
 
@@ -142,21 +142,21 @@ async def test_require_family_admin_denies_a_plain_member_of_that_family(
 ) -> None:
     from fastapi import HTTPException
 
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     user, family = member
     with pytest.raises(HTTPException) as raised:
-        await require_family_admin(family.id)(db, user, trip)
+        await require_family_head_or_spouse(family.id)(db, user, trip)
     assert raised.value.status_code == 403
 
 
 async def test_require_family_admin_allows_the_main_admin(
     db: AsyncSession, main_admin: User, trip: Trip
 ) -> None:
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     family = await make_family(db, trip, "Somebodys", color=4)
-    assert await require_family_admin(family.id)(db, main_admin, trip) is main_admin
+    assert await require_family_head_or_spouse(family.id)(db, main_admin, trip) is main_admin
 
 
 # --- require_stage -----------------------------------------------------------------------

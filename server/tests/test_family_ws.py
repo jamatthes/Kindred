@@ -175,7 +175,7 @@ async def test_the_member_payload_never_carries_a_consent_state(
     family = await make_family(db, trip, "Sharers", color=3)
     admin = await make_user(db, "sharersadmin")
     sharer = await make_user(db, "sharer")
-    await add_member(db, family, admin, role="admin")
+    await add_member(db, family, admin, role="head")
     await add_member(db, family, sharer, role="member")
     settings = await db.scalar(select(UserSettings).where(UserSettings.user_id == sharer.id))
     settings.live_location_enabled = True
@@ -232,7 +232,7 @@ async def test_removing_a_member_reaches_the_room_and_that_person(
     family = await make_family(db, trip, "Leavers", color=4)
     admin = await make_user(db, "leaveradmin")
     leaver = await make_user(db, "leaver")
-    await add_member(db, family, admin, role="admin")
+    await add_member(db, family, admin, role="head")
     await add_member(db, family, leaver, role="member")
 
     observer, _ = watcher
@@ -252,7 +252,7 @@ async def test_removing_a_member_reaches_the_room_and_that_person(
         await own_socket.disconnect()
 
 
-async def test_finishing_family_setup_announces_both_the_family_and_its_admin(
+async def test_finishing_family_setup_announces_both_the_family_and_its_head(
     client: httpx.AsyncClient,
     db: AsyncSession,
     trip: Trip,
@@ -286,6 +286,6 @@ async def test_finishing_family_setup_announces_both_the_family_and_its_admin(
         assert created["payload"]["family"]["name"] == "The Founders"
         joined = await _next(socket, "member.joined")
         assert joined["payload"]["member"]["username"] == "founder"
-        assert joined["payload"]["member"]["role"] == "admin"
+        assert joined["payload"]["member"]["role"] == "head"
     finally:
         await socket.disconnect()
