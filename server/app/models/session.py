@@ -14,7 +14,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -37,7 +46,7 @@ class Session(UUIDPrimaryKeyMixin, Base):
         nullable=False,
     )
     #: sha256 of the opaque cookie value. The raw value exists only in the user's cookie jar.
-    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False)
     #: Issued with the session; echoed by the SPA in ``X-CSRF-Token`` (double-submit).
     csrf_token: Mapped[str] = mapped_column(Text, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -52,6 +61,10 @@ class Session(UUIDPrimaryKeyMixin, Base):
     )
 
     __table_args__ = (
+        # Named explicitly rather than left to SQLAlchemy's default, so the schema built by
+        # `create_all` (the test suite) and the one built by the migration are identical down
+        # to constraint names — which is what makes them comparable at all.
+        UniqueConstraint("token_hash", name="uq_sessions_token_hash"),
         Index("ix_sessions_user_id", "user_id"),
         Index("ix_sessions_expires_at", "expires_at"),
     )

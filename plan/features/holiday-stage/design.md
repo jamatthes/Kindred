@@ -3,19 +3,25 @@
 **Read first:** `plan/overview.md`, `plan/architecture.md`, `plan/design-system.md`, `CLAUDE.md`,
 and this feature's `requirements.md`.
 
+> NOTE: role hierarchy updated 2026-08-11 — stage transitions are now owner-or-organiser
+> (`require_organiser`), not "main admin". Family-level location-sharing switches are set by a
+> **head of family** or a **spouse** (`family_members.role`), not a "family admin", with one
+> asymmetry: a spouse cannot flip the head's own per-member switch. See `plan/overview.md`'s
+> Roles section and `requirements.md`'s HS-15.
+
 ## Data model
 
 All tables below already exist in `plan/architecture.md`. No new tables are required.
 
 | Table | Columns used | Notes |
 |---|---|---|
-| `trips` | `id`, `stage` (`planning`/`holiday`/`end`), `start_date`, `end_date`, `owner_user_id`, `timezone` | `owner_user_id` is the main admin. `timezone` drives all "now" calculations — never use server local time. |
+| `trips` | `id`, `stage` (`planning`/`holiday`/`end`), `start_date`, `end_date`, `owner_user_id`, `timezone` | `owner_user_id` is the owner. `timezone` drives all "now" calculations — never use server local time. |
 | `itinerary_items` | `trip_id`, `day`, `start_time`, `end_time`, `title`, `suggestion_id`, `sort` | Source for now/next. Times are nullable, which the now/next algorithm must handle. |
 | `checkins` | `trip_id`, `user_id`, `lat`, `lng`, `accuracy_m`, `note`, `created_at` | One row per deliberate check-in. "Running late" is just a `note` value. |
 | `live_locations` | `user_id` (unique), `trip_id`, `lat`, `lng`, `accuracy_m`, `updated_at` | Exactly one row per user. Upserted by foreground `watchPosition`; **deleted** on toggle-off. Never accumulates history. |
 | `user_settings` | `user_id`, `live_location_enabled` (default false), `push_enabled` | The member's own consent. Seeded from their family's default when they join; written by nobody but that member afterwards. |
 | `families` | `color`, `location_sharing_allowed`, `member_location_default` | `color` drives pin colour for check-ins and live markers. The two policy columns are read on every live-location query and are owned by `families` (FM-15) — this feature never writes them. |
-| `family_members` | `location_sharing_allowed` | The family admin's per-member veto. Read-only here, same as above. |
+| `family_members` | `location_sharing_allowed` | The family's head (or spouse) per-member veto. Read-only here, same as above. |
 | `users` | `first_name`, `last_name`, `display_name`, `avatar_attachment_id` | Marker badge and hover label. `initials` and `avatar_thumb_url` are served pre-computed by `families`' serialiser so every surface renders one identity. |
 | `attachments` | `subject_type='checkin'`, `subject_id`, `uploader_id`, file path, `mime`, `width/height` | Check-in photos, and the archive photo grid. |
 | `notifications` | `recipient_user_id`, `type`, `payload_json`, `read_at` | Stage changes and check-ins generate rows; see `plan/features/notifications/`. |
@@ -49,7 +55,7 @@ planning ──advance──▶ holiday ──advance──▶ end
 
 - Legal advances: `planning→holiday`, `holiday→end`. Anything else is 409.
 - Legal reverts: `holiday→planning`, `end→holiday`. Reverting more than one step in a single call
-  is not allowed; the admin can call it twice.
+  is not allowed; the owner or organiser can call it twice.
 - Transitions are performed in a single transaction that also enqueues notifications and the
   websocket broadcast, so clients never see a half-applied change.
 
@@ -93,7 +99,7 @@ All under `/api/v1/`. Session cookie auth + CSRF on mutations, per `plan/archite
 | Method | Path | Request | Response | Dependencies |
 |---|---|---|---|---|
 | `GET` | `/trips/{trip_id}` | — | `{ id, name, stage, start_date, end_date, timezone }` | `require_member` |
-| `PATCH` | `/trips/{trip_id}/stage` | `{ "stage": "holiday", "reason": "revert"? }` | `{ id, stage, changed_at, changed_by }` | `require_main_admin` — **no stage guard** |
+| `PATCH` | `/trips/{trip_id}/stage` | `{ "stage": "holiday", "reason": "revert"? }` | `{ id, stage, changed_at, changed_by }` | `require_organiser` (owner or organiser) — **no stage guard** |
 
 `PATCH .../stage` validates the transition against the machine above. Invalid target → 409
 `{code: "illegal_transition"}`. Same-stage no-op → 200 with the unchanged trip (idempotent).
@@ -123,7 +129,7 @@ Algorithm, all in the trip's `timezone`:
 |---|---|---|---|---|
 | `POST` | `/checkins` | `{ trip_id, lat, lng, accuracy_m, note? }` | `201` `Checkin` | `require_member`, `require_stage("holiday")` |
 | `GET` | `/checkins` | `?trip_id=&cursor=&limit=50` | `{ items: Checkin[], next_cursor }` | `require_member` |
-| `DELETE` | `/checkins/{id}` | — | `204` | `require_member` + owner-or-admin check, `require_stage("planning","holiday")` |
+| `DELETE` | `/checkins/{id}` | — | `204` | `require_member` + (own check-in, OR owner/organiser for any, OR the check-in author's own head/spouse), `require_stage("planning","holiday")` |
 
 `Checkin` = `{ id, user: {id, display_name}, family: {id, color}, lat, lng, accuracy_m, note, created_at, attachments: [...] }`.
 
@@ -165,8 +171,8 @@ nothing; it cannot, because it is not sent the rows it may not have.
 -- conceptually, per candidate row
    live_locations.updated_at > now() - LIVE_DROP_AFTER   -- actually sharing, recently
 AND user_settings.live_location_enabled                   -- the member's own consent
-AND family_members.location_sharing_allowed               -- their family admin's per-member switch
-AND families.location_sharing_allowed                     -- their family admin's master switch
+AND family_members.location_sharing_allowed               -- their family's head/spouse per-member switch
+AND families.location_sharing_allowed                     -- their family's head/spouse master switch
 AND families.trip_id = <the caller's trip>                -- same trip, always
 ```
 
@@ -179,7 +185,7 @@ produces four rows.
 
 The response tells the caller nothing about *why* somebody is absent. There is no
 `hidden_by_policy` flag and no count of suppressed rows, because from outside a family the
-difference between "chose not to share", "was hidden by their family admin" and "phone is in a
+difference between "chose not to share", "was hidden by their family's head or spouse" and "phone is in a
 pocket" is not the viewer's business — and a field distinguishing them would make the map a way
 to audit other people's choices.
 
@@ -286,7 +292,7 @@ both light and dark.
 
 - A compact stage chip in the app shell: label plus icon (never colour alone). `planning` uses
   `--color-info`, `holiday` uses `--color-success`, `end` uses a muted neutral surface.
-- Admin stage controls live in the admin/trip screen, not the main nav. "Start holiday" is a primary
+- Stage controls (owner and organisers only) live in the admin/trip screen, not the main nav. "Start holiday" is a primary
   button; "Finish trip" is a primary button with danger-tinted confirm; "Revert stage" is a quiet
   tertiary control placed below a divider.
 - Confirm dialogs are modal (a temporary interaction — the one case `design-system.md` permits an
@@ -379,7 +385,8 @@ A member whose `live_location_enabled` was seeded `true` from their family's def
 
 - The settings copy below, verbatim — the same words as the settings screen, so nobody is asked
   to agree to a summary of something they will later read differently.
-- One line naming the source: "Your family admin set sharing to start on for new members."
+- One line naming the source: "Your family's head (or spouse) set sharing to start on for new
+  members."
 - `Start sharing` and `Not now`. `Not now` writes `live_location_enabled = false` — recorded as
   the member's own setting, indistinguishable afterwards from having turned it off themselves.
 - Dismissing the sheet without choosing counts as `Not now`. The safe default when someone walks
@@ -387,7 +394,8 @@ A member whose `live_location_enabled` was seeded `true` from their family's def
 - It appears once. Having chosen, the member manages it from their profile like anyone else.
 
 This sheet is why a seeded default is not a consent: the browser's permission prompt and this
-disclosure both stand between the family admin's setting and any coordinate leaving the device.
+disclosure both stand between the family head's (or spouse's) setting and any coordinate
+leaving the device.
 
 ### Settings copy (exact intent, wording to be finalised in DesignSync)
 
@@ -431,7 +439,7 @@ disclosure both stand between the family admin's setting and any coordinate leav
 | User closes tab without `sendBeacon` firing | Row goes stale after `LIVE_STALE_AFTER`, is hidden after `LIVE_DROP_AFTER`, and is deleted by a periodic sweep task. |
 | Websocket disconnected during Holiday | Client shows a subtle "reconnecting" state; on reconnect it refetches check-ins and live locations rather than trusting local state. |
 | Stage advanced while a member has an unsaved suggestion form open | Their submit returns 409 `stage_forbidden` with the specific message; the draft is preserved client-side so nothing is lost. |
-| Two admins press "Start holiday" simultaneously | The transition is idempotent — the second call sees the trip already in `holiday` and returns 200 without a second notification. |
+| The owner and an organiser (or two organisers) press "Start holiday" simultaneously | The transition is idempotent — the second call sees the trip already in `holiday` and returns 200 without a second notification. |
 | Revert requested from `planning` | 409 `illegal_transition`. |
 | Now/next requested with an empty itinerary | Both slots null; UI shows the empty state pointing at the itinerary. |
 | Trip timezone unset | Fall back to UTC and surface an admin warning — do not silently use server time. |

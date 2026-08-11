@@ -16,7 +16,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiError, api, onUnauthorized } from './apiClient'
-import type { LoginResponse, Preferences, ThemePref, User } from './types'
+import type { LoginResponse, NextStep, Preferences, ThemePref, User } from './types'
 import {
   applyTheme,
   cacheTheme,
@@ -29,20 +29,48 @@ import type { ResolvedTheme } from '../design/theme'
 export type SessionStatus = 'loading' | 'anonymous' | 'authenticated'
 
 /** Which top-level screen the app is allowed to show. */
-export type Route = 'loading' | 'login' | 'password-change' | 'app'
+export type Route =
+  | 'loading'
+  | 'login'
+  | 'password-change'
+  | 'setup-trip'
+  | 'setup-family'
+  | 'app'
+
+/**
+ * The gate, and the whole of it.
+ *
+ * Everything past "is there a session at all" comes from the server's `next_step`
+ * (`plan/architecture.md`, foundation F-13). The client is told the *answer*, never the
+ * precedence — so there is no order here to get wrong, and no combination of flags a user
+ * could arrange to slip past a screen. `plan/features/families/tasks.md` Phase 10 says it
+ * outright: "Routing reads `next_step` from `auth/me` and nothing else. Do not reimplement
+ * the precedence in the client."
+ *
+ * The mapping below is a rename, not a decision: each `next_step` value names one screen.
+ */
+const SCREEN_FOR_NEXT_STEP: Record<NextStep, Route> = {
+  change_password: 'password-change',
+  setup_trip: 'setup-trip',
+  setup_family: 'setup-family',
+  app: 'app',
+}
 
 export function routeFor(status: SessionStatus, user: User | null): Route {
   if (status === 'loading') return 'loading'
   if (status === 'anonymous' || user === null) return 'login'
-  // Deliberately checked before anything else: the forced change is not a screen the user
-  // navigates *to*, it is the only screen that exists until the password is changed.
-  if (user.must_change_password) return 'password-change'
-  return 'app'
+  return SCREEN_FOR_NEXT_STEP[user.next_step] ?? 'app'
 }
 
 export type SessionValue = {
   status: SessionStatus
   user: User | null
+  /**
+   * Adopt a user the caller already has. The join screen registers and is handed the new
+   * user in the same response, so re-fetching `auth/me` to learn what it was just told
+   * would be a round trip spent confirming something already known.
+   */
+  adoptUser: (user: User) => void
   route: Route
   themePref: ThemePref
   resolvedTheme: ResolvedTheme
@@ -188,6 +216,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       user,
+      adoptUser,
       route: routeFor(status, user),
       themePref,
       resolvedTheme,
@@ -198,7 +227,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setThemePref,
       refresh,
     }),
-    [status, user, themePref, resolvedTheme, themeError, login, logout, changePassword, setThemePref, refresh],
+    [status, user, adoptUser, themePref, resolvedTheme, themeError, login, logout, changePassword, setThemePref, refresh],
   )
 
   return createElement(SessionContext.Provider, { value }, children)

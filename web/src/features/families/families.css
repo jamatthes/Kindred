@@ -1,0 +1,598 @@
+/* Families. Token-only: every colour is a semantic token and every length is on the
+   5/8/13/21/34/55 scale, the type scale, or a hairline (see scripts/check-tokens.mjs). */
+
+.families {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.families__head h1 {
+  font-size: var(--text-sub);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.families__sub {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+}
+
+.families__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--family-card-min), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.families__empty {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--card-radius);
+  text-align: center;
+  color: var(--color-text-muted);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+}
+
+/* ---------- family card ---------- */
+
+.fcard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.fcard:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* The viewer's own family. Paired with the "your family" text below, never colour alone. */
+.fcard--mine {
+  border-color: var(--color-accent);
+}
+
+.fcard__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fcard__dot {
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-full);
+  flex: none;
+}
+
+.fcard__name {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.fcard__count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+.fcard__locality {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.fcard__privacy {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+.fcard__members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-1);
+  font-size: var(--text-sm);
+}
+
+.mrow__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mrow__role {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+/* ---------- invite card ---------- */
+
+.fcard--invite {
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-surface-raised);
+  box-shadow: none;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fcard__plus {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-1);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.fcard__blurb {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.invite-once {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.invite-once__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.invite-once__row code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-once__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
+.invite-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.invite-form__expiry {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.invite-form__expiry select {
+  height: var(--field-height);
+  border-radius: var(--field-radius);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: 0 var(--space-2);
+}
+
+.invite-list {
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.invite-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.invite-list__meta {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--chip-radius);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  flex: none;
+}
+
+.chip--active {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.chip--used {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+.chip--revoked,
+.chip--expired {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+/* ---------- panel ---------- */
+
+.family-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 38%;
+  min-width: var(--panel-min-width);
+  max-width: var(--panel-max-width);
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.family-panel__bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.family-panel__body {
+  padding: var(--space-3) var(--space-4) var(--space-6);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.family-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.family-panel__head h2 {
+  font-size: var(--text-sub);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.panel-block {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.panel-block__title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.panel-block__body,
+.panel-block__state {
+  font-size: var(--text-sm);
+}
+
+.panel-block__state {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.panel-block__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  color: var(--color-text-faint);
+}
+
+.confirm-block {
+  display: grid;
+  gap: var(--space-2);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-3);
+}
+
+.confirm-block__found {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* ---------- member rows ---------- */
+
+.member-list,
+.member-switches {
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.member-row,
+.member-switches__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--hit-target);
+}
+
+.member-row__who,
+.member-switches__who {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.member-row__name,
+.member-switches__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-row__meta,
+.member-switches__state {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.member-row__error {
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+.member-row__actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---------- switch ---------- */
+
+.k-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.k-switch.is-disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.k-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.k-switch__track {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin-top: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.k-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.k-switch input:checked + .k-switch__track {
+  background: var(--color-accent);
+}
+
+.k-switch input:checked + .k-switch__track .k-switch__thumb {
+  transform: translateX(13px);
+}
+
+.k-switch input:focus-visible + .k-switch__track {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.k-switch__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.k-switch__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.k-switch__hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* The per-member switch is a control, not a paragraph — its label is for screen readers. */
+.member-switches__row .k-switch__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- create-family dialog ---------- */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  z-index: 30;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: var(--card-measure-sm);
+  background: var(--color-surface);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-sheet);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.modal-card h2 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) { /* token-check-ignore: mirrors --breakpoint-panel; a media query cannot read a custom property */
+  .family-panel {
+    display: none;
+  }
+}
+
+/* ---------- profile ---------- */
+
+.profile-grid {
+  display: grid;
+  gap: var(--space-3);
+  max-width: var(--reading-measure);
+  margin-top: var(--space-4);
+}
+
+.profile-avatar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.profile-avatar__preview {
+  /* Borrows the profile badge's own size token: the crop preview stands in exactly that
+     slot, so restating the number here would be a second place to change it. */
+  width: var(--badge-64);
+  height: var(--badge-64);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  flex: none;
+  border: 2px solid var(--color-border-strong);
+}
+
+.profile-avatar__preview img {
+  width: 100%;
+  height: 100%;
+  /* The centre-square crop the server will apply, shown before it is applied. */
+  object-fit: cover;
+}
+
+.profile-avatar__actions {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.profile-facts {
+  display: grid;
+  grid-template-columns: var(--label-column-width) 1fr;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.profile-facts dt {
+  color: var(--color-text-muted);
+}
+
+.profile-facts dd {
+  font-weight: 700;
+}
+
+.auth-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.auth-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: var(--space-1);
+}

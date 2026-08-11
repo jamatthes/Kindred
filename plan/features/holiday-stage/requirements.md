@@ -6,7 +6,7 @@ Milestone **M5** (End-stage archive polish lands in M7).
 ## Summary
 
 The stage machine and everything that only matters once the trip is real. A trip moves
-`planning → holiday → end`. Advancing is main-admin-only and confirmed. During **Holiday** the
+`planning → holiday → end`. Advancing is owner-or-organiser-only and confirmed. During **Holiday** the
 product pivots to the phone: a "now / next up" screen, a one-tap check-in that drops a
 family-coloured pin on the shared map, an opt-in foreground live-location share, and a "running
 late" quick status. Suggestions keep working during Holiday and are still admin-confirmed. **End**
@@ -20,20 +20,22 @@ toggle is off by default and there is a visible indicator the entire time sharin
 
 ### Stage machine
 
-**HS-1 — As a main admin, I can move the trip from Planning to Holiday.**
-- A "Start holiday" control is visible to the main admin only, on the trip/admin screen.
+**HS-1 — As the owner or an organiser, I can move the trip from Planning to Holiday.**
+- A "Start holiday" control is visible to the owner and to organisers only, on the trip/admin
+  screen.
 - Activating it opens a real confirm dialog (admin-destructive action, per `design-system.md`)
   naming the current and target stage and summarising the effect in one line.
 - On confirm the trip's stage changes and every connected client updates without a reload.
 - A notification is generated for all trip members (see `plan/features/notifications/`).
-- Non-main-admins never see the control, and the endpoint rejects them with 403.
+- Anyone who is neither owner nor organiser never sees the control, and the endpoint rejects
+  them with 403.
 
-**HS-2 — As a main admin, I can move the trip from Holiday to End.**
+**HS-2 — As the owner or an organiser, I can move the trip from Holiday to End.**
 - Same confirm pattern, with explicit wording that End makes the trip read-only for everyone.
 - After the change, every mutating endpoint in the application rejects writes for this trip.
 - The UI switches to the archive view as its default surface.
 
-**HS-3 — As a main admin, I can revert a stage change I made by mistake.**
+**HS-3 — As the owner or an organiser, I can revert a stage change I made by mistake.**
 - A separate, deliberately less prominent "Revert stage" control moves the trip back one stage.
 - Requires typing/confirming a second time, and states that reverting un-freezes the trip.
 - Reverting generates a notification to all members so it is never silent.
@@ -91,9 +93,9 @@ toggle is off by default and there is a visible indicator the entire time sharin
 ### Holiday: live location
 
 **HS-9 — As a member, I can opt in to sharing my live location while the app is open.**
-- The toggle lives in my settings and is **OFF by default** — unless my family admin set our
-  family's default to on before I joined, in which case it starts on and I am asked once
-  before anything is sent (see HS-15).
+- The toggle lives in my settings and is **OFF by default** — unless my family's head (or
+  spouse) set our family's default to on before I joined, in which case it starts on and I am
+  asked once before anything is sent (see HS-15).
 - The settings copy states plainly: sharing only works while the app is open and in the
   foreground; closing the app or switching away stops it; there is no background tracking.
 - Turning it on requests geolocation permission and starts `watchPosition`.
@@ -102,9 +104,10 @@ toggle is off by default and there is a visible indicator the entire time sharin
 - If my family's settings are currently hiding me, the indicator says so rather than claiming
   I am visible. An indicator that overstates what is being shared is worse than none.
 - Position updates are throttled and only sent when the position meaningfully changed.
-- **Nobody can turn this toggle on for me.** My family admin can prevent my location being
-  shown and can choose what the toggle starts at for people who join after them, but the act
-  of sharing is mine alone, and my browser's permission prompt is mine alone to answer.
+- **Nobody can turn this toggle on for me.** My family's head or spouse can prevent my
+  location being shown and can choose what the toggle starts at for people who join after
+  them, but the act of sharing is mine alone, and my browser's permission prompt is mine alone
+  to answer.
 
 **HS-10 — As a member, I can stop sharing at any time, and it really stops.**
 - Toggling off stops the watch and deletes my `live_locations` row server-side.
@@ -132,7 +135,8 @@ toggle is off by default and there is a visible indicator the entire time sharin
   hidden by a setting versus simply not sharing — from outside their family, the two look the
   same, which is what stops the map becoming a way to audit other people's choices.
 
-**HS-15 — As a family admin, I decide which of my family appear on the map.**
+**HS-15 — As the head of my family (or a spouse), I decide which of my family appear on the
+map.**
 - I have one switch for the whole family and one per member, and I set what new members start
   with. All three live in my family's settings, not on the map.
 - Turning the family switch off removes all of us, myself included, immediately and for
@@ -141,12 +145,19 @@ toggle is off by default and there is a visible indicator the entire time sharin
   puts nobody on the map who has not chosen to be there.
 - My own sharing starts on when I create the family; everyone else starts from the default I
   set, and is asked before anything is sent.
+- A spouse has every one of these powers — the family switch, everyone else's per-member
+  switch, and the new-member default — with one asymmetry: a spouse cannot flip the head's own
+  per-member visibility switch, matching `plan/overview.md`'s Roles section ("a spouse cannot
+  ... change the head's switches"). The head can flip a spouse's. This is the same
+  one-directional rule as the rest of the head/spouse relationship, applied to the one switch
+  that is personally the head's.
 - The full rules, and the reasoning behind them, live in `plan/features/families/`
   (FM-15) — that feature owns these settings; this one only reads them.
 
 > NOTE: an earlier version of this document said the member alone governed their sharing and
-> that there was no admin override at all. That is now narrowed: an admin holds *permission*,
-> the member holds *consent*, and both are required. The property worth preserving — that no
+> that there was no admin override at all. That is now narrowed: a family's head or spouse
+> holds *permission*, the member holds *consent*, and both are required. The property worth
+> preserving — that no
 > administrator can cause a person to broadcast their location — is unchanged, and is stated
 > explicitly in HS-9 and in the permissions table below.
 
@@ -154,8 +165,8 @@ toggle is off by default and there is a visible indicator the entire time sharin
 
 **HS-12 — As a member, I can still add suggestions during Holiday.**
 - Creating suggestions, voting, and commenting all remain available in Holiday.
-- Suggestions still require main-admin confirmation to reach the itinerary — Holiday changes
-  nothing about that flow.
+- Suggestions still require confirmation by the owner or an organiser to reach the itinerary —
+  Holiday changes nothing about that flow.
 
 ### End: archive
 
@@ -171,39 +182,47 @@ toggle is off by default and there is a visible indicator the entire time sharin
 
 ## Permissions
 
-| Capability | Main admin | Family admin | Member | Logged-out |
-|---|---|---|---|---|
-| View current stage | ✅ | ✅ | ✅ | ❌ |
-| Advance stage (planning→holiday→end) | ✅ | ❌ | ❌ | ❌ |
-| Revert stage (one step back) | ✅ | ❌ | ❌ | ❌ |
-| View now/next screen | ✅ | ✅ | ✅ | ❌ |
-| Create own check-in | ✅ | ✅ | ✅ | ❌ |
-| View check-in feed + pins | ✅ | ✅ | ✅ | ❌ |
-| Delete own check-in | ✅ | ✅ | ✅ | ❌ |
-| Delete anyone's check-in | ✅ | ✅ (own family only) | ❌ | ❌ |
-| Toggle own live-location sharing | ✅ | ✅ | ✅ | ❌ |
-| View others' live locations | ✅ | ✅ | ✅ | ❌ |
-| Hide a family from the map | ✅ (any) | ✅ (own family) | ❌ | ❌ |
-| Hide one member from the map | ✅ (any) | ✅ (own family) | ❌ | ❌ |
-| Set a family's new-member default | ✅ (any) | ✅ (own family) | ❌ | ❌ |
-| **Turn on another user's sharing** | **❌** | **❌** | **❌** | **❌** |
-| View End-stage archive | ✅ | ✅ | ✅ | ❌ |
+| Capability | Owner | Organiser | Head | Spouse | Member | Logged-out |
+|---|---|---|---|---|---|---|
+| View current stage | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Advance stage (planning→holiday→end) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Revert stage (one step back) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| View now/next screen | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Create own check-in | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| View check-in feed + pins | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Delete own check-in | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Delete anyone's check-in | ✅ (any) | ✅ (any) | ✅ (own family only) | ✅ (own family only) | ❌ | ❌ |
+| Toggle own live-location sharing | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| View others' live locations | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Hide a family from the map | ✅ (any) | ✅ (any) | ✅ (own family) | ✅ (own family) | ❌ | ❌ |
+| Hide one member from the map | ✅ (any) | ✅ (any) | ✅ (own family, incl. spouse) | ✅ (own family except the head) | ❌ | ❌ |
+| Set a family's new-member default | ✅ (any) | ✅ (any) | ✅ (own family) | ✅ (own family) | ❌ | ❌ |
+| **Turn on another user's sharing** | **❌** | **❌** | **❌** | **❌** | **❌** | **❌** |
+| View End-stage archive | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 
-Nobody — main admin included — can turn on another person's live-location sharing, or read a
-location for a user who is not sharing. Admins can only ever *remove* someone from the map.
+Nobody — owner and organisers included — can turn on another person's live-location sharing, or
+read a location for a user who is not sharing. Admins can only ever *remove* someone from the
+map.
 
-The three admin rows above are permission, not consent: each is an independent veto over a
-marker, and a marker requires every veto to be clear **and** the member's own toggle to be on
-**and** a fresh position from their own browser. The settings themselves are owned by
-`plan/features/families/` (FM-15); they are listed here because this is the feature where their
-effect is visible.
+The "hide one member" row carries the head/spouse asymmetry from `plan/overview.md`'s Roles
+section: a spouse can hide any other member of the family, and can set the family-wide switch
+and the default for new members, but cannot flip the head's own per-member visibility switch —
+that one is "the head's switch" and a spouse cannot change it, full stop (see the NOTE under
+HS-15). The owner and organisers are exempt from that asymmetry — it is a family-internal rule
+between a head and a spouse, not a trip-level one.
+
+The admin/organiser/head/spouse rows above are permission, not consent: each is an independent
+veto over a marker, and a marker requires every veto to be clear **and** the member's own
+toggle to be on **and** a fresh position from their own browser. The settings themselves are
+owned by `plan/features/families/` (FM-15); they are listed here because this is the feature
+where their effect is visible.
 
 ## Stage availability
 
 | Capability | Planning | Holiday | End |
 |---|---|---|---|
-| Stage advance (by main admin) | ✅ → holiday | ✅ → end | ❌ (terminal) |
-| Stage revert (by main admin) | ❌ | ✅ → planning | ✅ → holiday |
+| Stage advance (by owner or organiser) | ✅ → holiday | ✅ → end | ❌ (terminal) |
+| Stage revert (by owner or organiser) | ❌ | ✅ → planning | ✅ → holiday |
 | Now / next screen | Hidden (itinerary view instead) | ✅ default mobile screen | ❌ (archive instead) |
 | Create check-in | ❌ | ✅ | ❌ |
 | View check-ins | n/a (none exist) | ✅ | ✅ read-only |

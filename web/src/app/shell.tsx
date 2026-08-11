@@ -13,7 +13,10 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from './apiClient'
 import { useSession } from './session'
+import { useNavigate } from './router'
 import { useSocketStatus } from './socket'
+import { IdentityBadge } from '../design/IdentityBadge'
+import type { AppRoute } from './router'
 import type { PresenceSnapshot, ThemePref, TripStage } from './types'
 import './shell.css'
 
@@ -25,11 +28,11 @@ const STAGE_LABEL: Record<TripStage, string> = {
 
 /** Nav destinations. `ready` flips to true as each feature lands. */
 const NAV = [
-  { key: 'home', label: 'Home', ready: true },
+  { key: 'home', label: 'Home', ready: true, to: { name: 'home' } as const },
   { key: 'map', label: 'Map', ready: false, arrives: 'the map & suggestions feature' },
   { key: 'polls', label: 'Polls', ready: false, arrives: 'the polls feature' },
   { key: 'itinerary', label: 'Itinerary', ready: false, arrives: 'the itinerary feature' },
-  { key: 'families', label: 'Families', ready: false, arrives: 'the families feature' },
+  { key: 'families', label: 'Families', ready: true, to: { name: 'families' } as const },
 ] as const
 
 function Icon({ name }: { name: string }) {
@@ -162,16 +165,17 @@ function PresenceStack({ online }: { online: boolean }) {
   const { user } = useSession()
   if (!user) return null
   const initial = (user.family?.name ?? user.display_name).slice(0, 1).toUpperCase()
-  const colour = user.family ? `var(--family-${user.family.color})` : 'var(--color-text-faint)'
   return (
     <div className="presence-stack" aria-label="Who is online">
-      <span
-        className={`presence-stack__av${online ? '' : ' is-offline'}`}
-        style={{ background: colour }}
-        title={`${user.family?.name ?? user.display_name} — ${online ? 'online' : 'offline'}`}
-      >
-        {initial}
-      </span>
+      {/* One avatar per family; until the full stack arrives with presence fan-out this is
+          the viewer's own, which is correct rather than a placeholder. */}
+      <IdentityBadge
+        initials={initial}
+        familyColor={user.family?.color}
+        size={32}
+        offline={!online}
+        name={`${user.family?.name ?? user.display_name} — ${online ? 'online' : 'offline'}`}
+      />
     </div>
   )
 }
@@ -205,6 +209,7 @@ export type ShellProps = {
 
 export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
   const { user } = useSession()
+  const navigate = useNavigate()
   const socketStatus = useSocketStatus(Boolean(user) && user?.must_change_password === false)
   usePresence(Boolean(user))
 
@@ -224,7 +229,11 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
             className={`rail__btn${activeNav === item.key ? ' is-active' : ''}`}
             disabled={!item.ready}
             aria-current={activeNav === item.key ? 'page' : undefined}
+            aria-label={item.label}
             title={item.ready ? item.label : `${item.label} — arrives with ${item.arrives}`}
+            onClick={() => {
+              if ('to' in item) navigate(item.to as AppRoute)
+            }}
           >
             <Icon name={item.key} />
           </button>
@@ -238,9 +247,24 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
         >
           <Icon name="admin" />
         </button>
-        <span className="avatar" title={user?.display_name}>
-          {user?.display_name.slice(0, 1).toUpperCase()}
-        </span>
+        <button
+          type="button"
+          className="rail__btn"
+          aria-label="Your profile"
+          title={user?.display_name}
+          aria-current={activeNav === 'profile' ? 'page' : undefined}
+          onClick={() => navigate({ name: 'profile' })}
+        >
+          {/* The same badge component the member lists and the map use — one person, one
+              rendering, everywhere. */}
+          <IdentityBadge
+            initials={user?.initials ?? ''}
+            familyColor={user?.family?.color}
+            avatarThumbUrl={user?.avatar_thumb_url}
+            size={32}
+            name={user?.display_name}
+          />
+        </button>
       </nav>
 
       <div className="shell__main">
@@ -304,6 +328,9 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
               disabled={!item.ready}
               aria-current={activeNav === item.key ? 'page' : undefined}
               title={item.ready ? item.label : `${item.label} — arrives with ${item.arrives}`}
+              onClick={() => {
+                if ('to' in item) navigate(item.to as AppRoute)
+              }}
             >
               <Icon name={item.key} />
               {item.label}

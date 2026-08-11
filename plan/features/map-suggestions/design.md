@@ -98,6 +98,34 @@ Rules:
   fill (preference-ramp tint when poll/vote scores exist, neutral otherwise). Reference
   rendering: `design-preview/screen-planning-map.html`.
 
+### Named-locality regions (decision 2026-08-11)
+
+When a region is created by searching a named place ("Hampshire", "Cornwall") rather than
+drawing, we want the real administrative boundary — the dashed outline Google shows for a
+locality — with our tinted fill. Google's APIs never return that polygon (their boundary
+data is render-only and licensed), so:
+
+- **Boundary source: OpenStreetMap via Nominatim** (`polygon_geojson=1`). One server-side
+  fetch at region creation; the returned boundary GeoJSON is stored in
+  `geometry_geojson` (`properties.shape: "polygon"`, plus `properties.boundary_source:
+  "osm"` and the OSM relation id) and cached forever — never re-fetched on render, per the
+  API-cost rule. ODbL requires a visible "boundary © OpenStreetMap contributors"
+  attribution wherever such a region renders.
+- Downstream, a named-locality region is an **ordinary region row**: same rendering path
+  (dashed outline + tint), same centroid for distances, works in exports and the End-stage
+  archive, and permits exact point-in-region math later. No Google feature-layer / Map ID
+  dependency (that approach is explicitly rejected: render-only, own SKU, no stored
+  geometry).
+- Simplify oversized rings server-side (Douglas–Peucker to a sane vertex budget, target
+  ≤ 500 points) before storing; UK county boundaries at full OSM resolution are far
+  denser than a map overlay needs.
+- **Fallback** when Nominatim has no boundary for the query: seed a rounded ellipse
+  fitted inside the geocoded bounding box, visually labelled approximate, with a
+  "refine the outline" action opening the draw tool pre-seeded with that shape. Never
+  render a raw bounding-box rectangle.
+- Nominatim usage policy: single fetch per created region with proper User-Agent
+  identification; tests fake the service, as with every external call.
+
 ### Grouping (derived, never stored)
 
 Activities and meals that sit at an accommodation are grouped at query time. No column, no

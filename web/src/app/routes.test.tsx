@@ -6,9 +6,17 @@ import type { User } from './types'
 const admin: User = {
   id: 'u1',
   username: 'admin',
+  first_name: 'Admin',
+  last_name: '',
+  avatar_url: null,
+  avatar_thumb_url: null,
+  initials: 'A',
   display_name: 'Admin',
   is_platform_admin: true,
+  is_owner: true,
+  is_organiser: true,
   must_change_password: false,
+  next_step: 'app',
   theme_pref: 'light',
   locale: 'en-GB',
   family: null,
@@ -97,7 +105,7 @@ describe('the shell gate', () => {
   })
 
   it('pins a must-change-password user to the change screen with no way out', async () => {
-    stubApi({ ...admin, must_change_password: true })
+    stubApi({ ...admin, must_change_password: true, next_step: 'change_password' })
     render(<App />)
 
     expect(

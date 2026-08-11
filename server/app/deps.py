@@ -21,9 +21,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.onboarding import is_pending_family
 from app.core.sessions import load_session, touch_session
-from app.models import Family, FamilyMember, Session, Trip, User
+from app.models import (
+    FAMILY_MANAGER_ROLES,
+    Family,
+    FamilyMember,
+    Session,
+    Trip,
+    TripOrganiser,
+    User,
+)
 from app.schemas.common import ApiError, forbidden, not_authenticated
+from app.schemas.family import Viewer, viewer_from
 
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 
@@ -128,36 +138,146 @@ async def require_member(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> User
         return user
     if trip is not None and await load_membership(db, user.id, trip.id) is not None:
         return user
-    raise forbidden("You need an invite to this trip before you can see it.")
+    # A distinct code, not the generic `forbidden`: the client has to tell "you are not on
+    # this trip" (show the not-on-the-trip screen, re-read `auth/me`) apart from "you are on
+    # it but may not do that" (show nothing; the control should not have been there).
+    # `plan/features/families/design.md` names it in the edge-case table and in Phase 6's
+    # verify step.
+    raise ApiError(
+        403, "not_on_trip", "You need an invite to this trip before you can see it."
+    )
 
 
-def require_family_admin(family_id: uuid.UUID):
-    """Dependency factory: admin **of that family**, or the main admin (F-9)."""
+async def is_owner(user: User, trip: Trip | None) -> bool:
+    """The trip's owner. `is_platform_admin` is the bootstrap bypass, unchanged from M0.
+
+    The seeded account has to be able to reach its own instance before any trip exists, so it
+    satisfies every trip-level check. That is a property of the *installation*, not of the
+    role hierarchy, which is why it sits here rather than in `trip_organisers`.
+    """
+    return user.is_platform_admin or (trip is not None and trip.owner_user_id == user.id)
+
+
+async def is_organiser(db: AsyncSession, user: User, trip: Trip | None) -> bool:
+    """The owner, or someone the owner appointed (`trip_organisers`, FM-17)."""
+    if await is_owner(user, trip):
+        return True
+    if trip is None:
+        return False
+    return (
+        await db.scalar(
+            select(TripOrganiser.id).where(
+                TripOrganiser.trip_id == trip.id, TripOrganiser.user_id == user.id
+            )
+        )
+    ) is not None
+
+
+async def require_owner(user: CurrentUser, trip: ActiveTrip) -> User:
+    """The owner alone. **Used only by organiser management** (`admin-console`, FM-17).
+
+    Deliberately narrower than `require_organiser`: an organiser who could appoint organisers
+    could unappoint the owner's choices, and there would be no way back. This is the one power
+    the owner does not delegate, and it is a separate dependency so that fact is visible at
+    every route that needs it rather than buried in a role comparison.
+    """
+    if await is_owner(user, trip):
+        return user
+    raise ApiError(403, "owner_only", "Only the trip's owner can do that.")
+
+
+async def require_organiser(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> User:
+    """Every cross-family power: the owner, or an organiser they appointed.
+
+    This is what the pre-2026-08-11 docs called `require_main_admin`; every "main admin"
+    permission in a feature document means this unless it says otherwise.
+    """
+    if await is_organiser(db, user, trip):
+        return user
+    raise forbidden("Only the trip's owner or an organiser can do that.")
+
+
+def require_family_head_or_spouse(family_id: uuid.UUID):
+    """Dependency factory: **head or spouse of that family**, or an organiser.
+
+    The spouse asymmetry is *not* enforced here, and could not be: it depends on the target of
+    the action, not on the actor's role, so a spouse is admitted to the route and refused only
+    when the person they are acting on is the head (`models.family.spouse_may_act_on`).
+    Enforcing it at the door would lock a spouse out of the nine-tenths of the route that is
+    theirs to use.
+    """
 
     async def _dep(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> User:
-        if user.is_platform_admin or (trip is not None and trip.owner_user_id == user.id):
+        if await is_organiser(db, user, trip):
             return user
         membership = await db.scalar(
             select(FamilyMember).where(
                 FamilyMember.family_id == family_id,
                 FamilyMember.user_id == user.id,
-                FamilyMember.role == "admin",
+                FamilyMember.role.in_(FAMILY_MANAGER_ROLES),
             )
         )
         if membership is None:
-            raise forbidden("Only a family admin can do that.")
+            raise forbidden("Only this family's head or spouse can do that.")
         return user
 
     return _dep
 
 
-async def require_main_admin(user: CurrentUser, trip: ActiveTrip) -> User:
-    """The platform admin, or the owner of the active trip (F-9)."""
-    if user.is_platform_admin:
+async def require_family_manager(
+    family_id: uuid.UUID, db: DbDep, user: CurrentUser, trip: ActiveTrip
+) -> User:
+    """`require_family_head_or_spouse`, resolving the family from the route's path parameter.
+
+    NOTE (implementation, `families` Phase 5): `plan/features/foundation/design.md` specifies
+    this as a factory taking `family_id`, which works when the id is known where the route is
+    declared and not when it arrives in the path — a factory is evaluated at import time and
+    the request does not exist yet. This is the same rule with the id declared as a dependency
+    parameter, which is how FastAPI hands a path value to a dependency. The factory stays for
+    callers that do have the id in hand.
+    """
+    return await require_family_head_or_spouse(family_id)(db, user, trip)
+
+
+async def require_pending_family(db: DbDep, user: CurrentUser) -> User:
+    """The single route in the product a user with no family may call (`families` FM-13).
+
+    `require_member` refuses anyone without a family everywhere, which includes someone who
+    has accepted a new-family invite but not yet named their family. `POST /families/mine` is
+    the one exception, and this is it. `plan/architecture.md` states the rule and the reason
+    it is stated at all: "a second route in this category is a decision to be documented, not
+    a quiet exemption."
+
+    The predicate itself lives in `app/core/onboarding.py`, shared with the `next_step` gate,
+    so the screen a user is sent to and the route that screen calls can never disagree about
+    who is allowed to be there.
+    """
+    if await is_pending_family(db, user):
         return user
-    if trip is not None and trip.owner_user_id == user.id:
-        return user
-    raise forbidden("Only the main admin can do that.")
+    raise forbidden("Only someone setting up a new family can do that.")
+
+
+async def current_viewer(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> Viewer:
+    """The caller reduced to what the family serialisers are allowed to consult.
+
+    Resolved once per request, here, rather than in each route: the address rule and the
+    consent rule are privacy guarantees, and a route that assembled its own `Viewer` could
+    assemble a more generous one.
+    """
+    membership = None
+    if trip is not None:
+        membership = await load_membership(db, user.id, trip.id)
+    family, member = membership if membership is not None else (None, None)
+    return viewer_from(
+        user,
+        family_id=family.id if family else None,
+        role=member.role if member else None,
+        is_owner=await is_owner(user, trip),
+        is_organiser=await is_organiser(db, user, trip),
+    )
+
+
+ViewerDep = Annotated[Viewer, Depends(current_viewer)]
 
 
 def require_stage(*stages: str):

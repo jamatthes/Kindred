@@ -70,7 +70,11 @@ async def test_require_member_denies_a_user_with_no_family(
     await login_as(probe_client, db, outsider)
     response = await probe_client.get(MEMBER)
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "forbidden"
+    # A distinct code from the generic `forbidden`, added by `families`: the client has to
+    # tell "you are not on this trip" (show the not-on-the-trip screen) apart from "you are
+    # on it but may not do that" (show nothing — the control should not have been there).
+    # `plan/features/families/design.md` names it in the edge-case table.
+    assert response.json()["detail"]["code"] == "not_on_trip"
 
 
 # --- require_main_admin ------------------------------------------------------------------
@@ -111,10 +115,10 @@ async def test_require_main_admin_denies_a_family_admin(
 async def test_require_family_admin_allows_that_familys_admin(
     db: AsyncSession, family_admin: tuple[User, Family], trip: Trip
 ) -> None:
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     user, family = family_admin
-    assert await require_family_admin(family.id)(db, user, trip) is user
+    assert await require_family_head_or_spouse(family.id)(db, user, trip) is user
 
 
 async def test_require_family_admin_denies_an_admin_of_another_family(
@@ -122,13 +126,13 @@ async def test_require_family_admin_denies_an_admin_of_another_family(
 ) -> None:
     from fastapi import HTTPException
 
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     user, _ = family_admin
     other = await make_family(db, trip, "Others", color=3)
 
     with pytest.raises(HTTPException) as raised:
-        await require_family_admin(other.id)(db, user, trip)
+        await require_family_head_or_spouse(other.id)(db, user, trip)
     assert raised.value.status_code == 403
     assert raised.value.detail["code"] == "forbidden"
 
@@ -138,21 +142,21 @@ async def test_require_family_admin_denies_a_plain_member_of_that_family(
 ) -> None:
     from fastapi import HTTPException
 
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     user, family = member
     with pytest.raises(HTTPException) as raised:
-        await require_family_admin(family.id)(db, user, trip)
+        await require_family_head_or_spouse(family.id)(db, user, trip)
     assert raised.value.status_code == 403
 
 
 async def test_require_family_admin_allows_the_main_admin(
     db: AsyncSession, main_admin: User, trip: Trip
 ) -> None:
-    from app.deps import require_family_admin
+    from app.deps import require_family_head_or_spouse
 
     family = await make_family(db, trip, "Somebodys", color=4)
-    assert await require_family_admin(family.id)(db, main_admin, trip) is main_admin
+    assert await require_family_head_or_spouse(family.id)(db, main_admin, trip) is main_admin
 
 
 # --- require_stage -----------------------------------------------------------------------

@@ -20,15 +20,47 @@ detail lives in a right-hand side panel; time lives in a bottom timeline panel.
 | **Holiday** | The trip is happening. Itinerary + map front and center; "now / next up" mobile view; check-ins and opt-in foreground live location. Suggestions still allowed, still admin-confirmed. |
 | **End** | Everything frozen read-only. The trip becomes an archive/scrapbook (map + itinerary + photos + expenses). |
 
-## Roles
+## Roles (revised 2026-08-11)
 
-- **Main admin** — one per platform/trip; also a regular family member. Final say: confirms/rejects suggestions into the itinerary, manages stages, configures voting modes, manages any family.
-- **Family admin** — one per family; manages own family's members, home address, and who in the family appears on the map.
-- **Member** — individual login, belongs to one family; votes, suggests, comments, checks in, and alone decides whether to share their own location.
+Roles come in **two independent kinds**, and the distinction is the point: a trip-level role
+says what you may do *across* families, a family-level role says what you may do *inside* one.
+The owner and the organisers are also ordinary heads or members of their own families, and
+neither kind of role implies the other.
 
-The first deploy seeds a platform account `admin`/`admin` and **forces a password change on first login**, after which the main admin names the trip before reaching the app.
+### Trip-level
 
-**How people get in.** The main admin invites each family with a new-family invite link. The recipient registers, then names their family on a setup screen and becomes its family admin. From there a family admin invites their own family's members (or the main admin does it for them); a family admin can never invite into another family. Every account is created through an invite — there is no open sign-up.
+- **Owner** — the person whose trip it is (`trips.owner_user_id`; the seeded admin on a fresh
+  install). Everything an organiser can do, **plus the one thing only they can**: appointing
+  and removing organisers. Exactly one per trip.
+- **Organiser** — appointed by the owner (`trip_organisers`). Every cross-family power:
+  confirms/rejects suggestions into the itinerary, manages stages, configures voting modes,
+  manages any family, invites anyone anywhere. **Cannot promote or demote organisers,
+  including each other** — otherwise the owner's control of the guest list would only last
+  until the first organiser decided otherwise, and there would be no way back.
+
+### Family-level
+
+- **Head of family** — one per family, the person who created it or was promoted into the
+  role. Manages their own family: members, the home address, the invite links, and who in the
+  family appears on the map. Their own location sharing starts on when they create the family.
+- **Spouse** — a second adult with the head's powers over the family, and **one asymmetry**:
+  a spouse cannot modify, demote or remove the head, nor change the head's visibility
+  switches. The head can do all of those to a spouse. The asymmetry is deliberate and
+  one-directional — two people who can each remove the other is a family that can lock itself
+  out in one click. There is no limit on how many spouses a family has; promotion and demotion
+  between member and spouse is the head's (or the owner's, or an organiser's) to do.
+- **Member** — individual login, belongs to exactly one family; votes, suggests, comments,
+  checks in, and **alone** decides whether to share their own location.
+
+> The old vocabulary was "main admin / family admin / member". "Main admin" split into owner
+> and organiser because one person managing a real trip needs help, but handing that help the
+> ability to unappoint the person who asked for it is a different decision. "Family admin"
+> became head of family, and gained spouse, because a household usually has two adults and
+> making one of them a plain member misdescribes the family the software is modelling.
+
+The first deploy seeds a platform account `admin`/`admin` and **forces a password change on first login**, after which the owner names the trip before reaching the app.
+
+**How people get in.** The owner (or an organiser) invites each family with a new-family invite link. The recipient registers, then names their family on a setup screen and becomes its head of family. From there the head or a spouse invites their own family's members (or the owner/an organiser does it for them); neither a head nor a spouse can ever invite into another family. Every account is created through an invite — there is no open sign-up.
 
 ## Decision log (settled 2026-08-10)
 
@@ -39,7 +71,8 @@ The first deploy seeds a platform account `admin`/`admin` and **forces a passwor
 | Frontend | React + Vite, installable **PWA** |
 | Maps | **Google Maps Platform** (JS Maps, Places, Distance Matrix, Geocoding, Directions) — free-tier viable at our scale IF cached server-side (see `architecture.md`); chosen over OSM stack for Places data + polish |
 | API cost rule | Never call Google in a render path. Geocode homes once; Distance Matrix once per (home, suggestion) pair, cached in DB; Directions once per itinerary change, cached; Places re-fetched on card-open only (ToS: persist `place_id` only) |
-| Accounts | Individual logins grouped into families; per-family admin; one main admin |
+| Accounts | Individual logins grouped into families; per-family admin; one main admin — **superseded 2026-08-11, see the row below** |
+| Role hierarchy | **Owner / organiser / head of family / spouse / member** (added 2026-08-11, replacing "main admin / family admin / member"). Two independent kinds: trip-level (owner, organiser) and family-level (head, spouse, member); neither implies the other, and the owner is also an ordinary head or member of their own family. Organisers hold every cross-family power **except managing organisers** — that is the owner's alone, because a delegate who can unappoint the delegator is not a delegate. Spouse equals head over the family **except** that a spouse cannot modify, demote or remove the head or change the head's switches; the asymmetry is one-directional because two people who can each remove the other is a family that can lock itself out in one click. Organisers live in a new `trip_organisers` table; head and spouse are `family_members.role` values (`admin` renamed to `head`). Dependencies: `require_organiser` (owner or organiser) replaces `require_main_admin`, `require_owner` guards organiser management only, and `require_family_admin` becomes `require_family_head_or_spouse`. Owned by `families`; `admin-console` and `holiday-stage` inherit it |
 | Voting mode | Configurable **per poll / per suggestion category** (1–10 score or 👍/👎), set by admin |
 | Trips scope | Single active trip in v1 UI; **schema multi-trip-ready** from day one |
 | Theme | **Light by default**; dark mode = swapped token set; user preference persisted server-side |
@@ -51,6 +84,7 @@ The first deploy seeds a platform account `admin`/`admin` and **forces a passwor
 | Onboarding | One server-owned gate: `auth/me.next_step` ∈ `change_password` / `setup_trip` / `setup_family` / `app`. The client routes on that field alone. The main admin names the trip on first login (`admin-console` AC-0); a new family's admin names their family on first login (`families` FM-13) — the family name is **not** collected on the join form (added 2026-08-11) |
 | Deploy | Docker Compose on home server; **Cloudflare proxy in front of IPv6-only origin** (IPv4 reachability + auto-TLS; HTTPS is required by geolocation/PWA/push) |
 | Charts | **Own small token-aware SVG chart widgets** — no heavy chart library; honesty rules baked in (see `design-system.md`) |
+| Named-locality regions | Boundary polygons come from **OpenStreetMap/Nominatim** (fetched once at creation, stored in `geometry_geojson`, ODbL attribution shown) — Google's boundary rendering is render-only/no-export and is rejected. Fallback: fitted ellipse + "refine outline", never a raw bounding box (added 2026-08-11; `map-suggestions` design) |
 | Styling sources | Palantir = system design only. designmotionhq patterns = principles only, **explicitly do not copy its visual styling**. Visual direction set by a DesignSync pass after M0 |
 | Docs-first | Every feature has `plan/features/<name>/{requirements,design,tasks}.md`, written before its code; docs updated when the feature changes |
 | Legacy app | Stays at `E:\GitRepos\palantir-for-family-trips` as reference only (see `CLAUDE.md` for what it's good for) |

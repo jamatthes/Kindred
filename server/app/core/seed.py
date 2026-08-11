@@ -44,10 +44,16 @@ async def _seed_admin(db: AsyncSession) -> User | None:
     existing = await db.scalar(select(func.count()).select_from(User))
     if existing:
         return None
+    name = settings.seed_admin_username.strip().title()
     user = User(
         username=settings.seed_admin_username.strip().lower(),
         password_hash=hash_password(settings.seed_admin_password),
-        display_name=settings.seed_admin_username.strip().title(),
+        # A mononym, deliberately: the seeded account is "Admin", not a person, and the
+        # initials rule (`families` FM-14) already covers an empty last name with a
+        # one-letter badge. The real name is set on the profile page after first login.
+        first_name=name,
+        last_name="",
+        display_name=name,
         is_platform_admin=True,
         # The seeded password is published in .env.example. The account is unusable for
         # anything else until it is changed.

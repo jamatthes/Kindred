@@ -39,4 +39,16 @@
   --reading-measure: 720px;
   --card-measure-sm: 420px;
   --label-column-width: 140px;
+  /* The width below which the side panel becomes a bottom sheet. Wider than
+     --breakpoint-mobile because the panel needs room before the nav does: at 900px
+     a 38% panel is still narrower than the content it describes.
+     `src/design/breakpoints.ts` mirrors this for the one component that has to ask
+     in JavaScript — keep the two in step. */
+  --breakpoint-panel: 900px;
+
+  /* --- Families (features/families) --------------------------------------
+     A family card holds a name, a member count and up to a handful of member rows;
+     below this it starts wrapping names, which is the point it stops being glanceable. */
+  --family-card-min: 300px;
+  --panel-min-width: 340px;
 }
