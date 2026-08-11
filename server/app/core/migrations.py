@@ -70,6 +70,6 @@ def _upgrade_head() -> None:
 async def run_migrations() -> None:
     """Wait for the database, then bring it to ``head``. Raises if either step fails."""
     await wait_for_database()
-    logger.info("Applying Alembic migrations…")
+    logger.info("Applying Alembic migrations...")
     await asyncio.to_thread(_upgrade_head)
     logger.info("Migrations applied.")

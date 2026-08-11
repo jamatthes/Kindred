@@ -16,6 +16,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.core.migrations import run_migrations
+from app.core.seed import run_seed
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ API_PREFIX = "/api/v1"
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logging.basicConfig(level=settings.log_level.upper())
     await run_migrations()
+    # After migrations, never before: the seed writes rows into tables the migration creates.
+    await run_seed()
     yield
 
 
