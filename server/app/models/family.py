@@ -59,6 +59,10 @@ MAX_COLOR_SLOTS = 8
 #: Allowed invite lifetimes, in hours: 24 hours, 7 days, 30 days.
 INVITE_EXPIRY_CHOICES = (24, 168, 720)
 
+#: `invites.mode`. What the invite is *for*, stated rather than inferred — see migration
+#: `0003` for why a nullable `family_id` could not carry it.
+INVITE_MODES = ("join", "create_family")
+
 
 class Family(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "families"
@@ -180,8 +184,13 @@ class Invite(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    #: Null means "this invite creates a new family" (FM-6). `ON DELETE SET NULL`, so a
-    #: deleted family leaves the invite reportable rather than vanishing with it.
+    #: `join` (FM-5) or `create_family` (FM-6). Stated rather than inferred from
+    #: `family_id is null`, because `ON DELETE SET NULL` would otherwise turn a join invite
+    #: into a family-founding one the moment its family was deleted — see migration `0003`.
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, server_default="join")
+    #: The family being joined. Null for a `create_family` invite (there is none yet), and
+    #: also null for a `join` invite whose family has since been deleted — which is why
+    #: `mode` exists to tell those two apart.
     family_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("families.id", ondelete="SET NULL"),
@@ -206,12 +215,20 @@ class Invite(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     family: Mapped[Family | None] = relationship(lazy="joined")
 
-    __table_args__ = (UniqueConstraint("token_hash", name="uq_invites_token_hash"),)
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_invites_token_hash"),
+        CheckConstraint(f"mode IN {INVITE_MODES}", name="ck_invites_mode"),
+    )
 
     @property
     def creates_family(self) -> bool:
         """A new-family invite (FM-6) rather than a join-this-family one (FM-5)."""
-        return self.family_id is None
+        return self.mode == "create_family"
+
+    @property
+    def family_missing(self) -> bool:
+        """A `join` invite whose family has been deleted (`invite_family_missing`)."""
+        return self.mode == "join" and self.family_id is None
 
 
 def is_invite_usable(invite: Invite | None, *, now: datetime | None = None) -> bool:

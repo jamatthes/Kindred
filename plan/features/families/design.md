@@ -95,6 +95,24 @@ The raw token is shown once at creation and never retrievable afterwards — the
 
 An invite is usable when `used_by is null and revoked_at is null and expires_at > now()`.
 
+**PROPOSED ADDITION — `invites.mode`** (text: `join` / `create_family`, not null, default
+`join`), added by migration `0003`. This section says a null `family_id` means "creates a new
+family", and the `invites` schema entry says `family_id` is `ON DELETE SET NULL` so a deleted
+family leaves the invite reportable as `invite_family_missing`. Those cannot both be true:
+deleting a family turns its outstanding join invites into family-founding ones, and accepting
+one then creates an account and drops the visitor on a family setup screen they were never
+invited to — a `201` where the edge-case table below promises a `409`. With `mode` stated,
+`family_id is null` means exactly one thing:
+
+| `mode` | `family_id` | Meaning |
+|---|---|---|
+| `create_family` | null | FM-6 — the recipient founds their own family |
+| `join` | set | FM-5 — join that family |
+| `join` | null | the family was deleted → `invite_family_missing` |
+
+`InvitePreviewOut.reason` gains `family_missing` for the same reason: the visitor should learn
+this before filling in a registration form, not after submitting one.
+
 ### `users` (exists, from foundation)
 
 Read and written here for registration (FM-7) and profile edits (FM-11).

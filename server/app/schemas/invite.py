@@ -26,7 +26,9 @@ from app.schemas.user import NextStep, UserOut
 
 InviteMode = Literal["join", "create_family"]
 InviteStatus = Literal["active", "used", "revoked", "expired"]
-InviteInvalidReason = Literal["expired", "used", "revoked", "unknown", "trip_ended"]
+InviteInvalidReason = Literal[
+    "expired", "used", "revoked", "unknown", "trip_ended", "family_missing"
+]
 
 #: 24 hours, 7 days, 30 days. A short list rather than a free number, so the UI is a select
 #: and an operator cannot mint a ten-year invite by accident (FM-5).

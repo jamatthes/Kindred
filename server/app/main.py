@@ -26,6 +26,7 @@ from app.routers import (
     auth,
     families,
     health,
+    invites,
     me,
     presence,
     settings as settings_router,
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router, prefix=API_PREFIX)
     app.include_router(presence.router, prefix=API_PREFIX)
     app.include_router(families.router, prefix=API_PREFIX)
+    app.include_router(invites.router, prefix=API_PREFIX)
 
     # Not under API_PREFIX: Caddy proxies `/ws` separately (plan/architecture.md).
     app.include_router(ws.router)
