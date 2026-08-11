@@ -50,19 +50,23 @@
   --family-indigo: #5B5FC7;
   --family-plum: #9A4F9E;
 
-  /* --- Preference ramp 0–10 (colorblind-safe red → amber → teal).
-         Data never lives in hue alone: always pair with the numeric value. --- */
-  --scale-pref-0: #B3362B;
-  --scale-pref-1: #BC4A2A;
-  --scale-pref-2: #C55E29;
-  --scale-pref-3: #CD7228;
-  --scale-pref-4: #D48627;
-  --scale-pref-5: #D99A2B;
-  --scale-pref-6: #B79A33;
-  --scale-pref-7: #93973E;
-  --scale-pref-8: #5E9468;
-  --scale-pref-9: #3A8E74;
-  --scale-pref-10: #128778;
+  /* --- Preference ramp 0–10, LIGHT-theme baseline (colorblind-safe red → amber → teal).
+         Raw scale only — components never reference these directly. The semantic layer
+         (`tokens.semantic.css`) maps `--scale-pref-N` to these under `[data-theme="light"]`
+         and to a separately re-tuned dark set under `[data-theme="dark"]`, the same split
+         already used for `--family-N`. Data never lives in hue alone: always pair with the
+         numeric value. --- */
+  --pref-ramp-0: #B3362B;
+  --pref-ramp-1: #BC4A2A;
+  --pref-ramp-2: #C55E29;
+  --pref-ramp-3: #CD7228;
+  --pref-ramp-4: #D48627;
+  --pref-ramp-5: #D99A2B;
+  --pref-ramp-6: #B79A33;
+  --pref-ramp-7: #93973E;
+  --pref-ramp-8: #5E9468;
+  --pref-ramp-9: #3A8E74;
+  --pref-ramp-10: #128778;
 
   /* --- Spacing (golden-ratio-derived, px) --- */
   --space-1: 5px;

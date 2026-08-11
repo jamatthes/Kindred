@@ -55,6 +55,21 @@
   --family-7: var(--family-indigo);
   --family-8: var(--family-plum);
 
+  /* Preference ramp — the light-theme mapping onto the primitive scale. Charts and
+     HeatMatrix reference `--scale-pref-N` only; which theme block wins is the whole
+     point of this indirection. */
+  --scale-pref-0: var(--pref-ramp-0);
+  --scale-pref-1: var(--pref-ramp-1);
+  --scale-pref-2: var(--pref-ramp-2);
+  --scale-pref-3: var(--pref-ramp-3);
+  --scale-pref-4: var(--pref-ramp-4);
+  --scale-pref-5: var(--pref-ramp-5);
+  --scale-pref-6: var(--pref-ramp-6);
+  --scale-pref-7: var(--pref-ramp-7);
+  --scale-pref-8: var(--pref-ramp-8);
+  --scale-pref-9: var(--pref-ramp-9);
+  --scale-pref-10: var(--pref-ramp-10);
+
   --shadow-card: var(--shadow-1);
   --shadow-popover: var(--shadow-2);
   --shadow-sheet: var(--shadow-3);
@@ -106,6 +121,26 @@
   --family-6: #74A9DE;
   --family-7: #8286D9;
   --family-8: #B573B8;
+
+  /* Preference ramp — re-tuned for dark, not inverted: same hue journey (red 5°→ amber
+     38°→ yellow-green 63°→ teal 172°) and the same relative step separation as the light
+     ramp, lightness lifted ~16pts and desaturated ~8pts so it doesn't vibrate against
+     `--stone-850`. HeatMatrix tints these at `--mix-tint-strong` (24%) onto
+     `--color-surface`, so the rendered cell stays close to the dark surface's own
+     lightness either way — `--color-text` (near-white in dark) reads at a large AA
+     margin on every step, exactly as it does in light. Values checked under a
+     deuteranopia simulation for the same red→amber→teal separation as the light set. */
+  --scale-pref-0: #CF6A61;
+  --scale-pref-1: #D37D65;
+  --scale-pref-2: #D78E69;
+  --scale-pref-3: #DA9E6D;
+  --scale-pref-4: #DCAC70;
+  --scale-pref-5: #DFB977;
+  --scale-pref-6: #CDB86F;
+  --scale-pref-7: #B4B86F;
+  --scale-pref-8: #94AF99;
+  --scale-pref-9: #66B49C;
+  --scale-pref-10: #25C6B1;
 
   --shadow-card: none;
   --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.4);
