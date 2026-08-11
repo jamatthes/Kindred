@@ -1,14 +1,18 @@
 /**
- * `/styleguide` — chart widget gallery.
+ * `/styleguide` — the design-system gallery (`plan/features/design-system/tasks.md`
+ * Phase 8): token scales, primitives, and every chart widget, in one unlinked,
+ * authenticated route (DS-13). No Storybook dependency; a page-scoped theme toggle so
+ * both themes can be compared without touching the account preference.
  *
- * Renders every widget in `web/src/charts/` with realistic sample data (a York/Cornwall
- * poll, matching `design-preview/charts.html` and `design-preview/screen-polls.html`),
- * plus each widget's empty and single-point states. A plain, unlinked, authenticated
- * route (DS-13) — no Storybook dependency, page-scoped theme toggle so both themes can be
- * compared without touching the account preference.
- *
- * This page covers the *chart* portion of the design-system styleguide only; the token,
- * primitive, and form-state sections are a separate track's Phase 8 work.
+ * Three sections:
+ *  - Tokens (`StyleguideTokens.tsx`) — colour scales in both themes at once, with a live
+ *    contrast readout, the preference ramp shown three ways, type and spacing scales.
+ *  - Primitives (`StyleguidePrimitives.tsx`) — every primitive that actually exists in
+ *    `web/src/app/ui/` and `web/src/design/` today, in its documented states.
+ *  - Charts — every widget in `web/src/charts/` with realistic sample data (a
+ *    York/Cornwall poll, matching `design-preview/charts.html` and
+ *    `design-preview/screen-polls.html`), plus each widget's empty and single-point
+ *    states.
  */
 
 import { useState } from 'react'
@@ -18,6 +22,8 @@ import { SpreadDots } from './SpreadDots'
 import { HeatMatrix } from './HeatMatrix'
 import { DistributionStrip } from './DistributionStrip'
 import { MiniBar, Sparkline } from './MiniBar'
+import { StyleguideTokens } from './StyleguideTokens'
+import { StyleguidePrimitives } from './StyleguidePrimitives'
 import type { ChartMember, ChartOption } from './types'
 import './Styleguide.css'
 
@@ -67,11 +73,10 @@ export function Styleguide() {
     <div className="k-styleguide" data-theme={theme}>
       <div className="k-styleguide__head">
         <div>
-          <h1>Chart widgets</h1>
+          <h1>Design system</h1>
           <p>
-            Small token-aware SVG components, no chart library. Bars always start at zero,
-            one accent per key series, no gridline noise — titles state the finding, not
-            the metric name.
+            Tokens, primitives, and the chart widget library — reviewed here, in both
+            themes, before and after any design-system change.
           </p>
         </div>
         <div className="k-styleguide__toggle" role="group" aria-label="Theme">
@@ -84,7 +89,13 @@ export function Styleguide() {
         </div>
       </div>
 
-      <p className="k-styleguide__section-title">Realistic data — York/Cornwall poll</p>
+      <p className="k-styleguide__section-title">Tokens</p>
+      <StyleguideTokens />
+
+      <p className="k-styleguide__section-title">Primitives</p>
+      <StyleguidePrimitives />
+
+      <p className="k-styleguide__section-title">Charts — realistic data (York/Cornwall poll)</p>
       <div className="k-styleguide__grid">
         <Card tag="AvgBar" sub="Average score per destination, 11 members · scale 0–10">
           <AvgBar
@@ -130,7 +141,7 @@ export function Styleguide() {
         </Card>
       </div>
 
-      <p className="k-styleguide__section-title">Empty states</p>
+      <p className="k-styleguide__section-title">Charts — empty and single-point states</p>
       <div className="k-styleguide__grid">
         <Card tag="AvgBar" sub="No votes yet">
           <AvgBar insight="No scores yet" items={[]} />
