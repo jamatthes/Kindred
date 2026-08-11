@@ -1,0 +1,35 @@
+# Override for the Playwright harness (web/e2e), used with `-p kindred-e2e --env-file
+# deploy/.env.e2e`. Checked in (it carries no secrets — those live in the git-ignored
+# deploy/.env.e2e, written fresh by web/e2e/global-setup.ts on every run).
+#
+# Two things the base docker-compose.yml does not parametrise per-project, and both matter
+# for the isolation the harness promises:
+#
+# 1. `api`'s `env_file:` is the fixed path `.env` in the base file — `--env-file` only feeds
+#    ${VAR} interpolation *inside* compose.yml (ports, POSTGRES_USER, ...), it does not
+#    change which file `env_file:` points at. Same trick as deploy/README.md's
+#    "Verifying a clean install without destroying your data".
+# 2. `postgres`'s and `api`'s data live on *bind mounts* to ../data/postgres and
+#    ../data/attachments — paths relative to this directory, not to the compose project
+#    name. Running a second project with `-p kindred-e2e` alone would still point both
+#    containers at the SAME host directories the dev stack uses, which is exactly the data
+#    corruption the "without destroying your data" section exists to avoid. Named volumes
+#    below are automatically namespaced by the project name instead, so `-p kindred-e2e`
+#    is what actually isolates them, and `down -v` throws them away cleanly.
+services:
+  postgres:
+    # No env_file override needed here: postgres's `environment:` block in the base file
+    # already reads POSTGRES_USER/PASSWORD/DB via ${...} interpolation, which docker compose
+    # resolves from --env-file at invocation time regardless of this override file.
+    volumes:
+      - kindred_e2e_pgdata:/var/lib/postgresql/data
+
+  api:
+    env_file: !override
+      - .env.e2e
+    volumes:
+      - kindred_e2e_attachments:/data/attachments
+
+volumes:
+  kindred_e2e_pgdata:
+  kindred_e2e_attachments:
