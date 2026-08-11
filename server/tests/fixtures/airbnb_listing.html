@@ -1,0 +1,65 @@
+<!--
+Sanitized, hand-constructed fixture — NOT a copy of any live page.
+
+Built from the field shapes documented in `plan/features/map-suggestions/design.md`
+("Airbnb-aware extraction", verified against a live listing 2026-08-11): the `og:title`
+structured-facts format, the `<title>` locality format, and the embedded-JSON
+`latitude`/`longitude`/`personCapacity` keys. No content, copy, photos, or identifiers were
+copied from any real Airbnb listing or page source — the strings below (address, host copy,
+photo URL, ids) are all invented for this fixture.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dent, England, United Kingdom</title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Airbnb">
+  <meta property="og:title" content="Home in Dent · ★4.8 · 5 bedrooms · 7 beds · 4.5 bathrooms">
+  <meta property="og:description" content="Cosy fell-side farmhouse retreat near the Dales Way">
+  <meta property="og:image" content="https://a0.example-static.com/pictures/hero-720.jpg">
+  <meta property="og:url" content="https://www.airbnb.com/rooms/00000000">
+</head>
+<body>
+  <script id="data-injector" type="application/json">
+  {
+    "niobeMinimalClientData": [
+      [
+        "StaysPdpSections",
+        {
+          "data": {
+            "presentation": {
+              "stayProductDetailPage": {
+                "sections": {
+                  "metadata": {
+                    "loggingContext": {
+                      "eventDataLogging": {
+                        "listingId": "00000000"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    ],
+    "listing": {
+      "id": "00000000",
+      "location": {
+        "lat": 54.283100,
+        "lng": -2.457800
+      },
+      "coordinate": {
+        "latitude": 54.283100,
+        "longitude": -2.457800
+      },
+      "personCapacity": 10,
+      "bedroomLabel": "5 bedrooms",
+      "bathroomLabel": "4.5 bathrooms"
+    }
+  }
+  </script>
+</body>
+</html>
