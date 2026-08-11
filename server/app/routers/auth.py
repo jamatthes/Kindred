@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import ratelimit
 from app.core.config import settings
+from app.core.onboarding import resolve_next_step
 from app.core.security import (
     check_needs_rehash,
     hash_password,
@@ -37,6 +38,8 @@ from app.schemas.common import (
     invalid_credentials,
     not_authenticated,
 )
+from app.schemas.family import initials
+from app.schemas.family import attachment_url as avatar_url
 from app.schemas.user import FamilyBrief, TripBrief, UserOut
 
 logger = logging.getLogger(__name__)
@@ -48,7 +51,12 @@ CSRF_COOKIE_NAME = "kindred_csrf"
 
 
 async def build_user_out(db: AsyncSession, user: User, trip: Trip | None) -> UserOut:
-    """`UserOut` with the family and trip the shell needs, so it makes one call, not three."""
+    """`UserOut` with the family, trip and onboarding gate the shell needs, in one call.
+
+    `next_step` is resolved here rather than derived by the client from
+    `must_change_password` and friends: the client is told the answer, never the precedence
+    (F-13, `app/core/onboarding.py`).
+    """
     family_brief = None
     if trip is not None:
         membership = await load_membership(db, user.id, trip.id)
@@ -60,9 +68,15 @@ async def build_user_out(db: AsyncSession, user: User, trip: Trip | None) -> Use
     return UserOut(
         id=user.id,
         username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
         display_name=user.display_name,
+        avatar_url=avatar_url(user.avatar, thumb=False),
+        avatar_thumb_url=avatar_url(user.avatar, thumb=True),
+        initials=initials(user),
         is_platform_admin=user.is_platform_admin,
         must_change_password=user.must_change_password,
+        next_step=await resolve_next_step(db, user, trip),
         theme_pref=user.theme_pref,
         locale=user.locale,
         family=family_brief,

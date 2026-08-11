@@ -170,6 +170,23 @@ All under `/api/v1`. Every request and response has a Pydantic schema so `/docs`
 `family` is null until `families` ships. `trip` carries the single active trip so the shell
 knows the stage without a second call.
 
+> NOTE (implementation, `families` Phase 3): `UserOut` above predates the onboarding gate and
+> is missing the field `plan/architecture.md` and `plan/overview.md` both make binding —
+> **`next_step`** (`change_password` | `setup_trip` | `setup_family` | `app`), F-13. It is
+> added here rather than in `families`, because the gate is foundation's: the client routes on
+> that field alone and never recomputes the precedence, so there must be exactly one resolver
+> and it must sit under every feature that owns a step. It lives in `app/core/onboarding.py`
+> (`resolve_next_step`), alongside the shared `is_pending_family` predicate that
+> `families`' `require_pending_family` also uses — the gate and the dependency that admits a
+> pending caller must never disagree about who that is. `needs_trip_setup` is a named
+> placeholder returning "there is no trip at all", which never fires on a seeded install;
+> `admin-console` (AC-0) replaces its body with its own condition and touches nothing else.
+>
+> `UserOut` also gains `first_name`, `last_name`, `avatar_url`, `avatar_thumb_url` and
+> `initials` in the same commit. `families` adds those columns (FM-14) and every surface that
+> draws a person needs the badge; putting them on the record the shell already fetches avoids
+> a second call on every load, which is why `family` and `trip` are there too.
+
 Error envelope, used by every router in the project:
 
 ```

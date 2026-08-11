@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import uuid
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Boolean, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.attachment import Attachment
 
 #: Allowed values for ``users.theme_pref`` (F-7).
 THEME_PREFS = ("light", "dark", "system")
@@ -61,6 +66,21 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    #: Eager, and with an explicit ``foreign_keys``: `attachments` points back at `users`
+    #: through `uploader_id`, so there are two paths between the tables and SQLAlchemy cannot
+    #: pick one for us. Loading it here means `MemberOut` can emit an avatar URL without a
+    #: query per member row.
+    avatar: Mapped[Attachment | None] = relationship(
+        lazy="joined", foreign_keys=[avatar_attachment_id]
+    )
+    #: The user's own settings row, including `live_location_enabled` — their **consent** to
+    #: share a location, which no admin may write (`plan/features/families/design.md`). Eager
+    #: because `MemberOut` reports it to entitled callers and a lazy load on an
+    #: `AsyncSession` would raise rather than fetch.
+    settings: Mapped[UserSettings | None] = relationship(
+        lazy="joined", uselist=False, back_populates="user"
+    )
+
     __table_args__ = (
         # Usernames are compared case-insensitively; a functional unique index gives us that
         # without depending on the `citext` extension being installed.
@@ -77,6 +97,10 @@ class UserSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         unique=True,
     )
+    user: Mapped[User] = relationship(back_populates="settings")
+    #: **Consent**, written only by the member themselves. `families` reads it and never
+    #: writes it for anyone else; the single exception is the one-time seed from
+    #: `families.member_location_default` at the moment a membership row is created.
     live_location_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )

@@ -95,7 +95,7 @@ All tables `id` (uuid pk), `created_at`, `updated_at` unless noted. FKs implied 
 ### Platform
 - **notifications** — recipient_user_id, type, payload_json (deep-link target), read_at (nullable)
 - **push_subscriptions** — user_id, endpoint (unique), p256dh, auth, user_agent, last_used_at, failure_count, created_at
-- **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive, and for profile pictures (`subject_type = 'user'`, referenced back from `users.avatar_attachment_id`). All uploads are re-encoded server-side and **stripped of EXIF, GPS included** — a location-privacy product must not republish coordinates hidden in a photo
+- **attachments** — subject_type/subject_id, uploader_id, file path (local volume), mime, width/height; used for photos on suggestions/check-ins/archive, and for profile pictures (`subject_type = 'user'`, referenced back from `users.avatar_attachment_id`). All uploads are re-encoded server-side and **stripped of EXIF, GPS included** — a location-privacy product must not republish coordinates hidden in a photo. Also carries `thumb_path` (nullable — avatars emit two renditions, 256px and 64px, and `MemberOut` exposes both) and `byte_size` (what was written after re-encoding, which is not the size of the upload). Created by migration `0002`, not `0001`: foundation created only the tables it used. *families, `0002`*
 
 ### Approved additions (proposed in feature design docs, accepted 2026-08-10)
 
