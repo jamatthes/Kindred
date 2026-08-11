@@ -3,6 +3,18 @@
 **Reads first:** `plan/architecture.md`, `plan/design-system.md`, `plan/features/foundation/`,
 and `requirements.md` in this directory.
 
+> **Roles (revised 2026-08-11).** This feature owns the hierarchy: **owner / organiser** at
+> trip level, **head of family / spouse / member** at family level, defined in
+> `requirements.md` > Roles. Throughout this document, "main admin" in any older sentence
+> means **owner or organiser** (`require_organiser`); the powers reserved to the owner alone
+> say so explicitly. "Family admin" means **head of family**, and a spouse has the same powers
+> **except where the head is the target of the action**.
+>
+> NOTE: `admin-console` and `holiday-stage` inherit this hierarchy rather than restating it.
+> `admin-console` additionally owns the organiser-management endpoints and UI — this feature
+> creates the `trip_organisers` table and the `require_owner` / `require_organiser`
+> dependencies, so those screens are added over a hierarchy that already works.
+
 ## Data model
 
 ### `families` (exists in `plan/architecture.md`)
@@ -36,7 +48,7 @@ unreachable" (FM-3), which have different UI states and different retry semantic
 
 **PROPOSED ADDITION — `families.location_sharing_allowed`** (bool, not null, default `true`)
 and **`families.member_location_default`** (bool, not null, default `false`). The two halves
-of the family admin's location policy (FM-15). They are separate columns because they answer
+of the head or spouse's location policy (FM-15). They are separate columns because they answer
 different questions and change at different times: `location_sharing_allowed` is a live
 switch read on every map query, `member_location_default` is a seed value read exactly once
 per member, when they join.
@@ -47,14 +59,34 @@ per member, when they join.
 
 ### `family_members` (exists)
 
-`family_id`, `user_id`, `role` (`admin` / `member`). Foundation created the table bare.
+`family_id`, `user_id`, `role`. Foundation created the table bare.
+
+**PROPOSED ADDITION — `role` becomes `head` / `spouse` / `member`** (check-constrained;
+`admin` renamed to `head`, `spouse` new). A household usually has two adults, and making one
+of them a plain member misdescribes the family the software is modelling. **Exactly one `head`
+per family**, enforced by a partial unique index on `(family_id) WHERE role = 'head'`: a
+family with two heads and the spouse asymmetry between them is a deadlock nobody can
+unpick, and a family with none can only be repaired by an organiser.
+
+A spouse holds the head's powers over the family with one exception, and the exception is
+evaluated against the **target** of the action rather than the actor's role: a spouse may not
+remove the head, change the head's role, or change the head's visibility switches. Expressed
+as one predicate so it cannot be applied to three routes and forgotten on a fourth:
+
+```
+spouse_may_act_on(actor, target) = not (actor.role == "spouse" and target.role == "head")
+```
+
+Transferring the head role is a single action, not a promote-then-demote: the outgoing head
+becomes a `spouse` in the same transaction that the incoming one becomes `head`. Two
+statements would leave a window with two heads or none, and the second could fail.
 
 **PROPOSED ADDITION — unique index** on `(user_id)`. A user belongs to exactly one family
 (`plan/overview.md`: "belongs to one family"). Enforcing it in the database prevents a class
 of bug that would otherwise be caught only in application code.
 
 **PROPOSED ADDITION — `family_members.location_sharing_allowed`** (bool, not null, default
-`true`). The per-member half of FM-15 — the family admin's decision that this particular
+`true`). The per-member half of FM-15 — the head or spouse's decision that this particular
 person is not shown, independent of whether that person has consented. It lives on
 `family_members` rather than on `users` because it is a fact about a person's place in a
 family, and it must disappear along with the membership when they leave.
@@ -63,6 +95,19 @@ family, and it must disappear along with the membership when they leave.
 > multi-trip schema would need. It is correct for v1 and matches the stated rule. If real
 > multi-trip support arrives, this becomes `(user_id, trip_id)` via `family_members.trip_id`
 > or a join through `families.trip_id` — flagged here so the change is a known one.
+
+### `trip_organisers` (created here)
+
+**PROPOSED ADDITION — new table.** `trip_id`, `user_id`, `granted_by` (nullable, FK → `users`
+`ON DELETE SET NULL`), `created_at`. Unique on `(trip_id, user_id)`, indexed on `trip_id`.
+
+No `updated_at`: the row's existence *is* the grant, so there is nothing to mutate — revoking
+is a delete. `granted_by` is nullable so removing the account that made a grant does not take
+the grant with it.
+
+Written **only** by the owner (`require_owner`). The table is created here because the
+permission dependencies in this feature read it from the first route; the endpoints and UI
+that manage it belong to `admin-console` (FM-17).
 
 ### `invites` (created here — see NOTE)
 
@@ -147,15 +192,15 @@ All under `/api/v1`. Every mutating route also carries
 | Method | Path | Request | Response | Permission |
 |---|---|---|---|---|
 | GET | `/families` | — | `[FamilyOut]` | `require_member` |
-| POST | `/families` | `{name, color?, home_address?}` | `FamilyOut` | `require_main_admin` |
+| POST | `/families` | `{name, color?, home_address?}` | `FamilyOut` | `require_organiser` |
 | POST | `/families/mine` | `{name, home_address?}` | `FamilyDetailOut` | `require_pending_family` |
 | GET | `/families/{id}` | — | `FamilyDetailOut` | `require_member` |
-| PATCH | `/families/{id}` | `{name?, color?}` | `FamilyOut` | `require_family_admin(id)` |
-| PATCH | `/families/{id}/location-policy` | `{sharing_allowed?, member_default?}` | `FamilyDetailOut` | `require_family_admin(id)` |
-| PUT | `/families/{id}/home` | `{home_address}` | `FamilyDetailOut` | `require_family_admin(id)` |
-| DELETE | `/families/{id}/home` | — | `204` | `require_family_admin(id)` |
-| POST | `/families/{id}/home/geocode` | — | `FamilyDetailOut` | `require_family_admin(id)` |
-| DELETE | `/families/{id}` | — | `204` | `require_main_admin` |
+| PATCH | `/families/{id}` | `{name?, color?}` | `FamilyOut` | `require_family_head_or_spouse(id)` |
+| PATCH | `/families/{id}/location-policy` | `{sharing_allowed?, member_default?}` | `FamilyDetailOut` | `require_family_head_or_spouse(id)` |
+| PUT | `/families/{id}/home` | `{home_address}` | `FamilyDetailOut` | `require_family_head_or_spouse(id)` |
+| DELETE | `/families/{id}/home` | — | `204` | `require_family_head_or_spouse(id)` |
+| POST | `/families/{id}/home/geocode` | — | `FamilyDetailOut` | `require_family_head_or_spouse(id)` |
+| DELETE | `/families/{id}` | — | `204` | `require_organiser` |
 
 `POST /families/mine` is the family-setup screen's only write, and the one route in this
 feature that a user with no family may call. Its dependency `require_pending_family`
@@ -166,13 +211,13 @@ whose `used_by` appears on a consumed invite with `family_id is null`. Anyone el
 and someone removed from the trip cannot use it to re-admit themselves.
 
 In one transaction it: creates the family on the invite's `trip_id` with the lowest free
-colour slot, writes the `family_members` row with `role = 'admin'`, seeds that user's
+colour slot, writes the `family_members` row with `role = 'head'`, seeds that user's
 `user_settings.live_location_enabled = true` (FM-15), and geocodes the home address if one was
 supplied. It is idempotent on a retry that arrives after the first succeeded: the second call
 sees the caller now has a family and returns `409 already_has_family`, which the client treats
 as success and re-reads `auth/me`.
 
-`PATCH /families/{id}/location-policy` is the family admin's control from FM-15. Setting
+`PATCH /families/{id}/location-policy` is the head or spouse's control from FM-15. Setting
 `sharing_allowed: false` does **not** write to any member's `user_settings` — it is a filter
 applied at read time, so turning it back on restores exactly the set of members who had
 consented, rather than silently re-enabling people who had turned themselves off.
@@ -189,7 +234,7 @@ consented, rather than silently re-enabling people who had turned themselves off
 
 `FamilyDetailOut` adds `members: [MemberOut]` and `member_location_default: bool`, and adds
 `home_address`, `home_lat`, `home_lng`, `home_geocoded_at` **only when the caller is a member
-of that family or the main admin**. The serialiser makes this decision server-side; the
+of that family, the owner, or an organiser**. The serialiser makes this decision server-side; the
 frontend never receives a field it is not entitled to see.
 
 `member_location_default` is in `FamilyDetailOut` rather than `FamilyOut` because it is a
@@ -200,11 +245,11 @@ family's internal policy, not something other families need in a list.
 ```
 {user_id, username, first_name, last_name, display_name,
  avatar_url: str|null, initials: str,
- role, joined_at, is_main_admin,
- location_sharing_allowed: bool,          // the family admin's per-member switch
+ role, joined_at, is_owner, is_organiser,
+ location_sharing_allowed: bool,          // the head or spouse's per-member switch
  location_sharing_enabled: bool|null}     // the member's own consent; null unless the
-                                          // caller is that member, their family admin,
-                                          // or the main admin
+                                          // caller is that member, their family's head or
+                                          // spouse, the owner, or an organiser
 ```
 
 `initials` is computed server-side so every surface renders the same badge — the map, the
@@ -226,17 +271,17 @@ to the stored one and `geocode_status == "ok"`, it is a no-op and no external ca
 | Method | Path | Request | Response | Permission |
 |---|---|---|---|---|
 | GET | `/families/{id}/members` | — | `[MemberOut]` | `require_member` |
-| PATCH | `/families/{id}/members/{user_id}` | `{role?: "admin"\|"member", location_sharing_allowed?: bool}` | `MemberOut` | `require_family_admin(id)` |
-| DELETE | `/families/{id}/members/{user_id}` | — | `204` | `require_family_admin(id)` |
+| PATCH | `/families/{id}/members/{user_id}` | `{role?: "head"\|"spouse"\|"member", location_sharing_allowed?: bool}` | `MemberOut` | `require_family_head_or_spouse(id)` |
+| DELETE | `/families/{id}/members/{user_id}` | — | `204` | `require_family_head_or_spouse(id)` |
 
-`location_sharing_allowed` on this route is the per-member half of FM-15 — the family admin
+`location_sharing_allowed` on this route is the per-member half of FM-15 — the head or spouse
 deciding that this particular person is not shown on the map. It writes
 `family_members.location_sharing_allowed` and never touches
 `user_settings.live_location_enabled`, for the same reason the family-level switch does not:
 a permission and a consent are different things, and collapsing them would let an admin
 revoke someone's own choice by flipping a switch twice.
 
-**A family admin can only ever narrow visibility with these two controls.** There is no
+**A head or spouse can only ever narrow visibility with these two controls.** There is no
 request body, on any route in this feature, that turns another user's sharing on. That
 invariant is what makes the promise in `plan/features/holiday-stage/requirements.md` ("nobody
 can turn on another person's live-location sharing") still true now that family policy exists.
@@ -245,14 +290,15 @@ can turn on another person's live-location sharing") still true now that family 
 
 | Method | Path | Request | Response | Permission |
 |---|---|---|---|---|
-| GET | `/invites` | `?family_id=` | `[InviteOut]` | `require_family_admin` for own; `require_main_admin` for all |
+| GET | `/invites` | `?family_id=` | `[InviteOut]` | `require_family_head_or_spouse` for own; `require_organiser` for all |
 | POST | `/invites` | `{family_id: uuid\|null, expires_in_hours: 24\|168\|720}` | `InviteCreatedOut` | see below |
-| POST | `/invites/{id}/revoke` | — | `204` | creator's family admin, or main admin |
+| POST | `/invites/{id}/revoke` | — | `204` | that family's head or spouse, or an organiser |
 | GET | `/invites/token/{token}` | — | `InvitePreviewOut` | **none — public** |
 | POST | `/invites/token/{token}/accept` | `{username, first_name, last_name, password}` | `{user, csrf_token, next_step}` + session cookie | **none — public**, rate-limited |
 
-`POST /invites` permission: `family_id` non-null requires `require_family_admin(family_id)`;
-`family_id` null requires `require_main_admin` (FM-6).
+`POST /invites` permission: `family_id` non-null requires
+`require_family_head_or_spouse(family_id)`; `family_id` null requires `require_organiser`
+(FM-6).
 
 `InviteCreatedOut`: `{id, url, expires_at, family: {id, name}|null}` — `url` is
 `PUBLIC_BASE_URL` + `/join/<raw-token>`, returned exactly once.
@@ -265,7 +311,7 @@ When `valid` is false, every other field except `instance_name` is null — an i
 reveals nothing (FM-7).
 
 The accept body no longer carries `family_name`. Naming the family is the family-setup
-screen's job (FM-13), which means the two things a new family admin must decide — who they are
+screen's job (FM-13), which means the two things a new head of family must decide — who they are
 and what their family is called — are asked on two screens instead of one long form, and the
 second is resumable.
 
@@ -358,8 +404,8 @@ server-side from four independent facts:
 
 ```
 visible(user) =
-      families.location_sharing_allowed          -- the family admin's master switch
-  AND family_members.location_sharing_allowed    -- the family admin's per-member switch
+      families.location_sharing_allowed          -- the head or spouse's master switch
+  AND family_members.location_sharing_allowed    -- the head or spouse's per-member switch
   AND user_settings.live_location_enabled        -- the member's own consent
   AND <a fresh live_locations row exists>        -- they are actually sharing right now
 ```
@@ -368,17 +414,17 @@ Each term is owned by exactly one party, and no party can write another's:
 
 | Term | Written by | Never written by |
 |---|---|---|
-| `families.location_sharing_allowed` | that family's admin, or the main admin | members |
-| `family_members.location_sharing_allowed` | that family's admin, or the main admin | the member it describes |
+| `families.location_sharing_allowed` | that family's head or spouse, or an organiser | members |
+| `family_members.location_sharing_allowed` | that family's head or spouse, or an organiser | the member it describes |
 | `user_settings.live_location_enabled` | the member themselves, and nobody else | any admin, ever |
 | the `live_locations` row | the member's own browser, while the app is open | anyone |
 
-**The three permission terms can only ever remove a marker.** A family admin flipping both of
+**The three permission terms can only ever remove a marker.** A head or spouse flipping both of
 their switches on does not put anyone on the map; it only stops preventing it. This is what
-keeps `holiday-stage`'s HS-9 promise intact — "nobody, main admin included, can turn on
+keeps `holiday-stage`'s HS-9 promise intact — "nobody, owner included, can turn on
 another person's live-location sharing" — now that family policy exists alongside consent.
 
-The one place a family admin's decision does reach a member's own setting is the **seed**
+The one place a head or spouse's decision does reach a member's own setting is the **seed**
 described next, and it applies only at the instant a member joins.
 
 ### The default, and why a seed is not a consent
@@ -397,12 +443,12 @@ value and a marker on the map:
    member: the settings copy from `holiday-stage`, with `Start sharing` and `Not now`. `Not
    now` writes `live_location_enabled = false` — their own choice, recorded as their own.
 
-So the family admin's default decides what the toggle *starts at*, not whether the person
+So the family's default decides what the toggle *starts at*, not whether the person
 shares. That distinction is the reason this addition does not contradict the "off by default,
 privacy is a feature" stance in `plan/features/holiday-stage/requirements.md`; it is stated
 here because a future reader will otherwise reasonably think it does.
 
-The family admin's own row is seeded `true` at `POST /families/mine`, per FM-15 — the person
+The new head of family's own row is seeded `true` at `POST /families/mine`, per FM-15 — the person
 who set the trip up is the one member whose marker the rest of the family expects to see. The
 same two gates apply to them.
 
@@ -473,7 +519,7 @@ the channel rather than a closed set. These are **PROPOSED ADDITIONs** to it:
 | `family.created` | a family is created (including via `POST /families/mine`) | `{family: FamilyOut}` | families table, map |
 | `family.updated` | name, colour, home/geocode, or `location_sharing_allowed` changes | `{family: FamilyOut}` | families table, map pins, any family-coloured UI, **live-location layer** |
 | `family.deleted` | an empty family is deleted | `{family_id}` | families table, map |
-| `member.joined` | an invite is accepted, or a family admin finishes setup | `{family_id, member: MemberOut}` | member lists, counts |
+| `member.joined` | an invite is accepted, or a new head finishes setup | `{family_id, member: MemberOut}` | member lists, counts |
 | `member.updated` | a role, avatar, name, or `location_sharing_allowed` changes | `{family_id, member: MemberOut}` | member lists, **map marker labels and badges** |
 | `member.removed` | a member is removed | `{family_id, user_id}` | member lists, counts |
 
@@ -521,7 +567,7 @@ same dataset as a table and as a map overlay.
   block, and the invite block. Admin controls appear only for callers who are entitled to
   them, and the backend refuses regardless.
 - **Member list rows:** avatar (or initials badge) at 32px, full name, role chip, and — for
-  that family's admin and the main admin only — the per-member location switch described
+  that family's head or spouse, the owner and organisers only — the per-member location switch described
   below. Every row's badge carries the family colour as its border, so a member is
   identifiable as belonging to this family even where the row is seen out of context.
 
@@ -544,7 +590,7 @@ States, each with distinct text and an icon, never colour alone:
 - **Not found** — "We could not find that address on the map. Check it and try again." Retry
   action.
 - **Error** — "We could not reach the mapping service. Your address is saved." Retry action.
-  If the cause is `no_api_key` and the viewer is the main admin, the message links to the
+  If the cause is `no_api_key` and the viewer is the owner or an organiser, the message links to the
   admin console's Google status section instead.
 
 ### Identity badge
@@ -585,7 +631,7 @@ limit are stated next to the control before it is pressed, not only on error.
 ### Family location settings
 
 A block in the family side panel, visible to every member of that family, **editable** only by
-that family's admin and the main admin. Members see it read-only so they can understand why
+that family's head or spouse, the owner and organisers. Members see it read-only so they can understand why
 their own toggle may be having no effect — a setting that silently overrides you, invisibly,
 is the thing this block exists to prevent.
 
@@ -612,7 +658,7 @@ text beneath the name, which is the only place the three inputs are visible toge
 | this switch off | "You have turned this off for them" |
 | family switch off | "Off for the whole family" |
 
-The fourth and fifth rows are worded in the second person deliberately: the family admin is
+The fourth and fifth rows are worded in the second person deliberately: the head or spouse is
 looking at a consequence of their own action, and the copy should say so rather than reporting
 a neutral state.
 
@@ -632,7 +678,7 @@ Outstanding invites list below: created by, created, expires, status chip
 (`active` / `used` / `expired` / `revoked`), and a `Revoke` action on active ones. Revoke is a
 low-stakes reversible-by-reissue action, so it uses undo rather than a confirm dialog.
 
-The main admin's family view also offers `Invite a new family`, which creates the
+The owner's and organisers' family view also offers `Invite a new family`, which creates the
 `family_id: null` variant. It sits visually apart from the per-family invite so the two are
 not confused.
 
@@ -679,7 +725,7 @@ for the same reason the join screen is: they are not on the trip yet.
 - Because this screen is the only thing a `setup_family` user can reach, it carries its own
   log-out action; the nav rail that normally holds one is not rendered.
 
-> NOTE: the trip-level equivalent of this screen — the main admin's first-login trip setup —
+> NOTE: the trip-level equivalent of this screen — the owner's first-login trip setup —
 > is **not** specified here. It belongs to `admin-console` (AC-0), which owns every write to
 > `trips`. Both screens are reached through the same `next_step` gate, and that gate is
 > foundation's (F-13); only the two destination screens are owned by different features.
@@ -703,7 +749,7 @@ One page reached from the nav rail. Available in every stage, including End.
 
 ### Empty states
 
-- No families: "No families yet — create the first one" with the action inline (main admin);
+- No families: "No families yet — create the first one" with the action inline (owner or organiser);
   members see "The trip organiser hasn't added any families yet."
 - Family with one member: no special state, but the invite action is given prominence.
 - No outstanding invites: "No open invites."
@@ -722,10 +768,12 @@ request fails.
 | Colour slot taken | `409` code `color_taken`, message names the holding family |
 | Duplicate family name on the trip | `409` code `name_taken` |
 | Delete a family with members | `409` code `family_not_empty`; the message says to remove members first |
-| Remove the last family admin | `409` code `last_family_admin`; the message says to promote someone first |
-| Demote the last family admin | Same as above |
-| Remove or demote the main admin | `403` code `main_admin_protected` |
-| A family admin acts on another family | `403 forbidden`; the UI never showed the control |
+| Remove or demote the head of family | `409` code `head_required`; the message says to transfer the role first. A family always has exactly one head |
+| Transfer the head role | `PATCH .../members/{id}` with `role: "head"`. One transaction: the incoming head becomes `head` and the outgoing one becomes `spouse` |
+| Spouse tries to remove, demote or switch off the head | `403` code `head_protected`; the UI never showed the control |
+| Remove or demote the trip's owner | `403` code `owner_protected` |
+| A head or spouse acts on another family | `403 forbidden`; the UI never showed the control |
+| An organiser tries to appoint or remove an organiser | `403` code `owner_only` (route lives in `admin-console`) |
 | Member tries to read another family's full address | The field is simply absent from the response; no error, no leak |
 | Geocode returns no result | `200`, saved, `geocode_status = "not_found"` |
 | Geocode times out or errors | `200`, saved, `geocode_status = "error"`, retry offered |
@@ -742,13 +790,13 @@ request fails.
 | `create_family` acceptor calls any other route before finishing setup | `403 not_on_trip` from `require_member`. The shell never routes them anywhere that would issue such a call |
 | `POST /families/mine` submitted twice (double-tap, retry after timeout) | The second gets `409 already_has_family`; the client treats it as success and re-reads `auth/me` |
 | `POST /families/mine` by a user who already has a family | `403 forbidden` from `require_pending_family`; there is no path to a second family |
-| `POST /families/mine` when all eight colour slots are taken | `409 no_color_slots`. The user is stuck through no fault of their own, so the message tells them to contact the trip organiser, and the main admin's console shows the same condition |
-| Family admin turns the family switch off while a member is actively sharing | `family.updated` removes every marker for that family immediately. The member's own toggle stays on and their persistent "Sharing your location" indicator changes to say the family's setting is currently hiding them — the indicator must never claim they are visible when they are not |
-| Family admin turns the per-member switch off for someone actively sharing | Same, for that one marker |
-| Family admin sets `member_location_default` on | No existing member changes. Only `family_members` rows created afterwards are seeded from it |
+| `POST /families/mine` when all eight colour slots are taken | `409 no_color_slots`. The user is stuck through no fault of their own, so the message tells them to contact the trip organiser, and the organiser console shows the same condition |
+| A head or spouse turns the family switch off while a member is actively sharing | `family.updated` removes every marker for that family immediately. The member's own toggle stays on and their persistent "Sharing your location" indicator changes to say the family's setting is currently hiding them — the indicator must never claim they are visible when they are not |
+| A head or spouse turns the per-member switch off for someone actively sharing | Same, for that one marker |
+| A head or spouse sets `member_location_default` on | No existing member changes. Only `family_members` rows created afterwards are seeded from it |
 | A seeded-on member opens the app for the first time | The one-time disclosure appears before any `watchPosition` call. `Not now` writes their own `false`; the family default is not consulted again |
-| Member turns their own sharing on while the family switch is off | Allowed and stored. They see "On — your family's settings are hiding you for now" with a pointer to their family admin. Refusing the write would mean the family admin's switch had silently overwritten a personal setting |
-| Main admin changes another family's location policy | Allowed — the main admin manages any family (FM-10). The change is attributed in the `member.updated` payload so it is not mistaken for a family admin's own action |
+| Member turns their own sharing on while the family switch is off | Allowed and stored. They see "On — your family's settings are hiding you for now" with a pointer to their head of family. Refusing the write would mean the head's switch had silently overwritten a personal setting |
+| An owner or organiser changes another family's location policy | Allowed — they manage any family (FM-10). The change is attributed in the `member.updated` payload so it is not mistaken for the family's own action |
 | Member removed from a family while their per-member switch is off | The `family_members` row is deleted and the switch goes with it. Re-inviting them starts from the family's current default, not from the old value |
 | Avatar uploaded with a non-image file renamed to `.jpg` | `415 unsupported_media_type` — the type comes from magic bytes, not the extension |
 | Avatar upload larger than 8MB | `413 file_too_large`; the limit was stated before the picker opened |
@@ -765,7 +813,7 @@ request fails.
 ## Dependencies and hand-offs
 
 - **Depends on `foundation`** for sessions, CSRF, `require_member` /
-  `require_family_admin` / `require_main_admin` / `require_stage`, the error envelope, the
+  `require_family_head_or_spouse` / `require_organiser` / `require_owner` / `require_stage`, the error envelope, the
   WebSocket broadcast helpers, the password endpoint, and the `next_step` onboarding gate
   (F-13) that routes to the family setup screen.
 - **Provides to `distances`** the geocoded `home_lat`/`home_lng` that Distance Matrix pairs are

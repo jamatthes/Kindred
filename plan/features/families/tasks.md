@@ -7,6 +7,13 @@ before the next begins. Read `requirements.md` and `design.md` in this directory
 **Prerequisite:** `foundation` is complete. `families` and `family_members` exist as bare
 tables from the foundation migration; this feature adds columns, constraints and behaviour.
 
+> **Roles (revised 2026-08-11).** Owner / organiser at trip level, head of family / spouse /
+> member at family level — see `requirements.md` > Roles. In every task below, "main admin"
+> means **owner or organiser** (`require_organiser`), and "family admin" means **head of
+> family**, with a spouse holding the same powers except where the head is the target of the
+> action. `require_family_admin` is now `require_family_head_or_spouse`; `require_owner`
+> guards organiser management, whose endpoints belong to `admin-console` (FM-17).
+
 ## Phase 1 — Migration
 
 - [ ] Alembic migration `0002_families`:
@@ -19,7 +26,12 @@ tables from the foundation migration; this feature adds columns, constraints and
         `member_location_default` (bool not null default `false`).
   - [ ] Unique indexes: `(trip_id, lower(name))`, `(trip_id, color)`.
   - [ ] `family_members`: unique index on `(user_id)`; add `location_sharing_allowed`
-        (bool not null default `true`).
+        (bool not null default `true`); `role` in `head|spouse|member` (check-constrained,
+        `admin` renamed to `head`) with a **partial unique index on `(family_id) WHERE
+        role = 'head'`** — exactly one head per family.
+  - [ ] `trip_organisers`: new table (trip_id, user_id, granted_by null FK → users
+        `ON DELETE SET NULL`, created_at); unique `(trip_id, user_id)`, indexed on
+        trip_id. Created here; its endpoints belong to `admin-console` (FM-17).
   - [ ] `users`: add `first_name` (text not null) and `last_name` (text not null, default
         `''`), plus `avatar_attachment_id` (uuid null, FK → `attachments`,
         `ON DELETE SET NULL`). Backfill the seeded admin's `first_name` from its
@@ -59,7 +71,7 @@ covers all four falsy cases.
       `InvitePreviewOut`, `InviteAcceptIn`.
 - [ ] Implement the address-visibility rule as a serialiser decision: `FamilyDetailOut`
       includes `home_address`, `home_lat`, `home_lng` and `home_geocoded_at` **only** when the
-      caller is a member of that family or the main admin. Write it as one function used by
+      caller is a member of that family, the owner, or an organiser. Write it as one function used by
       every route that returns a family, so it cannot be forgotten on a new endpoint.
 - [ ] `InviteAcceptIn` is `{username, first_name, last_name?, password, password_confirm}`.
       It accepts **no** `family_name` and **no** `display_name`: the family is named on the
@@ -72,14 +84,15 @@ covers all four falsy cases.
       places is how a person ends up with two different badges.
 - [ ] `MemberOut` includes `first_name`, `last_name`, `initials`, `avatar_url`,
       `avatar_thumb_url`, `location_sharing_allowed`, and `location_sharing_enabled` — the
-      last **null unless** the caller is that member, their family admin, or the main admin.
+      last **null unless** the caller is that member, their family's head or spouse, the
+      owner, or an organiser.
 
 **Verify:** `pytest server/tests/test_family_schemas.py` — the serialiser omits address fields
-for a non-member caller and includes them for a member and for the main admin;
+for a non-member caller and includes them for a member and for the owner;
 `InviteAcceptIn` rejects a body carrying `family_name`; `display_name` is derived correctly
 including the single-name case; `initials` returns one character when `last_name` is empty and
 handles a non-Latin name by grapheme rather than byte; `location_sharing_enabled` is null for a
-caller in another family and populated for that member's own family admin.
+caller in another family and populated for that member's own head of family.
 
 ## Phase 4 — Geocoding service
 
@@ -127,10 +140,15 @@ from exactly two places.
       `home_geocoded_at`; reset `geocode_status` to `pending`.
 - [ ] Guard rails, each returning the code named in `design.md`: `name_taken`, `color_taken`,
       `family_not_empty`, `last_family_admin`, `main_admin_protected`.
-- [ ] Role changes and removals operate through `require_family_admin(family_id)`, which
-      already admits the main admin for any family.
+- [ ] Role changes and removals operate through `require_family_head_or_spouse(family_id)`,
+      which already admits the owner and organisers for any family. The spouse asymmetry is
+      applied per-action against the **target**: a spouse may not remove, demote or switch
+      off the head (`403 head_protected`).
+- [ ] Head transfer: `role: "head"` moves the role in one transaction, demoting the outgoing
+      head to `spouse`. A family always has exactly one head, so a bare demotion of the head
+      is `409 head_required`.
 
-**Verify:** in `/docs` — create a family as the main admin, confirm it gets colour 1; create a
+**Verify:** in `/docs` — create a family as the owner, confirm it gets colour 1; create a
 second and confirm colour 2; attempt to set the second to colour 1 and get `409 color_taken`.
 Set a home address with the fake geocoder configured to succeed and confirm `home_lat` is
 populated. `pytest server/tests/test_families.py` — happy path, permission-denied, and
@@ -143,8 +161,8 @@ admin's own row.
 - [ ] `routers/invites.py` with the five invite routes.
 - [ ] Token generation: `secrets.token_urlsafe(32)`; store only the sha256; return the raw
       value exactly once inside `InviteCreatedOut.url`.
-- [ ] `POST /invites` permission split: non-null `family_id` → `require_family_admin`;
-      null `family_id` → `require_main_admin`.
+- [ ] `POST /invites` permission split: non-null `family_id` →
+      `require_family_head_or_spouse`; null `family_id` → `require_organiser`.
 - [ ] `GET /invites/token/{token}` is public and always returns `200` — an unknown, expired,
       used or revoked token yields `valid: false` with a reason and no trip details.
 - [ ] `POST /invites/token/{token}/accept`:
@@ -244,22 +262,23 @@ member delivers `member.removed` to both the room and that user's own connection
       24/32/40/64, initials on a neutral fill, and initials again when the image fails to load.
       No broken-image state exists.
 - [ ] Member list with badges, promote / demote / remove, controls rendered only for entitled
-      callers. Removal of the last family admin is prevented in the UI with an explanatory
+      callers. Removing or demoting the head is prevented in the UI with an explanatory
       message, and still refused by the API.
 - [ ] Family location settings block — the family switch, the new-member default switch, and
-      the per-member switches, editable by that family's admin and the main admin, **read-only
+      the per-member switches, editable by that family's head or spouse and by the owner and
+      organisers, **read-only
       but visible** to members so nobody is silently overridden. Each member row shows its
       effective state using the five strings in `design.md`.
 - [ ] The family switch uses an undo toast, not a confirm — it is instantly reversible.
 - [ ] Invite block — create form, copy-once link display with a copy toast and a plain
       "shown only once" line, outstanding-invite list with status chips, revoke with undo.
-- [ ] The main admin's `Invite a new family` action, visually separated from per-family
+- [ ] The owner's and organisers' `Invite a new family` action, visually separated from per-family
       invites.
 - [ ] Empty states for no families, and for no outstanding invites.
 - [ ] Skeletons for the table and panel; spinners for inline saves; optimistic rename and
       recolour with rollback.
 
-**Verify:** in the browser as the main admin — create two families, watch the colours differ
+**Verify:** in the browser as the owner — create two families, watch the colours differ
 on the map, rename one and see it update in a second browser signed in as another user without
 a reload. Set a home address and confirm the map preview and confirmation step. Resize to a
 phone width and confirm the bottom sheet and ≥ 44px targets. Confirm a member logged into a
@@ -301,9 +320,11 @@ and confirm the undo toast reverts it and the map label follows.
       be refused, and stage-guard rejection in End.
 - [ ] `test_invites.py` — both invite variants, expiry, revocation, single-use concurrency,
       invalid-token preview leaking nothing, registration creating the correct role.
-- [ ] `test_family_permissions.py` — a family admin cannot touch another family; a member
-      cannot mutate anything; the main admin can do everything; the main admin cannot be
-      removed or demoted.
+- [ ] `test_family_permissions.py` — a head cannot touch another family; a member cannot
+      mutate anything; the owner and organisers can do everything; the owner cannot be removed
+      or demoted; an organiser cannot appoint another organiser; and the **spouse asymmetry**:
+      a spouse can manage every member of their family but is refused on the head, in every
+      direction (remove, demote, promote, visibility switch).
 - [ ] `test_address_privacy.py` — assert the exact response body for a non-member caller
       contains no `home_address`, `home_lat` or `home_lng` key on any endpoint that returns a
       family, and no `location_sharing_enabled` value on any member of another family.
@@ -312,8 +333,8 @@ and confirm the undo toast reverts it and the map label follows.
       `live_location_enabled = true`; a double submit yielding `409 already_has_family` with no
       second family; the eight-slot exhaustion case.
 - [ ] `test_location_policy.py` — the one that matters most. Assert that **no request body
-      reachable by a family admin or the main admin can set another user's
-      `live_location_enabled` to true**: enumerate the routes, call each as a family admin
+      reachable by a head, a spouse, an organiser or the owner can set another user's
+      `live_location_enabled` to true**: enumerate the routes, call each as a head
       against a member who has consent off, and assert the column is unchanged. Then assert the
       read-time filter: a member is absent from `GET /live-locations` when any one of the three
       permission terms is false, and present only when all three are true and a fresh row

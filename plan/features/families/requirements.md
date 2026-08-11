@@ -8,33 +8,67 @@ family; each family has a colour slot used for pins and labels across the whole 
 one home address that is geocoded once so home-to-suggestion distances can be cached later.
 People join by invite link — either into an existing family, or by creating a new family.
 
+## Roles (revised 2026-08-11)
+
+This feature owns the role hierarchy; `plan/overview.md` states it and `admin-console` and
+`holiday-stage` inherit it. Two independent kinds:
+
+| Kind | Role | Scope |
+|---|---|---|
+| Trip | **Owner** | `trips.owner_user_id`. Everything an organiser can do, plus appointing and removing organisers — which is theirs alone |
+| Trip | **Organiser** | A `trip_organisers` row. Every cross-family power except managing organisers |
+| Family | **Head of family** | One per family. Manages their own family entirely |
+| Family | **Spouse** | The head's powers over the family, **except over the head themselves** |
+| Family | **Member** | Belongs to one family; decides their own location sharing and nothing else |
+
+The two kinds do not imply each other: the owner and every organiser are also an ordinary
+head, spouse or member of their own family, and hold no family powers elsewhere except the
+cross-family ones their trip role gives them.
+
+**The two asymmetries, and why each exists:**
+
+- *An organiser cannot appoint or remove an organiser.* A delegate who can unappoint the
+  delegator is not a delegate. Without this, the owner's control of who runs the trip lasts
+  until the first organiser disagrees, and there is no way back.
+- *A spouse cannot modify, demote or remove the head, or change the head's visibility
+  switches.* Two people who can each remove the other is a family that can lock itself out in
+  one click. The relationship is one-directional: the head can do all of those to a spouse.
+
+Where a story below says "head or spouse", the spouse asymmetry applies whenever the **target**
+of the action is the head. It is a property of the action, not of the role — a spouse may edit
+every other member of the family freely.
+
+> This replaces the earlier vocabulary. "Main admin" is now **owner or organiser** wherever it
+> appears in a permission (`require_organiser`); the small number of powers reserved to the
+> owner alone are called out explicitly. "Family admin" is now **head of family**.
+
 ## User stories
 
-### FM-1 — Main admin: create a family
+### FM-1 — Owner or organiser: create a family
 
-**As the main admin, I can create a family so I can invite its members.**
+**As the owner or an organiser, I can create a family so I can invite its members.**
 
 - Required: name. Optional at creation: home address.
 - A colour slot from `--family-1…8` is assigned automatically, choosing the lowest-numbered
   slot not currently in use on the trip.
-- The main admin can override the colour slot; slots already used by another family are shown
+- The creator can override the colour slot; slots already used by another family are shown
   as taken.
 - The family is created on the active trip (`families.trip_id`).
 - A family name that duplicates an existing name on the trip is rejected with a clear message.
 
-### FM-2 — Family admin: edit my family's name and colour
+### FM-2 — Head or spouse: edit my family's name and colour
 
-**As a family admin, I can rename my own family and change its colour slot.**
+**As a head of family or a spouse, I can rename my own family and change its colour slot.**
 
-- A family admin can edit only their own family; the main admin can edit any.
+- A head or spouse can edit only their own family; the owner and organisers can edit any.
 - Changing the colour slot to one already taken is rejected with a message naming the family
   holding it.
 - The change is reflected immediately on the map and in any list showing family colours, for
   every connected user.
 
-### FM-3 — Family admin: set our home address
+### FM-3 — Head or spouse: set our home address
 
-**As a family admin, I can set our home address so the app can show us how far things are.**
+**As a head of family or a spouse, I can set our home address so the app can show us how far things are.**
 
 - The address is entered as free text and stored in `families.home_address`.
 - On save the server geocodes it **once**, writing `home_lat`, `home_lng` and
@@ -47,7 +81,7 @@ People join by invite link — either into an existing family, or by creating a 
   saves and a "not yet placed" state appears; a retry action re-attempts later.
 - Editing the address to a different value clears the old coordinates and re-geocodes.
   Re-saving an unchanged address does **not** call the API again.
-- Only a family admin (own family) or the main admin may set it.
+- Only the head or a spouse (own family), the owner, or an organiser may set it.
 
 ### FM-4 — Any member: see the families on this trip
 
@@ -55,35 +89,35 @@ People join by invite link — either into an existing family, or by creating a 
 
 - A table lists families with: colour swatch, name, member count, home town or "no home set",
   and whether the home is placed on the map.
-- Full home addresses are visible to members of that family and to the main admin. Other
+- Full home addresses are visible to members of that family and to the owner and organisers. Other
   members see a coarse label only (the town/locality from the geocode result), never the full
   street address.
 - Selecting a family opens its detail panel with its member list.
 - Homes with coordinates appear on the map as family-coloured home pins.
 
-### FM-5 — Family admin: invite someone to my family
+### FM-5 — Head or spouse: invite someone to my family
 
-**As a family admin, I can create an invite link that adds someone to my family.**
+**As a head of family or a spouse, I can create an invite link that adds someone to my family.**
 
 - Creating an invite produces a single-use link containing an unguessable token.
 - The creator chooses an expiry from a short list (24 hours, 7 days, 30 days); default 7 days.
 - The link is displayed once with a copy action, along with its expiry and who created it.
 - The invite is scoped to the creator's family (`invites.family_id` set).
-- A family admin sees all outstanding invites for their own family and can revoke any of
+- A head or spouse sees all outstanding invites for their own family and can revoke any of
   them.
 - A revoked or used invite cannot be used again.
 
-### FM-6 — Main admin: invite someone who will start a new family
+### FM-6 — Owner or organiser: invite someone who will start a new family
 
-**As the main admin, I can create an invite that lets the recipient create their own family.**
+**As the owner or an organiser, I can create an invite that lets the recipient create their own family.**
 
 - The invite is created with `invites.family_id` null, which means "this invite creates a new
   family".
-- Only the main admin can create this variant. A family admin can only invite into their own
-  family.
+- Only the owner or an organiser can create this variant. A head or spouse can only invite
+  into their own family.
 - On acceptance the recipient is logged in and directed to the family setup screen (see
   `plan/features/families/design.md` "Family setup screen") where they name their new family,
-  become its family admin automatically, and may set a home address then or later.
+  become its head of family automatically, and may set a home address then or later.
 
 ### FM-7 — Logged-out visitor: accept an invite and register
 
@@ -124,27 +158,30 @@ switching accounts.**
 - A user who already belongs to a family cannot accept an invite into a different family
   without being removed from the first — the app says so rather than failing obscurely.
 
-### FM-9 — Family admin: manage my family's members
+### FM-9 — Head or spouse: manage my family's members
 
-**As a family admin, I can manage the people in my own family.**
+**As a head of family or a spouse, I can manage the people in my own family.**
 
 - I can see each member's display name, username, role and when they joined.
-- I can promote a member to family admin, and demote a family admin to member.
+- I can promote a member to **spouse**, and demote a spouse back to member (FM-16).
 - I can remove a member from the family.
-- I cannot remove myself while I am the only family admin; the app asks me to promote someone
-  else first.
-- I cannot remove or demote the main admin.
+- **A family always has exactly one head.** I cannot remove or demote the head; handing the
+  role on is a transfer, not a vacancy (FM-16).
+- I cannot remove or demote the trip's owner.
+- **As a spouse, everything above applies except where the head is the target**: I cannot
+  remove the head, change their role, or change their visibility switches. The app does not
+  offer those controls, and the API refuses them.
 - A removed member's account still exists but has no family, so they lose member access until
   they are re-invited. Their past votes, comments and suggestions are retained and still
   attributed to them.
 
-### FM-10 — Main admin: manage any family
+### FM-10 — Owner or organiser: manage any family
 
-**As the main admin, I can do anything a family admin can do, for any family.**
+**As the owner or an organiser, I can do anything a head of family can do, for any family.**
 
 - Includes creating, renaming, recolouring, setting the home address, inviting, and managing
   members and roles for every family.
-- The main admin can also delete a family that has no members.
+- The owner and organisers can also delete a family that has no members.
 - Deleting a family with members is refused; members must be removed first. This is
   deliberate — it prevents accidental loss of a whole group's access.
 - Removing users entirely and resetting passwords belong to `admin-console`, not here.
@@ -176,7 +213,7 @@ switching accounts.**
 - When a family's location settings change, markers that are no longer permitted disappear
   immediately, without waiting for a refresh.
 
-### FM-13 — New family admin: name my family on first login
+### FM-13 — New head of family: name my family on first login
 
 **As someone who accepted an invite to start a new family, I am asked to name my family before
 I enter the app.**
@@ -185,10 +222,10 @@ I enter the app.**
   the trip: I have an account, but no family.
 - The screen asks for one thing — our family name — and optionally lets me add our home
   address, clearly marked as something I can do later.
-- It tells me I will be this family's admin, and that the name and the admin can both be
+- It tells me I will be this family's head, and that the name and the head can both be
   changed afterwards.
 - A name already used on this trip is rejected on the field with a specific message.
-- On submit, my family is created, I become its admin, a colour is assigned automatically, and
+- On submit, my family is created, I become its head, a colour is assigned automatically, and
   I land on the app home.
 - If I close the tab without finishing, nothing is half-created; logging in again brings me
   back to the same screen.
@@ -218,10 +255,10 @@ I enter the app.**
   available as a label or on hover, so colour is never the only thing identifying me.
 - My picture is visible to everyone on the trip and to nobody else.
 
-### FM-15 — Family admin: decide who in my family appears on the map
+### FM-15 — Head or spouse: decide who in my family appears on the map
 
-**As a family admin, I can control which of my family are shown on the trip map, without being
-able to switch on sharing for someone who has not agreed to it.**
+**As a head of family or a spouse, I can control which of my family are shown on the trip map,
+without being able to switch on sharing for someone who has not agreed to it.**
 
 - Everyone on the trip is shown on the map individually — one marker per person, not one per
   family.
@@ -239,7 +276,8 @@ able to switch on sharing for someone who has not agreed to it.**
   only they can answer either.
 - A member whose sharing I have turned off is told so plainly in their own settings, with who
   to ask. It is never silently ineffective.
-- The main admin can do all of this for any family, as they can with everything else (FM-10).
+- The owner and organisers can do all of this for any family, as they can with everything
+  else (FM-10). A spouse can do it for every member of their family except the head.
 
 > NOTE: this is a real change to the rule in `plan/features/holiday-stage/requirements.md`
 > that said sharing was governed by the member alone. The invariant that survives — and the
@@ -248,37 +286,96 @@ able to switch on sharing for someone who has not agreed to it.**
 > touches a member's own setting, it happens once, and the browser's permission prompt still
 > stands between it and any location leaving the device.
 
+### FM-16 — Head of family: share the running of my family with my spouse
+
+**As a head of family, I can give another adult in my family the same powers I have, without
+giving them power over me.**
+
+- I can promote any member of my family to **spouse**, and demote a spouse back to member.
+- A spouse can do everything I can do for this family: manage members, set the home address,
+  create and revoke invites, and set the family's and members' map-visibility switches.
+- **A spouse cannot act on me.** They cannot remove me, change my role, or change my
+  visibility switches. The controls are not rendered for them, and the API refuses the request
+  regardless — the UI hiding a control is a courtesy, not a permission.
+- A spouse cannot promote or demote anyone to or from spouse either. Promotion is mine, the
+  owner's, or an organiser's. Otherwise a spouse could promote a confederate and outvote the
+  arrangement I made.
+- There is no limit on how many spouses a family has. A household with three adults sharing
+  the arrangements is a real household, and an arbitrary cap would only be a rule to explain.
+- **A family always has exactly one head.** I cannot demote myself and leave the family
+  headless; I hand the role on instead, which makes me a spouse in the same action. That is a
+  transfer, and the app describes it as one rather than as two half-completed steps.
+- The owner and organisers can do all of this for any family (FM-10).
+
+> NOTE: spouse is a permission level, not a claim about anyone's relationship. The name is the
+> one families will read correctly in the overwhelmingly common case; nothing in the software
+> checks or records a relationship, and any adult a head trusts with the arrangements can hold
+> it. It is deliberately *not* called "family admin (second)" — the product is for families,
+> and a label that describes the household reads better than one that describes the ACL.
+
+### FM-17 — Owner: choose who helps me run the trip
+
+**As the owner, I can appoint organisers to share the work of running the trip, and take that
+back.**
+
+- An organiser gets every cross-family power I have: confirming suggestions, moving stages,
+  configuring voting modes, managing any family, and inviting anyone anywhere.
+- **An organiser cannot appoint or remove an organiser — including themselves and each
+  other.** That power is mine alone. Otherwise my choice of who runs the trip lasts only until
+  the first organiser disagrees with it, and there is no way back.
+- Being an organiser says nothing about my family or theirs: organisers are still an ordinary
+  head, spouse or member of their own family, and the two roles are edited in different places.
+- Removing an organiser takes the trip-level powers away and leaves their family membership,
+  their votes and their comments untouched.
+
+> The **endpoints and UI** for appointing organisers belong to `admin-console`, not here. This
+> feature defines the role, creates the `trip_organisers` table, and honours it in every
+> permission check and serialiser — so `admin-console` adds screens over a hierarchy that
+> already works, rather than introducing one.
+
 ## Permissions
 
-"Own" means the family the user belongs to.
+"Own" means the family the user belongs to. Trip roles and family roles are independent, so a
+person's effective permission is the union of their row in each half of the table.
 
-| Action | Main admin | Family admin | Member | Logged-out |
-|---|---|---|---|---|
-| List families and member counts | yes | yes | yes | no |
-| See a family's full home address | yes (any) | own only | own only | no |
-| See a family's coarse home locality | yes | yes | yes | no |
-| Create a family for someone else | yes | no | no | no |
-| Create my own family during setup | n/a | n/a (this is how you become one) | no | no |
-| Rename / recolour a family | yes (any) | own only | no | no |
-| Set or clear a home address | yes (any) | own only | no | no |
-| Retry geocoding | yes (any) | own only | no | no |
-| Delete an empty family | yes | no | no | no |
-| Create a family-scoped invite | yes (any family) | own family only | no | no |
-| Create a new-family invite | yes | no | no | no |
-| List / revoke invites | yes (all) | own family only | no | no |
-| Preview an invite by token | yes | yes | yes | yes |
-| Accept an invite (register) | n/a | n/a | n/a | yes |
-| Promote / demote a family admin | yes (any) | own family only | no | no |
-| Remove a member from a family | yes (any) | own family only | no | no |
-| Set a family's map-visibility switch | yes (any) | own only | no | no |
-| Set a member's map-visibility switch | yes (any) | own family only | no | no |
-| Set a family's new-member default | yes (any) | own only | no | no |
-| Turn **on** another user's sharing | **no** | **no** | **no** | **no** |
-| Edit own names / picture / password / theme | yes | yes | yes | no |
-| Edit own location-sharing toggle | yes | yes | yes | no |
-| Edit another user's names or picture | no (see `admin-console`) | no | no | no |
+| Action | Owner | Organiser | Head | Spouse | Member | Logged-out |
+|---|---|---|---|---|---|---|
+| List families and member counts | yes | yes | yes | yes | yes | no |
+| See a family's full home address | yes (any) | yes (any) | own only | own only | own only | no |
+| See a family's coarse home locality | yes | yes | yes | yes | yes | no |
+| Create a family for someone else | yes | yes | no | no | no | no |
+| Create my own family during setup | n/a | n/a | n/a (this is how you become one) | no | no | no |
+| Rename / recolour a family | yes (any) | yes (any) | own only | own only | no | no |
+| Set or clear a home address | yes (any) | yes (any) | own only | own only | no | no |
+| Retry geocoding | yes (any) | yes (any) | own only | own only | no | no |
+| Delete an empty family | yes | yes | no | no | no | no |
+| Create a family-scoped invite | yes (any family) | yes (any family) | own family only | own family only | no | no |
+| Create a new-family invite | yes | yes | no | no | no | no |
+| List / revoke invites | yes (all) | yes (all) | own family only | own family only | no | no |
+| Preview an invite by token | yes | yes | yes | yes | yes | yes |
+| Accept an invite (register) | n/a | n/a | n/a | n/a | n/a | yes |
+| Promote a member to spouse | yes (any) | yes (any) | own family only | **no** | no | no |
+| Demote a spouse to member | yes (any) | yes (any) | own family only | **no** | no | no |
+| Transfer the head of family role | yes (any) | yes (any) | own family only | **no** | no | no |
+| Remove a member from a family | yes (any) | yes (any) | own family only | own family, **not the head** | no | no |
+| Set a family's map-visibility switch | yes (any) | yes (any) | own only | own only | no | no |
+| Set a member's map-visibility switch | yes (any) | yes (any) | own family only | own family, **not the head** | no | no |
+| Set a family's new-member default | yes (any) | yes (any) | own only | own only | no | no |
+| **Appoint or remove an organiser** | **yes** | **no** | no | no | no | no |
+| Turn **on** another user's sharing | **no** | **no** | **no** | **no** | **no** | **no** |
+| Edit own names / picture / password / theme | yes | yes | yes | yes | yes | no |
+| Edit own location-sharing toggle | yes | yes | yes | yes | yes | no |
+| Edit another user's names or picture | no (see `admin-console`) | no | no | no | no | no |
 
-The main admin can never be removed from their family or demoted through this feature.
+The trip's owner can never be removed from their family or demoted through this feature.
+
+The "appoint or remove an organiser" row is `yes` for the owner and `no` for everybody else,
+including organisers themselves. The *endpoints* for it live in `admin-console`; the row is
+here because this feature defines the hierarchy and creates the table those endpoints write.
+
+The three `no` cells marked for spouse are the whole of the spouse asymmetry. A spouse who
+could hand themselves the head role, or remove the head, would make the distinction
+decorative.
 
 "Create my own family during setup" is available to exactly one caller: an authenticated user
 who has accepted a new-family invite and has no family yet. It is not a general capability of
@@ -298,7 +395,8 @@ that a later reader can see it was a decision.
 | Set or retry a home address | yes | yes | no (`409`) |
 | Create / revoke invites | yes | yes | no (`409`) |
 | Accept an invite | yes | yes | no — the trip is closed; the preview says so |
-| Promote / demote / remove members | yes | yes | no (`409`) |
+| Promote / demote / remove members, transfer the head role | yes | yes | no (`409`) |
+| Appoint / remove an organiser (`admin-console`) | yes | yes | no (`409`) |
 | Edit family / member map-visibility switches | yes | yes | no (`409`) |
 | Edit own names, picture, password, theme | yes | yes | yes |
 | Edit own location-sharing toggle | yes | yes | yes |
