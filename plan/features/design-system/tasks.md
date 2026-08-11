@@ -228,39 +228,87 @@ No date/time picker was ever specced; native `<input type="date">` is what the a
 ships. Consumers queued behind this: trip dates (admin-console Section 1 + AC-0), itinerary
 day/time editing and "give it a time" (M4), suggestion date windows (M3+). Build once, here.
 
-- [ ] `DateRangePicker` — the trip-dates case: one calendar surface, click start then end,
+- [x] `DateRangePicker` — the trip-dates case: one calendar surface, click start then end,
       range highlighted; typing remains possible (the input is the accessible base, the
       calendar is progressive enhancement); no six-click month spelunking — year/month jump
       controls and "next weekend / next week" quick-picks where the caller opts in.
-- [ ] `DatePicker` — single date; same base; trip-aware variant that, given the trip's date
+- [x] `DatePicker` — single date; same base; trip-aware variant that, given the trip's date
       span, renders those days as the primary strip (an itinerary item is almost always
       scheduled inside the trip) with the full calendar one gesture away.
-- [ ] `TimeField` — time-of-day entry snapping to the itinerary's 15-minute grid
+- [x] `TimeField` — time-of-day entry snapping to the itinerary's 15-minute grid
       (`--daytrack-snap`), typeable ("14:30"), with a wheel/list on touch; pairs with
       `DatePicker` for the "give it a time" flow.
-- [ ] **Range coupling (user ruling 2026-08-11):** when start and end are separate fields,
+- [x] **Range coupling (user ruling 2026-08-11):** when start and end are separate fields,
       the end field's minimum is the chosen start date — earlier days render disabled and
       unclickable — and opening the end picker **starts its calendar at the start date's
       month**, never at today (observed bug: start=December, end picker opened at August).
       Symmetrically, picking an end before re-opening start caps start's maximum. If a new
       start lands after the current end, the end clears with an inline explanation rather
       than silently holding an invalid range.
-- [ ] **Range interaction:** hover paints a live preview of the span; first click locks
+- [x] **Range interaction:** hover paints a live preview of the span; first click locks
       start, second locks end; the edges stay adjustable without starting over. Two months
       render side by side on desktop so a range crosses the boundary without paging.
-- [ ] **Presets, caller-supplied:** the component accepts quick-pick chips; trip creation
+- [x] **Presets, caller-supplied:** the component accepts quick-pick chips; trip creation
       passes trip-shaped ones ("This weekend", "A week", "A fortnight" anchored on the
       chosen start) — not analytics presets. Presets are one click, never mandatory.
-- [ ] **Mobile is not a shrunken popover:** below the tablet breakpoint the picker opens in
+- [x] **Mobile is not a shrunken popover:** below the tablet breakpoint the picker opens in
       the existing `BottomSheet` as a full-height vertically scrolling calendar, today
       anchored at the top.
-- [ ] Both themes, token-only, keyboard complete (arrows move days, PgUp/Dn months,
+- [x] Both themes, token-only, keyboard complete (arrows move days, PgUp/Dn months,
       Shift+PgUp/Dn years, Enter confirms, Escape closes, typed entry always works),
       `--hit-target` on touch, and honest fallback: if JS fails, the native input still
       submits.
-- [ ] Styleguide section with all three, both themes, disabled/error states.
-- [ ] Swap into the admin console's trip dates (the only shipped consumer) without API change.
+- [x] Styleguide section with all three, both themes, disabled/error states.
+- [x] Swap into the admin console's trip dates (the only shipped consumer) without API change.
 
 **Verify:** in the styleguide, pick a trip range with two clicks and no month navigation for
 adjacent months; set an itinerary-style time by typing and by wheel; tab through the whole
 range picker without a mouse; `npm run verify` green.
+
+
+### Implementation notes (2026-08-11)
+
+Built as `web/src/app/ui/pickers/` — `calendar.ts` (all date/time arithmetic, by hand),
+`CalendarGrid`, `CalendarSurface`, `DateField`, `PickerLayer`, `DateRangePicker`,
+`DatePicker`, `TimeField`, `pickers.css`. Seven deviations and decisions worth recording,
+per the docs-first rule:
+
+1. **Placement.** The spec's home for these was `web/src/design/`. They live in
+   `web/src/app/ui/pickers/` instead, because `scripts/check-tokens.mjs` deliberately
+   exempts `src/design/**` — that is where literal values are *allowed* to be declared. A
+   picker is a component, not a token file, and putting it under `src/design/` would have
+   made it the one component in the app exempt from the token check. The new component
+   tokens it needs (`--picker-*`, `--daytrack-snap`) *are* declared in
+   `src/design/tokens.components.css`, which is the right side of that line.
+2. **`--daytrack-snap` is created here**, not by the itinerary feature that named it: 15,
+   unitless, because CSS has no minute unit and both the day track and `TimeField` need to
+   divide by it rather than print it. `src/design/snap.ts` mirrors the number for the
+   arithmetic, the same known duplication `breakpoints.ts` carries for `--breakpoint-panel`.
+3. **Out-of-range days carry `aria-disabled`, not `disabled`.** The spec says "disabled and
+   unclickable" and they are both — but a `disabled` button leaves the focus order, and in a
+   roving-tabindex grid that means arrow-keying across a blocked week silently drops focus.
+   They announce as unavailable, refuse the click, and stay reachable.
+4. **The start's maximum is capped in the calendar, and the clear-with-explanation path is
+   reached by typing.** Both clauses of the ruling are implemented, and this is the only
+   consistent reading of them: a calendar that caps start at the end date cannot also
+   *produce* a start after the end. So the calendar caps (days after the end are disabled),
+   and a typed start after the end clears the end with the inline notice.
+5. **The no-JS fallback is honest but limited.** `DateField` renders a real
+   `<input type="date">` — native typing, native submission, the OS keyboard — with the
+   browser's own calendar indicator hidden in CSS, because two calendars on one field is how
+   the observed bug arrived (ours opens at the trip's start month; the browser's opens where
+   it likes). Where `type="date"` is unsupported the field falls back to text and our own
+   tolerant parser (`4/12/2027`, `04.12.27`, ISO; garbage rejected, never coerced). But Kindred
+   is a client-rendered SPA: if JS fails, no form renders at all. The native input is the base
+   for *typing and assistive tech*, which is the part that was actually at stake.
+6. **The sheet uses `BottomSheet`'s existing `full` snap (90%),** not a new 100vh variant —
+   the two months stack into one scrolling column below the breakpoint. Adding a third snap
+   for one consumer would have been a design-system change made in passing.
+7. **`PICKER_SHEET_QUERY` is its own constant** at the same 900px as `PANEL_SHEET_QUERY`
+   rather than an alias: same number, different decision, and aliasing would mean a future
+   change to the panel silently moved every picker.
+
+Not done, deliberately: no `weekStartsOn` plumbing to a user preference (the components take
+the prop; nothing sets it, and the locale-aware default is a separate decision); the day
+strip caps at 21 days and falls back to the calendar beyond that; `TimeField`'s touch "wheel"
+is a scroll-snapping `listbox` rather than a rendered cylinder.
