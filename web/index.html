@@ -3,8 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Substituted from --color-accent at build time by the kindred:theme-color plugin. -->
+    <meta name="theme-color" content="__THEME_COLOR__" />
+    <meta name="description" content="Plan a family holiday together — suggestions, votes and one itinerary." />
     <title>Kindred</title>
+    <script>
+      // Blocking on purpose, and tiny: it runs before first paint so a dark-theme user
+      // never sees a white flash. localStorage holds a *cache* of the server preference;
+      // `auth/me` reconciles it a moment later. Key must match design/theme.ts.
+      (function () {
+        try {
+          var pref = localStorage.getItem('kindred.theme') || 'system'
+          var resolved =
+            pref === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : pref
+          document.documentElement.dataset.theme = resolved
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
