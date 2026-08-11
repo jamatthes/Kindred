@@ -208,8 +208,13 @@ async def _claim_color(
     return slot
 
 
-def _reject_touching_the_owner(member: FamilyMember, trip: Trip | None) -> None:
-    """FM-9/FM-10: the trip's owner cannot be removed or demoted through this feature."""
+def reject_touching_the_owner(member: FamilyMember, trip: Trip | None) -> None:
+    """FM-9/FM-10: the trip's owner cannot be removed or demoted through this feature.
+
+    Public, and imported by `admin-console`'s user-removal route: the two features must
+    refuse the same person for the same reason, and one implementation is how that stays
+    true. Same for :func:`reject_leaving_the_family_headless` below.
+    """
     is_trip_owner = member.user.is_platform_admin or (
         trip is not None and trip.owner_user_id == member.user_id
     )
@@ -221,7 +226,7 @@ def _reject_touching_the_owner(member: FamilyMember, trip: Trip | None) -> None:
         )
 
 
-def _reject_leaving_the_family_headless(member: FamilyMember) -> None:
+def reject_leaving_the_family_headless(member: FamilyMember) -> None:
     """A family always has exactly one head (FM-16).
 
     So a head is never *demoted* or *removed* — the role is handed on, which is a transfer and
@@ -713,8 +718,8 @@ async def update_member(
                 await db.flush()
             member.role = ROLE_HEAD
         else:
-            _reject_touching_the_owner(member, trip)
-            _reject_leaving_the_family_headless(member)
+            reject_touching_the_owner(member, trip)
+            reject_leaving_the_family_headless(member)
             member.role = requested
 
     if "location_sharing_allowed" in changes:
@@ -760,8 +765,8 @@ async def remove_member(
     family = await _load_family(db, family_id)
     member = _find_member(family, user_id)
     await _reject_spouse_acting_on_head(db, user, family, member, trip)
-    _reject_touching_the_owner(member, trip)
-    _reject_leaving_the_family_headless(member)
+    reject_touching_the_owner(member, trip)
+    reject_leaving_the_family_headless(member)
 
     trip_id = family.trip_id
     await db.delete(member)

@@ -187,6 +187,29 @@ async def send_user(
     return delivered
 
 
+async def close_user(user_id: uuid.UUID, code: int = WS_CLOSE_POLICY_VIOLATION) -> int:
+    """Close every socket belonging to one user, and forget them.
+
+    Used after a password reset or a removal from the trip (`admin-console` AC-7/AC-8), and
+    always *after* the `session.revoked` frame — the client needs to be told why before the
+    connection goes away, or the disconnect looks like a network problem and it reconnects.
+
+    Closing is not enough on its own: the session behind the socket has already been revoked
+    in the database, so a reconnect fails authentication anyway. This makes the outcome
+    immediate rather than waiting for the client's next request.
+    """
+    closed = 0
+    for conn in registry.connections_for_user(user_id):
+        registry.remove(conn)
+        try:
+            await conn.websocket.close(code=code)
+        except (RuntimeError, WebSocketDisconnect):
+            # Already gone: the outcome we wanted, arrived at by another route.
+            pass
+        closed += 1
+    return closed
+
+
 # --- presence ----------------------------------------------------------------------------
 
 
