@@ -1,0 +1,93 @@
+/* ============================================================================
+   HeatMatrix — a real HTML table, not SVG.
+   ----------------------------------------------------------------------------
+   Every other widget in `web/src/charts/` is hand-drawn SVG, but a score matrix
+   *is* tabular data, and the sticky-header behaviour design-system.md asks for
+   ("matching the Table primitive's behaviour") only exists natively on a real
+   `<table>` with CSS `position: sticky` — the same technique the `Table`
+   primitive itself uses. This also means the visible table doubles as its own
+   accessible structure; there is no separate visually-hidden fallback table
+   here the way the other widgets have one.
+   ========================================================================== */
+
+.k-heat {
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.k-heat-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.k-heat-table th,
+.k-heat-table td {
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Column headers: stick to the top of the scroll container. */
+.k-heat-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+  z-index: 1;
+}
+
+/* Row headers: stick to the left of the scroll container. */
+.k-heat-table tbody th {
+  position: sticky;
+  left: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 400;
+  text-align: right;
+  border-right: 1px solid var(--color-border);
+  z-index: 1;
+}
+
+/* The corner cell sticks both ways and sits above both sticky edges. */
+.k-heat-table thead th:first-child {
+  left: 0;
+  z-index: 2;
+}
+
+.k-heat-table td {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  border-radius: var(--radius-1);
+}
+
+.k-heat-table td.k-heat-cell--empty {
+  color: var(--color-text-faint);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--color-border-strong),
+      var(--color-border-strong) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    var(--color-surface-sunken);
+}
+
+.k-heat-cell--0 { background: color-mix(in srgb, var(--scale-pref-0) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--1 { background: color-mix(in srgb, var(--scale-pref-1) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--2 { background: color-mix(in srgb, var(--scale-pref-2) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--3 { background: color-mix(in srgb, var(--scale-pref-3) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--4 { background: color-mix(in srgb, var(--scale-pref-4) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--5 { background: color-mix(in srgb, var(--scale-pref-5) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--6 { background: color-mix(in srgb, var(--scale-pref-6) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--7 { background: color-mix(in srgb, var(--scale-pref-7) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--8 { background: color-mix(in srgb, var(--scale-pref-8) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--9 { background: color-mix(in srgb, var(--scale-pref-9) var(--mix-tint-strong), var(--color-surface)); }
+.k-heat-cell--10 { background: color-mix(in srgb, var(--scale-pref-10) var(--mix-tint-strong), var(--color-surface)); }
