@@ -44,7 +44,8 @@ class FamilyBriefOut(BaseModel):
 
     id: uuid.UUID
     name: str
-    color: int
+    color: int | None
+    color_custom: str | None = None
 
 
 class InviteCreateIn(BaseModel):

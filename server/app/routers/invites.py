@@ -99,7 +99,9 @@ async def _instance_name(db: AsyncSession) -> str:
 def _brief(family: Family | None) -> FamilyBriefOut | None:
     if family is None:
         return None
-    return FamilyBriefOut(id=family.id, name=family.name, color=family.color)
+    return FamilyBriefOut(
+        id=family.id, name=family.name, color=family.color, color_custom=family.color_custom
+    )
 
 
 async def _load_invite(db: AsyncSession, invite_id: uuid.UUID) -> Invite:
