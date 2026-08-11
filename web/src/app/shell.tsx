@@ -279,7 +279,16 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
 
         <div className="workspace">
           <main className="workspace__main">{children}</main>
-          {sidePanel === undefined ? null : <aside className="side-panel">{sidePanel}</aside>}
+          {/* The 38% half of the split, laid out from M0 so features drop in without a
+              layout rewrite. Like the timeline slot, it says what it is for rather than
+              rendering a blank rectangle. */}
+          <aside className="side-panel" aria-label="Details">
+            {sidePanel ?? (
+              <p className="side-panel__empty">
+                Select something on the map or in a list and its details appear here.
+              </p>
+            )}
+          </aside>
         </div>
 
         <div className="timeline-slot">

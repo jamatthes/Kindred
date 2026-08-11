@@ -212,6 +212,12 @@
   overflow: auto;
 }
 
+.side-panel__empty {
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+
 /* Bottom timeline slot, collapsed until the itinerary feature fills it. */
 .timeline-slot {
   height: var(--space-5);

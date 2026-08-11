@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../App'
 import type { User } from './types'
 
@@ -115,6 +115,37 @@ describe('the shell gate', () => {
 
     await waitFor(() =>
       expect(document.documentElement.dataset.theme).toBe('dark'),
+    )
+  })
+})
+
+describe('the theme control', () => {
+  it('rolls back and explains itself when the server refuses the change', async () => {
+    stubApi(admin) // recorded preference: light
+    render(<App />)
+    await screen.findByRole('group', { name: 'Theme' })
+    expect(document.documentElement.dataset.theme).toBe('light')
+
+    // The PATCH fails — the optimistic switch must not survive it.
+    vi.mocked(fetch).mockImplementation((input: string | URL | Request) => {
+      if (String(input).endsWith('/me/preferences')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ detail: { code: 'forbidden', message: 'Not allowed.' } }),
+            { status: 403 },
+          ),
+        )
+      }
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dark theme' }))
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'))
+    expect(screen.getByRole('group', { name: 'Theme' })).toHaveAttribute('title', 'Not allowed.')
+    expect(screen.getByRole('button', { name: 'Light theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
     )
   })
 })
