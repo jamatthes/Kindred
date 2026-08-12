@@ -12,5 +12,30 @@ When it's over, the trip freezes into a browsable archive.
 - **Docs:** start at [`plan/overview.md`](plan/overview.md); contributors and AI agents read
   [`CLAUDE.md`](CLAUDE.md) first.
 
-> Status: planning phase — see [`plan/`](plan/) for the full written record. No application
-> code yet by design (docs-first workflow).
+> Status: M0–M2 shipped — auth and onboarding, families (invites, roles, colours, privacy),
+> admin console, polls and voting with live updates, the design system and chart library,
+> and the M3 map groundwork (map shell, boundary/link-preview/distance services). Next:
+> M3 map suggestions (needs Google Maps API keys), then itinerary, holiday mode, and
+> notifications. The full written record lives in [`plan/`](plan/).
+
+## Deploy
+
+Three containers (Postgres, API, Caddy serving the built PWA), one `.env`, one command:
+
+```bash
+git clone https://github.com/jamatthes/Kindred.git
+cd Kindred/deploy
+cp .env.example .env   # then set SECRET_KEY, POSTGRES_PASSWORD, KINDRED_SITE_ADDRESS
+docker compose -f docker-compose.yml up --build -d
+```
+
+Open the site and log in as `admin` / `admin`; you are forced to set a real password before
+anything else. Full instructions — HTTPS, backups, upgrades — in
+[`deploy/README.md`](deploy/README.md).
+
+## Develop
+
+- Server: `cd server && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"`,
+  tests with `pytest` (needs a local Postgres and `TEST_DATABASE_URL`).
+- Web: `cd web && npm install`, `npm run verify` (lint, token check, build, tests),
+  `npm run e2e` (Playwright against a throwaway Docker stack).
