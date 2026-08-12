@@ -1,0 +1,32 @@
+# Override for the live/public deployment (techartronin.com), used with
+# `-p kindred-live --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml`.
+# Checked in — no secrets live here, those are in the git-ignored deploy/.env.prod.
+#
+# Runs alongside the local dev stack (docker-compose.yml alone, project `kindred`) on the
+# same machine without collision:
+#   - `-p kindred-live` namespaces containers/networks separately from the `kindred` project.
+#   - postgres/api get named volumes instead of the base file's ../data bind mounts, so this
+#     stack's DB and attachments can't share files with the dev stack's.
+#   - caddy publishes 80/443 (real HTTPS via KINDRED_SITE_ADDRESS) instead of the dev :8080.
+#   - postgres publishes no host port; nothing but the api container needs to reach it here.
+
+services:
+  postgres:
+    ports: !override []
+    volumes:
+      - kindred_live_pgdata:/var/lib/postgresql/data
+
+  api:
+    env_file: !override
+      - .env.prod
+    volumes:
+      - kindred_live_attachments:${ATTACHMENTS_DIR:-/data/attachments}
+
+  caddy:
+    ports: !override
+      - "80:80"
+      - "443:443"
+
+volumes:
+  kindred_live_pgdata:
+  kindred_live_attachments:

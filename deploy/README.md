@@ -33,14 +33,69 @@ ready; the compose healthcheck watches that endpoint.
 ### HTTPS is not optional in production
 
 Browser geolocation, PWA install, service workers and Web Push all require a secure context.
-Set `KINDRED_SITE_ADDRESS` to a hostname, uncomment the `80:80` and `443:443` port mappings
-in `docker-compose.yml`, and Caddy obtains and renews the certificate automatically. Behind
+Caddy obtains and renews the certificate automatically once it serves a real hostname on
+ports 80/443 — that is what `docker-compose.prod.yml` is for (next section). Behind
 Cloudflare, use an origin certificate or keep the proxy in front — see
 `plan/architecture.md` > Deployment.
 
 `:8080` over plain HTTP is for local testing only. It works because browsers treat
 `http://localhost` as a secure context, so the `Secure` session cookie is still stored. That
 exception does not extend to any other host.
+
+## The live stack, alongside the dev stack
+
+`docker-compose.prod.yml` is an override that turns the dev stack into a public one without
+disturbing it. Both run on the same machine at once:
+
+```bash
+cd deploy
+
+# dev — plain HTTP on :8080, data in ../data/, uses .env
+docker compose -f docker-compose.yml up --build -d
+
+# live — HTTPS on 80/443, isolated named volumes, uses .env.prod
+docker compose -p kindred-live --env-file .env.prod \
+  -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+What the override changes, and why each one matters:
+
+| Change | Reason |
+|---|---|
+| `caddy` publishes `80:80` + `443:443` | Browsers assume those ports, and ACME HTTP-01 needs 80 reachable |
+| `postgres` publishes nothing | Only the `api` container needs it; nothing on a public box should reach it |
+| `postgres`/`api` use **named** volumes | The base file bind-mounts `../data/*`, which is *not* namespaced by `-p`. Without this both stacks would write the same database files — the same trap the e2e override avoids |
+| `api` reads `.env.prod` | `env_file:` is a fixed path in the base file; `--env-file` does not change it |
+
+`-p kindred-live` is what keeps the containers, network and volumes separate. Tear it down
+with the same `-p` and `-f` flags, plus `-v` only if you mean to destroy the live data.
+
+### Reaching it over IPv6
+
+On an IPv6-only public address there is **no port forwarding to configure** — hosts have
+real addresses, so a NAT mapping is neither needed nor possible. What is needed is an
+explicit inbound **allow** rule on the gateway, because consumer gateways default-deny
+unsolicited inbound IPv6. On UniFi (Network 10.x) that is
+`Settings > Policy Engine > Policy Table > Create Policy`:
+
+```
+Source Zone      External      (Any)
+Destination Zone Internal      IP = <server's IPv6>, Port List = 80, 443
+Action           Allow
+IP Version       IPv6
+Protocol         TCP
+```
+
+Point the AAAA record at the host's **Public** address, not its Temporary one — Windows
+rotates temporary addresses daily and gateway UIs often display that one. On the host:
+`netsh interface ipv6 show addresses` and take the entry typed `Public`.
+
+**Do not test reachability from inside the LAN.** Requests to your own public address
+commonly loop back locally and succeed regardless of the firewall, which looks like proof
+and is not. Test from outside, and read `logs caddy` — `Timeout during connect (likely
+firewall problem)` means the gateway is still blocking, while `served key authentication`
+means the challenge got through. Caddy backs off on failure (60s doubling to 600s+), so
+after fixing the gateway `restart caddy` to retry immediately instead of waiting.
 
 ## Ports
 
