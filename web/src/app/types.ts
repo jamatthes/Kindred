@@ -579,14 +579,13 @@ export type PendingVotes = { count: number; suggestion_ids: string[] }
 
 export type CommentSubjectType = 'suggestion' | 'poll' | 'itinerary_item'
 
-export type CommentAuthor = {
-  user_id: string
-  display_name: string
-  family_id: string | null
-  family_color: number | null
-  family_color_custom?: string | null
-}
-
+/** The real `CommentOut` wire shape (`server/app/schemas/comment.py`) is flat — `author_id`/
+ * `author_name`/`family_id`/`family_color`/`family_color_custom` sit directly on the comment,
+ * there is no nested `author` object. `PollComment` (below) already matched this; `Comment`
+ * did not — found as a real, reproducible render crash by the M3 integration pass's live
+ * Playwright smoke (`comment.author.display_name` threw on every comment with content, in a
+ * crash/remount loop with no `ErrorBoundary` to catch it). Fixed by matching `PollComment`'s
+ * shape instead of inventing a second, nested one. */
 export type Comment = {
   id: string
   /** Not in `design.md`'s `GET /comments` response sketch, but assumed present on the
@@ -595,7 +594,11 @@ export type Comment = {
    * Optional so the type still matches the documented REST shape exactly. */
   subject_type?: CommentSubjectType
   subject_id?: string
-  author: CommentAuthor
+  author_id: string | null
+  author_name: string
+  family_id: string | null
+  family_color: number | null
+  family_color_custom?: string | null
   body: string
   mentions: string[]
   edited_at: string | null

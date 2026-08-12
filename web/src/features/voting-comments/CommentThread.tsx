@@ -109,17 +109,17 @@ export function CommentThread({
             return (
               <li key={comment.id} className="comment">
                 <IdentityBadge
-                  initials={comment.author.display_name.slice(0, 2).toUpperCase()}
+                  initials={comment.author_name.slice(0, 2).toUpperCase()}
                   familyColor={familyColor({
-                    color: comment.author.family_color,
-                    color_custom: comment.author.family_color_custom ?? null,
+                    color: comment.family_color,
+                    color_custom: comment.family_color_custom ?? null,
                   })}
                   size={24}
-                  name={comment.author.display_name}
+                  name={comment.author_name}
                 />
                 <div className="comment__body">
                   <span className="comment__who">
-                    {comment.author.display_name}
+                    {comment.author_name}
                     <span className="comment__when">
                       {' · '}
                       {relativeTime(comment.created_at)}

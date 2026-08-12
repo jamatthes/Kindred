@@ -53,7 +53,13 @@ function comment(overrides: Partial<Comment> = {}): Comment {
     id: 'c1',
     subject_type: 'suggestion',
     subject_id: 's1',
-    author: { user_id: 'me', display_name: 'Me', family_id: null, family_color: null },
+    // Flat, matching the real `CommentOut` wire shape (`server/app/schemas/comment.py`) —
+    // not a nested `author` object. See the M3 integration pass's fix note on `Comment` in
+    // app/types.ts.
+    author_id: 'me',
+    author_name: 'Me',
+    family_id: null,
+    family_color: null,
     body: 'First comment',
     mentions: [],
     edited_at: null,
@@ -131,7 +137,9 @@ describe('CommentThread — delete → undo (own comment)', () => {
 
 describe('CommentThread — moderation delete (someone else\'s comment)', () => {
   it('opens a confirm dialog and leaves a tombstone rather than reflowing', async () => {
-    list.mockResolvedValueOnce([comment({ can_edit: false, can_delete: true, author: { user_id: 'other', display_name: 'Alex', family_id: null, family_color: null } })])
+    list.mockResolvedValueOnce([
+      comment({ can_edit: false, can_delete: true, author_id: 'other', author_name: 'Alex', family_id: null, family_color: null }),
+    ])
     removeApi.mockResolvedValueOnce(undefined)
     render(<CommentThread subjectType="suggestion" subjectId="s1" />)
     await screen.findByText('First comment')
