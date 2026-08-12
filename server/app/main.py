@@ -30,11 +30,13 @@ from app.routers import (
     health,
     invites,
     me,
+    comments,
     polls,
     presence,
     settings as settings_router,
     suggestions,
     trips,
+    votes,
 )
 from app import ws
 from app.schemas.common import CODE_VALIDATION_ERROR
@@ -136,14 +138,19 @@ def create_app() -> FastAPI:
     app.include_router(invites.router, prefix=API_PREFIX)
     app.include_router(attachments.router, prefix=API_PREFIX)
     app.include_router(polls.router, prefix=API_PREFIX)
-    # `/comments/{id}` is deliberately not under `/polls`: the table is polymorphic, and
-    # `voting-comments` (M3) will serve suggestion and itinerary threads from the same
-    # routes rather than duplicating them per subject.
-    app.include_router(polls.comments_router, prefix=API_PREFIX)
+    # `/comments` is deliberately not under `/polls`: the table is polymorphic, and
+    # `voting-comments` (M3) serves poll, suggestion and itinerary threads from these routes
+    # rather than duplicating them per subject. `/polls/{id}/comments` survives as a thin
+    # delegate for a caller that already knows its subject.
+    app.include_router(comments.router, prefix=API_PREFIX)
     app.include_router(suggestions.router, prefix=API_PREFIX)
     # `/link-preview` is not under `/suggestions`: it takes a URL and returns page metadata,
     # touching no suggestion at all — the create form calls it before a suggestion exists.
     app.include_router(suggestions.link_preview_router, prefix=API_PREFIX)
+    app.include_router(votes.router, prefix=API_PREFIX)
+    # "Needs my vote" belongs to the caller rather than to any one suggestion, so it sits
+    # under `/me` alongside the rest of the personal endpoints.
+    app.include_router(votes.pending_router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     # Same feature, different gate: every role reads the voting modes, so that one route is
     # `require_member` and sits outside the /admin prefix.

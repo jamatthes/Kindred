@@ -25,6 +25,7 @@ from app.core.onboarding import is_pending_family
 from app.core.sessions import load_session, touch_session
 from app.models import (
     FAMILY_MANAGER_ROLES,
+    Comment,
     Family,
     FamilyMember,
     Session,
@@ -318,6 +319,69 @@ async def require_can_edit_suggestion(
     if not await can_edit_suggestion(db, user, trip, suggestion):
         raise forbidden("You can only change a suggestion from your own family.")
     return suggestion
+
+
+async def moderated_family_id(
+    db: AsyncSession, user: User
+) -> uuid.UUID | None:
+    """The family whose comments this caller may moderate, or ``None``.
+
+    A head or spouse may delete comments written by members of **their own** family — a
+    lightweight moderation path that does not need an organiser pulled in, and a deliberate
+    extension of "a head manages their own family" (`voting-comments/requirements.md`). A plain
+    member moderates nobody, including inside their own household.
+    """
+    return await db.scalar(
+        select(FamilyMember.family_id).where(
+            FamilyMember.user_id == user.id,
+            FamilyMember.role.in_(FAMILY_MANAGER_ROLES),
+        )
+    )
+
+
+async def require_comment_author(
+    comment_id: uuid.UUID, db: DbDep, user: CurrentUser
+) -> Comment:
+    """The author, and **nobody else at any role**.
+
+    There is deliberately no organiser override and no owner override: editing another person's
+    words under their name is never appropriate, so the permission does not exist rather than
+    being withheld (`voting-comments/requirements.md`, the NOTE under the permissions table).
+    An organiser who objects to a comment deletes it — under their own name, visibly — which is
+    a different act with a different record.
+    """
+    comment = await db.scalar(
+        select(Comment).where(Comment.id == comment_id, Comment.deleted_at.is_(None))
+    )
+    if comment is None:
+        raise ApiError(404, "not_found", "That comment does not exist.")
+    if comment.author_id != user.id:
+        raise forbidden("You can only edit your own comment.")
+    return comment
+
+
+async def require_can_delete_comment(
+    comment_id: uuid.UUID, db: DbDep, user: CurrentUser, trip: ActiveTrip
+) -> Comment:
+    """The author, the head or spouse of the author's family, or an organiser."""
+    comment = await db.scalar(
+        select(Comment).where(Comment.id == comment_id, Comment.deleted_at.is_(None))
+    )
+    if comment is None:
+        raise ApiError(404, "not_found", "That comment does not exist.")
+    if comment.author_id == user.id:
+        return comment
+    if await is_organiser(db, user, trip):
+        return comment
+
+    moderates = await moderated_family_id(db, user)
+    if moderates is not None:
+        author_family = await db.scalar(
+            select(FamilyMember.family_id).where(FamilyMember.user_id == comment.author_id)
+        )
+        if author_family is not None and author_family == moderates:
+            return comment
+    raise forbidden("You can only delete your own family's comments.")
 
 
 async def current_viewer(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> Viewer:

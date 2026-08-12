@@ -34,7 +34,6 @@ from app.models import (
     STATUS_OPEN,
     SUBJECT_POLL,
     TYPE_REGION,
-    Comment,
     Family,
     FamilyMember,
     Notification,
@@ -43,7 +42,6 @@ from app.models import (
     PollScore,
     Suggestion,
     Trip,
-    TripCategorySetting,
     User,
 )
 from app.models.suggestion import STATUS_PROPOSED as SUGGESTION_PROPOSED
@@ -70,13 +68,13 @@ async def get_voting_mode(db: AsyncSession, trip_id: uuid.UUID) -> str:
     ones. The fallback exists so a missing row degrades to the documented default rather than
     to a 500.
     """
-    mode = await db.scalar(
-        select(TripCategorySetting.voting_mode).where(
-            TripCategorySetting.trip_id == trip_id,
-            TripCategorySetting.category == POLL_CATEGORY,
-        )
-    )
-    return mode or "score"
+    from app.services.votes import resolve_voting_mode  # noqa: PLC0415 - see below
+
+    # Delegated to `votes.resolve_voting_mode` since M3 so that polls and suggestions cannot
+    # drift on what "the mode" means or where it is read from. Imported inside the function
+    # rather than at module scope only because `services.polls` is imported very early by the
+    # capability probe; the call itself is unconditional.
+    return await resolve_voting_mode(db, trip_id, POLL_CATEGORY)
 
 
 # --- loading -----------------------------------------------------------------------------------
@@ -285,7 +283,6 @@ async def build_results(db: AsyncSession, poll: Poll, trip: Trip) -> dict:
                     "display_name": user.display_name,
                     "family_id": family.id,
                     "family_color": family.color,
-            "family_color_custom": family.color_custom,
                     "family_color_custom": family.color_custom,
                     "score": row.score if mode == "score" else None,
                     "thumb": row.thumb if mode == "thumbs" else None,
@@ -503,16 +500,16 @@ async def seed_region(
 
 
 # --- comments ------------------------------------------------------------------------------------
+#
+# The thread itself belongs to `app/services/comments.py` (`voting-comments`, M3), which serves
+# polls, suggestions and itinerary items from one implementation. These two names survive as
+# delegates because the poll routes and tests read better naming the subject once.
 
 
 async def comment_count(db: AsyncSession, poll_id: uuid.UUID) -> int:
-    return (
-        await db.scalar(
-            select(func.count())
-            .select_from(Comment)
-            .where(Comment.subject_type == SUBJECT_POLL, Comment.subject_id == poll_id)
-        )
-    ) or 0
+    from app.services.comments import count_for_subject  # noqa: PLC0415 - avoids a cycle
+
+    return await count_for_subject(db, SUBJECT_POLL, poll_id)
 
 
 async def delete_poll_comments(db: AsyncSession, poll_id: uuid.UUID) -> None:
@@ -520,8 +517,6 @@ async def delete_poll_comments(db: AsyncSession, poll_id: uuid.UUID) -> None:
 
     Called in the same transaction as the poll delete — see `models/comment.py`.
     """
-    await db.execute(
-        delete(Comment).where(
-            Comment.subject_type == SUBJECT_POLL, Comment.subject_id == poll_id
-        )
-    )
+    from app.services.comments import delete_for_subject  # noqa: PLC0415 - avoids a cycle
+
+    await delete_for_subject(db, SUBJECT_POLL, poll_id)
