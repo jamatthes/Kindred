@@ -5,6 +5,60 @@ Implements `requirements.md` in this directory. Read `plan/architecture.md` and
 feature owns the suggestion record and its status *field*; this feature owns the status
 *transitions* and their UI.
 
+> **NOTE (server build, branch `feat/m3-votes-server`):** Phases 1-6 are implemented —
+> migrations, models, schemas, the vote service and router, the comment service and router, and
+> the server tests. Phases 7-11 (web) and 12 (docs/ops handoff) are not. Files:
+> `server/app/models/vote.py`, the soft-delete half of `server/app/models/comment.py`,
+> `server/app/schemas/vote.py`, `server/app/schemas/comment.py`,
+> `server/app/services/votes.py`, `server/app/services/comments.py`,
+> `server/app/services/mentions.py`, `server/app/routers/votes.py`,
+> `server/app/routers/comments.py`, three new dependencies in `deps.py`, plus
+> `suggestion_votes` and `comments.deleted_at` / `deleted_by` in
+> `alembic/versions/0001_schema.py`. Tests: `test_models_vote.py`, `test_schemas_vote.py`,
+> `test_mentions.py`, `test_router_votes.py`, `test_router_comments.py` (112 cases).
+>
+> **The second PROPOSED ADDITION, accepted: `comments.deleted_by`** (uuid, nullable, FK →
+> users `ON DELETE SET NULL`). Phase 5 anticipated this — "hold it in the session/request
+> layer, or add it as a second PROPOSED ADDITION if a server-side check proves necessary across
+> sessions" — and it does prove necessary. "Only the user who performed the delete may undo" is
+> unanswerable from a request-scoped variable the moment the tab closes or the undo arrives from
+> another device, and a rule enforced only while one session happens to be alive is not the rule
+> this document states. It also carries a permission the author/organiser distinction needs: an
+> author whose comment an organiser removed must not be able to put it back.
+>
+> **Deviations from this doc, and why:**
+> - **The full thread implementation replaced `polls`' own.** `plan/architecture.md` promised
+>   this when polls shipped the first thread; `/polls/{id}/comments` survives as a thin delegate
+>   for a caller that already knows its subject, so a poll thread now gets mentions, soft delete
+>   and undo without behaving differently from a suggestion thread.
+> - **`TallyOut` carries four fields this doc's response sketch does not**, each needed to
+>   implement the mode-change rules *honestly* rather than to add features: `suggestion_id` (so
+>   the broadcast frame and the REST body are the same object), `unclear` (a stored 5 read in
+>   thumbs mode is neither camp, and rounding it would invent an opinion), and `converted` /
+>   `counted` on each voter (so a converted score is never passed off as a genuine thumbs vote,
+>   and a thumb under score voting is visibly uncounted). `insight` is also added, matching
+>   `polls`' precedent and this doc's own instruction that the widgets take `insight` as their
+>   title prop.
+> - **`VoteSummaryOut` on the suggestion list is the aggregate only** — no `voters`, no
+>   `not_voted`. Fetching every voter for every row of a list that displays none of them would
+>   be an N+1 in aggregate form; the panel asks `GET /suggestions/{id}/votes` for the full
+>   shape. Both are computed by the same functions, and a test asserts a row and a panel agree
+>   after a mode change.
+> - **`SuggestionStatusUpdate` gains an optional `expected_status`.** This doc's edge-case table
+>   requires "the loser gets `409` with the current status" when two admins race, and nothing in
+>   the request could express what the loser believed. Optional, so a script or a retry that
+>   does not care simply omits it.
+> - **`GET /me/pending-votes` takes no `trip_id`.** v1 resolves the single active trip
+>   server-side in one place (`deps.active_trip`), as every other list endpoint in the product
+>   does; when multi-trip UI arrives it becomes a path parameter everywhere at once.
+> - **The retention sweep is lazy, not scheduled.** It runs from the thread read, which is the
+>   pattern `foundation` already uses for expired sessions and login attempts: this deployment
+>   is one container on a home server, and a cron entry that has to be installed separately is a
+>   cron entry that will not exist on somebody's machine.
+> - **`comments.deleted_at` filtering changed the poll comment count.** A soft-deleted comment
+>   no longer counts towards a poll's or a suggestion's badge, which is a behaviour change to
+>   `polls` and the right one — the badge counts what a reader would find in the thread.
+
 ---
 
 ## Data model

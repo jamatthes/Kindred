@@ -10,18 +10,18 @@ Prerequisites: `foundation`, `families`, and `map-suggestions` are complete.
 
 ## Phase 1 — Migrations
 
-- [ ] Confirm `suggestion_votes` matches `plan/architecture.md`; create it if `foundation`
+- [x] Confirm `suggestion_votes` matches `plan/architecture.md`; create it if `foundation`
       did not: `id`, `suggestion_id` (FK, indexed), `user_id` (FK), `score` (int, nullable),
       `thumb` (varchar, nullable), `created_at`, `updated_at`.
-- [ ] Add the unique constraint on `(suggestion_id, user_id)` — this is what makes one-vote-
+- [x] Add the unique constraint on `(suggestion_id, user_id)` — this is what makes one-vote-
       per-user structural rather than a race-prone application check.
-- [ ] Add check constraints: `score BETWEEN 0 AND 10`, `thumb IN ('up','down')`, and
+- [x] Add check constraints: `score BETWEEN 0 AND 10`, `thumb IN ('up','down')`, and
       `(score IS NULL) <> (thumb IS NULL)`.
-- [ ] Confirm `comments` matches `architecture.md`; create it if absent.
-- [ ] **PROPOSED ADDITION** — add `comments.deleted_at` (timestamptz, nullable, default null).
+- [x] Confirm `comments` matches `architecture.md`; create it if absent.
+- [x] **PROPOSED ADDITION** — add `comments.deleted_at` (timestamptz, nullable, default null).
       Rationale is in `design.md`; do not skip it, the undo pattern depends on it.
-- [ ] Add a partial index on `(subject_type, subject_id, created_at) WHERE deleted_at IS NULL`.
-- [ ] Run `alembic upgrade head` then `alembic downgrade -1` to confirm the migration reverses.
+- [x] Add a partial index on `(subject_type, subject_id, created_at) WHERE deleted_at IS NULL`.
+- [x] Run `alembic upgrade head` then `alembic downgrade -1` to confirm the migration reverses.
 
 `Verify:` `alembic upgrade head` succeeds on an empty database; in psql, an attempt to insert
 two votes for the same `(suggestion_id, user_id)` fails on the unique constraint, and an
@@ -31,14 +31,14 @@ insert with both `score` and `thumb` set fails on the check constraint.
 
 ## Phase 2 — Models
 
-- [ ] Add `server/app/models/vote.py` with the `SuggestionVote` model and relationships to
+- [x] Add `server/app/models/vote.py` with the `SuggestionVote` model and relationships to
       `Suggestion` and `User`.
-- [ ] Add `server/app/models/comment.py` with the `Comment` model. Because `subject_id` is
+- [x] Add `server/app/models/comment.py` with the `Comment` model. Because `subject_id` is
       polymorphic with no FK, add a module-level docstring stating that every read and write
       path must verify subject ownership explicitly.
-- [ ] Add a default query helper that filters `deleted_at IS NULL`, and make it the obvious
+- [x] Add a default query helper that filters `deleted_at IS NULL`, and make it the obvious
       path so a raw query is the exception rather than the norm.
-- [ ] Add `resolve_voting_mode(trip_id, category)` reading `trip_category_settings`. Never
+- [x] Add `resolve_voting_mode(trip_id, category)` reading `trip_category_settings`. Never
       denormalise the mode onto a vote row — always derive.
 
 `Verify:` `pytest server/tests/test_models_vote.py server/tests/test_models_comment.py` passes,
@@ -48,15 +48,15 @@ including a test that the default comment query excludes soft-deleted rows.
 
 ## Phase 3 — Schemas
 
-- [ ] Add `server/app/schemas/vote.py`: `VoteIn` (exactly one of `score`/`thumb`),
+- [x] Add `server/app/schemas/vote.py`: `VoteIn` (exactly one of `score`/`thumb`),
       `TallyOut` (mode, count, eligible_count, average, distribution, up/down/none, my_vote,
       voters, not_voted), `PendingVotesOut`.
-- [ ] Add `server/app/schemas/comment.py`: `CommentCreate`, `CommentUpdate`, `CommentOut`
+- [x] Add `server/app/schemas/comment.py`: `CommentCreate`, `CommentUpdate`, `CommentOut`
       (with `can_edit` / `can_delete` computed server-side), `CommentListParams`.
-- [ ] Enforce a body length cap (target 4000 chars) in the schema.
-- [ ] Add the mention parser in `server/app/services/mentions.py`: extract uuids from
+- [x] Enforce a body length cap (target 4000 chars) in the schema.
+- [x] Add the mention parser in `server/app/services/mentions.py`: extract uuids from
       `@[Display Name](user:<uuid>)`, return the set, and expose a diff helper for edits.
-- [ ] Unit-test the parser: multiple mentions, malformed markup, a uuid that is not a trip
+- [x] Unit-test the parser: multiple mentions, malformed markup, a uuid that is not a trip
       member, duplicate mentions of the same user, and a mention of the author.
 
 `Verify:` `pytest server/tests/test_schemas_vote.py server/tests/test_mentions.py` passes,
@@ -66,23 +66,23 @@ including rejection of a `VoteIn` carrying both `score` and `thumb`.
 
 ## Phase 4 — Vote service and router
 
-- [ ] Add `server/app/services/votes.py` with `upsert_vote`, `clear_vote`, and `get_tally`.
-- [ ] `upsert_vote` resolves the category mode, rejects a mismatched field with `422`, and
+- [x] Add `server/app/services/votes.py` with `upsert_vote`, `clear_vote`, and `get_tally`.
+- [x] `upsert_vote` resolves the category mode, rejects a mismatched field with `422`, and
       writes via a database upsert on the unique constraint, clearing the opposite column in
       the same statement so the check constraint holds after a mode change.
-- [ ] `get_tally` computes count, eligible_count, average and distribution (score) or
+- [x] `get_tally` computes count, eligible_count, average and distribution (score) or
       up/down/none (thumbs), plus attributed `voters` and the `not_voted` list. Never fold
       "not voted" into the denominator — it is reported separately.
-- [ ] Implement the mode-change display rules from `design.md`: score → thumbs converts by
+- [x] Implement the mode-change display rules from `design.md`: score → thumbs converts by
       threshold and labels the conversion; thumbs → score shows those users as **not yet
       voted** and never fabricates a number.
-- [ ] Add `get_pending_votes(user, trip)` excluding rejected suggestions and, by default, the
+- [x] Add `get_pending_votes(user, trip)` excluding rejected suggestions and, by default, the
       caller's own.
-- [ ] Add `server/app/routers/votes.py`: `PUT`/`DELETE /api/v1/suggestions/{id}/vote`,
+- [x] Add `server/app/routers/votes.py`: `PUT`/`DELETE /api/v1/suggestions/{id}/vote`,
       `GET /api/v1/suggestions/{id}/votes`, `GET /api/v1/me/pending-votes`.
-- [ ] `require_member` plus `require_stage("planning","holiday")` on mutations; `GET` works in
+- [x] `require_member` plus `require_stage("planning","holiday")` on mutations; `GET` works in
       every stage.
-- [ ] Broadcast `suggestion.vote.updated` to the trip room, **excluding `my_vote`** from the payload.
+- [x] Broadcast `suggestion.vote.updated` to the trip room, **excluding `my_vote`** from the payload.
 
 `Verify:` Start the API and use `/docs`: `PUT` a score vote and confirm the tally; `PUT` again
 with a different score and confirm the count stays at 1; `PUT` a `thumb` on a score-mode
@@ -92,27 +92,27 @@ category and confirm `422`; `DELETE` the vote and confirm the user moves into `n
 
 ## Phase 5 — Comment service and router
 
-- [ ] Add `server/app/services/comments.py` with `list_thread`, `create`, `update`,
+- [x] Add `server/app/services/comments.py` with `list_thread`, `create`, `update`,
       `soft_delete`, `undo_delete`, and a `verify_subject_access(subject_type, subject_id, user)`
       helper that resolves the subject's trip and confirms membership.
-- [ ] Call `verify_subject_access` on **every** path — there is no FK to protect this.
-- [ ] `create` parses mentions and inserts one `notifications` row per on-trip mentioned user,
+- [x] Call `verify_subject_access` on **every** path — there is no FK to protect this.
+- [x] `create` parses mentions and inserts one `notifications` row per on-trip mentioned user,
       excluding the author, with a deep-link payload.
-- [ ] `update` sets `edited_at`, re-parses mentions, and notifies only newly added ones.
-- [ ] `soft_delete` sets `deleted_at`; `undo_delete` clears it, permitted only to the deleting
+- [x] `update` sets `edited_at`, re-parses mentions, and notifies only newly added ones.
+- [x] `soft_delete` sets `deleted_at`; `undo_delete` clears it, permitted only to the deleting
       user and only inside the retention window, else `404`.
-- [ ] Record who performed the delete so `undo_delete` can check it (a `deleted_by` column is
+- [x] Record who performed the delete so `undo_delete` can check it (a `deleted_by` column is
       not in the schema — hold it in the session/request layer, or add it as a second
       PROPOSED ADDITION if a server-side check proves necessary across sessions).
-- [ ] Add a maintenance task that hard-deletes rows whose `deleted_at` is older than the
+- [x] Add a maintenance task that hard-deletes rows whose `deleted_at` is older than the
       retention window (target 30 days).
-- [ ] Add `require_comment_author(id)` and `require_can_delete_comment(id)` dependencies in
+- [x] Add `require_comment_author(id)` and `require_can_delete_comment(id)` dependencies in
       `deps.py` — the latter allows author, family admin of the author's family, or main admin.
-- [ ] Add `server/app/routers/comments.py` with `GET`, `POST`, `PATCH`, `DELETE`, and
+- [x] Add `server/app/routers/comments.py` with `GET`, `POST`, `PATCH`, `DELETE`, and
       `POST /{id}/undo-delete`; compute `can_edit`/`can_delete` per calling user in the response.
-- [ ] Broadcast `comment.created` / `.updated` / `.deleted`, and `notification.new` per mention.
+- [x] Broadcast `comment.created` / `.updated` / `.deleted`, and `notification.new` per mention.
       An undo-delete broadcasts `comment.created` so clients reconcile by `id`.
-- [ ] Register both routers in `main.py`.
+- [x] Register both routers in `main.py`.
 
 `Verify:` In `/docs`: post a comment containing a mention and confirm a `notifications` row
 appears for the mentioned user; `PATCH` it and confirm `edited_at` is set; `DELETE` it and
@@ -122,23 +122,23 @@ confirm `GET` no longer lists it; `POST .../undo-delete` and confirm it returns.
 
 ## Phase 6 — Server tests
 
-- [ ] Vote happy paths in both modes; change a vote; clear a vote.
-- [ ] Unique-constraint test: concurrent votes from the same user yield exactly one row.
-- [ ] Mode-mismatch `422`; mode-change behaviour in both directions, asserting explicitly that
+- [x] Vote happy paths in both modes; change a vote; clear a vote.
+- [x] Unique-constraint test: concurrent votes from the same user yield exactly one row.
+- [x] Mode-mismatch `422`; mode-change behaviour in both directions, asserting explicitly that
       **thumbs → score fabricates no numeric value** and lists those users as not voted.
-- [ ] Tally correctness: average, distribution, up/down/none, and `not_voted` for a suggestion
+- [x] Tally correctness: average, distribution, up/down/none, and `not_voted` for a suggestion
       with partial participation.
-- [ ] `pending-votes` excludes rejected suggestions and own suggestions by default.
-- [ ] Comment permission matrix: author edits; non-author edit returns `403` at every role
+- [x] `pending-votes` excludes rejected suggestions and own suggestions by default.
+- [x] Comment permission matrix: author edits; non-author edit returns `403` at every role
       including main admin (nobody edits another's words); author deletes; family admin deletes
       within family; family admin outside family returns `403`; main admin deletes any.
-- [ ] Subject-ownership test: commenting on a subject in another trip returns `403`.
-- [ ] Mention tests: off-trip uuid notifies nobody; self-mention notifies nobody; edit notifies
+- [x] Subject-ownership test: commenting on a subject in another trip returns `403`.
+- [x] Mention tests: off-trip uuid notifies nobody; self-mention notifies nobody; edit notifies
       only newly added mentions.
-- [ ] Undo tests: within window succeeds; outside window `404`; by a different user `404`.
-- [ ] Stage-guard tests: in `end` stage every mutation is rejected while `GET` tally and
+- [x] Undo tests: within window succeeds; outside window `404`; by a different user `404`.
+- [x] Stage-guard tests: in `end` stage every mutation is rejected while `GET` tally and
       thread still succeed.
-- [ ] Status-transition tests for the admin controls, including a `409` when two admins race.
+- [x] Status-transition tests for the admin controls, including a `409` when two admins race.
 
 `Verify:` `pytest server/tests/test_router_votes.py server/tests/test_router_comments.py`
 passes with the full permission matrix and mode-change cases green.
@@ -259,3 +259,37 @@ login → vote → comment → confirm path against the compose stack.
 
 `Verify:` `plan/architecture.md` lists `comments.deleted_at`, both docs in this directory match
 shipped behaviour, and the cleanup task appears in the deploy README.
+
+## Hand-off notes (server, M3)
+
+- **The web agent's contract.** `PUT`/`DELETE /api/v1/suggestions/{id}/vote` and
+  `GET /api/v1/suggestions/{id}/votes` all return the same `TallyOut`;
+  `GET /api/v1/me/pending-votes` returns `{count, suggestion_ids}` (no `trip_id` parameter —
+  the active trip is resolved server-side, as everywhere else in v1). Comments are
+  `GET/POST /api/v1/comments` with `subject_type` + `subject_id`, then
+  `PATCH`/`DELETE /api/v1/comments/{id}` and `POST /api/v1/comments/{id}/undo-delete`.
+  Events: `suggestion.vote.updated` (payload `{suggestion_id, tally}`, `tally.my_vote` always
+  null — merge it with the vote you know you cast), `comment.created` / `.updated` /
+  `.deleted`, and `notification.new` to the mentioned user's own socket. **An undo-delete
+  emits `comment.created`**, so reconcile by `id` and a restore lands back in place for free.
+- **Every capability flag is on the response.** `can_edit` is author-only at every role;
+  `can_delete` adds organisers and the author's family head or spouse. Never re-derive either.
+- **The mode-change display rules are already applied server-side**, in both the full tally and
+  the list summary. A voter carrying `converted: true` must be labelled as converted in the UI;
+  a voter in `not_voted` with `has_unusable_vote: true` voted in the other mode and should be
+  prompted to re-vote, never shown as a number. `unclear` is a stored 5 under thumbs voting and
+  belongs in the strip as its own proportion, exactly as `none` does.
+- **The undo affordance is the client's ten seconds**; the server's window is thirty days and
+  is not a user-facing feature. Do not shorten the client timer to match anything server-side,
+  and do not lengthen it — an undo affordance still on screen after a minute is furniture.
+- **`itinerary-timeline` (M4)** inherits a working thread: `subject_type = "itinerary_item"` is
+  already in the schema's `Literal` and in the check constraint, and
+  `services/comments.py::_subject_trip_id` has the branch stubbed to `None` — add the
+  `itinerary_items` lookup there and the thread works with no other change. The same module's
+  `delete_for_subject` is the cascade to call when an item is deleted.
+- **`notifications` (M6)** consumes `type = "mention"` rows with
+  `{subject_type, subject_id, comment_id, author_name, deep_link}`. They accumulate from M3
+  onward whether or not the bell exists.
+- **The one-query budget on the suggestion list is asserted by a test.** Adding a field that
+  needs per-row data means extending the pre-grouped joins in
+  `services/suggestions.py::_base_query`, not adding a lookup beside them.
