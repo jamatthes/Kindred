@@ -18,6 +18,17 @@ from app.models.comment import (
     Notification,
     visible_comments,
 )
+from app.models.distance import (
+    DEFAULT_MODE,
+    DISTANCE_FAILED,
+    DISTANCE_NO_HOME,
+    DISTANCE_NO_ROUTE,
+    DISTANCE_OK,
+    DISTANCE_PENDING,
+    DISTANCE_SETTLED,
+    DISTANCE_STATUSES,
+    DistanceCache,
+)
 from app.models.family import (
     FAMILY_MANAGER_ROLES,
     FAMILY_ROLES,
@@ -104,6 +115,15 @@ from app.models.vote import (
 from app.models.user import THEME_PREFS, User, UserSettings
 
 __all__ = [
+    "DEFAULT_MODE",
+    "DISTANCE_FAILED",
+    "DISTANCE_NO_HOME",
+    "DISTANCE_NO_ROUTE",
+    "DISTANCE_OK",
+    "DISTANCE_PENDING",
+    "DISTANCE_SETTLED",
+    "DISTANCE_STATUSES",
+    "DistanceCache",
     "COMMENT_RETENTION",
     "NOTIFICATION_MENTION",
     "SUBJECT_ITINERARY_ITEM",

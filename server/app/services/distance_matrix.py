@@ -1,14 +1,22 @@
 """Google Distance Matrix client — driving time/distance between (origin, destination) pairs.
 
-**Pre-built ahead of the route and the DB** (`plan/features/distances/tasks.md`, M3), same
-pattern as `app.services.link_preview` and `app.services.boundaries`: this module is
-deliberately route-free *and* deliberately DB-free. It never imports a model, never opens a
-session, and never touches `distance_cache`. The M3 feature agent wires
-:class:`DistanceMatrixService` into `queue_for_suggestion` / `queue_for_family` /
-`recompute` (`plan/features/distances/design.md` > "Background task") and implements a
-DB-backed :class:`CacheProtocol` over the `route_cache`/`distance_cache` tables; this file owns
-only the batching, caching-shape, and Google-calling behaviour so it can be reviewed and tested
-in isolation, per the isolation brief this module was built under.
+**This is the only module in the server that talks to Distance Matrix, and it is deliberately
+not the one the read path imports.** `plan/features/distances/design.md`'s HARD INVARIANT —
+"a request serving a page, a list, a card, or a panel never calls Distance Matrix" — is
+enforced here structurally rather than by discipline:
+
+* `app/services/distance_matrix.py` (this file) calls Google. Route-free and DB-free: it never
+  imports a model, never opens a session, and never touches `distance_cache`.
+* `app/services/distances.py` is the **read** half. It imports neither this module nor any
+  other Google client, and `tests/test_service_distances_read.py` asserts that by walking its
+  import graph — so a future edit that reaches for a live value from a render path fails a
+  test rather than quietly spending the API budget.
+* `app/services/distance_tasks.py` is the **write** half, and the only importer of this module.
+  It runs from background tasks alone.
+
+The file was named `distances.py` while it was a pre-build (`plan/features/distances/tasks.md`,
+M3) and was renamed when the feature landed, so the read module could take that name and the
+separation above could be a fact about the import graph.
 
 **HARD INVARIANT — never call Google in a render path** (`CLAUDE.md`,
 `plan/architecture.md`, restated in `plan/features/distances/design.md`). This module makes
@@ -96,9 +104,14 @@ DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
 
 #: `design.md`'s batching strategy: "Distance Matrix caps destinations per request (25 at time
 #: of writing) and total elements per request (100)". Origins share the same 25 cap.
-MAX_ORIGINS_PER_REQUEST = 25
-MAX_DESTINATIONS_PER_REQUEST = 25
-MAX_ELEMENTS_PER_REQUEST = 100
+#:
+#: Read from `core/config.py` rather than hard-coded here (`distances/tasks.md` Phase 2: "keep
+#: the limits as named settings in `core/config.py`, not literals scattered through the
+#: service"), so a change at Google's end is one edit in one place. Bound at import so the
+#: values a test asserts against are the values a request uses.
+MAX_ORIGINS_PER_REQUEST = settings.distance_max_origins
+MAX_DESTINATIONS_PER_REQUEST = settings.distance_max_destinations
+MAX_ELEMENTS_PER_REQUEST = settings.distance_max_elements
 
 REQUEST_TIMEOUT_SECONDS = 8.0
 

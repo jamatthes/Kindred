@@ -84,6 +84,11 @@ COMMENT_SUBJECTS = ("poll", "suggestion", "itinerary_item")
 #: points. The type drives the pin icon and the grouping rule, not the permissions.
 SUGGESTION_TYPES = ("region", "accommodation", "activity", "meal")
 
+#: `distance_cache.status`. **`no_home` is deliberately absent**: it is a presentation state
+#: derived from a family having no coordinates, not a row that exists — a family with no home
+#: has no `distance_cache` row at all.
+DISTANCE_STATUSES = ("pending", "ok", "no_route", "failed")
+
 #: `suggestions.status`. `scheduled` is set only by `itinerary-timeline` when the suggestion is
 #: placed on a day; `rejected` is a terminal side exit that `proposed` can be returned to.
 SUGGESTION_STATUSES = ("proposed", "shortlisted", "approved", "scheduled", "rejected")
@@ -682,6 +687,50 @@ def upgrade() -> None:
     )
     op.create_index("ix_suggestion_votes_user_id", "suggestion_votes", ["user_id"], unique=False)
 
+    # One row per (family home, suggestion) pair, computed once and cached **forever**: a
+    # driving distance between two fixed points does not change, which is the whole premise of
+    # the cache. Only a pin move past the epsilon or a home change invalidates one; nothing is
+    # ever expired by age.
+    op.create_table(
+        "distance_cache",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("family_id", sa.UUID(), nullable=False),
+        sa.Column("suggestion_id", sa.UUID(), nullable=False),
+        # Null unless `status = 'ok'`. A `no_route` row has no duration because there is no
+        # route, not because nobody has looked yet — which is exactly what `status` exists to
+        # distinguish.
+        sa.Column("duration_s", sa.Integer(), nullable=True),
+        sa.Column("distance_m", sa.Integer(), nullable=True),
+        # The PROPOSED ADDITION `distances/design.md` argues for at length, and the single most
+        # important column in this table. Without it, a pair that genuinely has no driving route
+        # — a UK home and a Greek island — is indistinguishable from one nobody has computed,
+        # so every list render would conclude "not computed" and re-queue a paid API call for a
+        # pair that will never resolve. A negative result is an answer, and this is where it
+        # gets to be one.
+        sa.Column("status", sa.String(length=16), server_default="pending", nullable=False),
+        # The second PROPOSED ADDITION: transient failures must be retried, but not for ever.
+        # Without a bound, one bad afternoon at the API becomes an unbounded retry storm
+        # against a paid endpoint.
+        sa.Column("attempts", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("mode", sa.String(length=16), server_default="driving", nullable=False),
+        sa.Column("computed_at", sa.DateTime(timezone=True), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["family_id"], ["families.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["suggestion_id"], ["suggestions.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        # The pair *is* the identity, and the upsert depends on this constraint by name.
+        sa.UniqueConstraint(
+            "family_id", "suggestion_id", name="uq_distance_cache_family_suggestion"
+        ),
+        sa.CheckConstraint(f"status IN {DISTANCE_STATUSES}", name="ck_distance_cache_status"),
+    )
+    # The read path filters on this constantly: "this suggestion's rows, and which are usable".
+    op.create_index(
+        "ix_distance_cache_suggestion_status", "distance_cache", ["suggestion_id", "status"]
+    )
+    # The home-change invalidation sweep resets one family's rows and nobody else's.
+    op.create_index("ix_distance_cache_family_id", "distance_cache", ["family_id"])
+
     # Polymorphic, so it carries no foreign key to its subject and cascade is the service
     # layer's job — deleting a poll deletes its comments in the same transaction.
     op.create_table(
@@ -795,6 +844,10 @@ def downgrade() -> None:
 
     op.drop_index("ix_notifications_recipient_created", table_name="notifications")
     op.drop_table("notifications")
+
+    op.drop_index("ix_distance_cache_family_id", table_name="distance_cache")
+    op.drop_index("ix_distance_cache_suggestion_status", table_name="distance_cache")
+    op.drop_table("distance_cache")
 
     op.drop_index("ix_comments_thread_live", table_name="comments")
     op.drop_index("ix_comments_subject", table_name="comments")
