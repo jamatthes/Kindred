@@ -3,6 +3,62 @@
 Implements `requirements.md` in this directory. Read `plan/architecture.md` (especially the
 Google API usage table and cost rules) and `plan/design-system.md` first.
 
+> **NOTE (server build, branch `feat/m3-distances-server`):** Phases 1-7 are implemented —
+> migration, models, schemas, the read service, the Google client and background task, the
+> router, and the server tests. Phases 8-12 (web) are not. Files:
+> `server/app/models/distance.py`, `server/app/schemas/distance.py`,
+> `server/app/services/distances.py` (**read only**),
+> `server/app/services/distance_tasks.py` (the write half),
+> `server/app/services/distance_matrix.py` (the pre-built Google client, moved — see below),
+> `server/app/routers/distances.py`, four new settings in `core/config.py`, and
+> `distance_cache` in `alembic/versions/0001_schema.py`. Tests:
+> `test_service_distances_read.py`, `test_service_distances_write.py`,
+> `test_router_distances.py` (56 cases), alongside the pre-build's own
+> `test_distance_matrix.py`.
+>
+> **The hard invariant is enforced in two places, both of which fail loudly.**
+> `test_service_distances_read.py::test_the_read_module_cannot_reach_google` walks the read
+> module's transitive import graph and its import statements; `test_router_distances.py::
+> test_no_render_path_ever_calls_google` drives every read endpoint against a client that raises
+> if called. Neither should ever be relaxed — the fix for a failure is to move the offending
+> code into `distance_tasks.py`.
+>
+> **Deviations from this doc, and why:**
+> - **The Google client is `app/services/distance_matrix.py`, not `services/google.py`.**
+>   `tasks.md` Phase 5 says to put it in `google.py`, but Phase 4 also demands that the read
+>   service "must not import or reference the Google client at all… so this is structurally
+>   true rather than a matter of discipline". Those two are satisfiable together only if the
+>   client has its own module and `distances.py` is the read half — which is also what the
+>   pre-build already built. The file was renamed from `services/distances.py` (its pre-build
+>   name) so the read module could take that name; the module itself was not rewritten.
+> - **`queue_for_*` do not chunk; the client does.** `tasks.md` Phase 5 asks the task layer to
+>   chunk. The pre-built `DistanceMatrixService` already chunks internally at the configured
+>   caps and its own tests cover the boundaries, so re-chunking above it would be a second
+>   implementation of one rule. The caps are now named settings in `core/config.py` and the
+>   client reads them, so the "no literals in the service" requirement holds in both layers.
+> - **`GET /distances` takes no `trip_id`.** v1 resolves the single active trip server-side in
+>   one place (`deps.active_trip`), as every other list endpoint does.
+> - **The `pending` guard is a lease, not a bare status check.** `design.md` offers "an advisory
+>   lock or a `pending` guard". A bare guard has a failure mode the doc does not mention: a task
+>   that dies mid-batch leaves its pairs `pending` and permanently un-reclaimable. So a claim
+>   owns its pairs for `settings.distance_claim_lease_seconds` (60), after which it is treated
+>   as abandoned. This is also why an immediate retry after a transient failure does not fire —
+>   the next trigger past the lease does.
+> - **A move and a home change force the re-claim.** Both are invalidations, so they reset even
+>   settled rows, per this doc's own edge-case table ("existing rows for that suggestion reset to
+>   `pending`"). A create does not, because there is nothing to reset. That makes force-recompute
+>   not quite "the only path that retries a settled negative" as written here — it is the only
+>   path that retries one *without the underlying geometry having changed*, which is the property
+>   that actually matters for the API budget.
+> - **`SuggestionOut.distances` is now populated**, per the NOTE under `GET /distances`: the list
+>   embeds the **caller's own family only** (a lighter payload, and what the distance column
+>   renders), and `GET /suggestions/{id}` embeds every family's, because that is the panel.
+>   `DistanceOut` is defined once, here, and imported by `schemas/suggestion.py` — two classes
+>   of the same name is how a chip in the list and a chip in the panel end up disagreeing.
+> - **The retention of `distance_cache.mode`**: stored and always `driving` in v1, as specified.
+>   No endpoint accepts a mode; adding walking or transit later is a column value, not a schema
+>   change.
+
 ---
 
 ## HARD INVARIANT — never call Google in a render path
