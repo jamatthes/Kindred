@@ -127,6 +127,19 @@ export function Styleguide() {
           />
         </Card>
 
+        <Card
+          tag="SpreadDots"
+          sub="Long labels ellipsize (with a title) — they never clip mid-glyph"
+        >
+          <SpreadDots
+            insight="The polls page composes its labels; they must survive a narrow block"
+            options={[
+              { label: 'Cornwall · spread 0.7', scores: [7, 8, 8, 9, 9, 10] },
+              { label: 'Lake District · spread 3.4 · split', scores: [1, 2, 3, 8, 9, 10] },
+            ]}
+          />
+        </Card>
+
         <Card tag="HeatMatrix" sub="Members × options — the spreadsheet this replaces">
           <HeatMatrix
             insight="Mei is the only one cool on Cornwall"

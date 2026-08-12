@@ -5,11 +5,16 @@
  * `baseline` prop, no `yMin` prop, and no way to pass one in — the domain is hardcoded to
  * `[0, scaleMax]` below. `AvgBar.test.tsx` asserts this both at the type level and by
  * checking rendered bar geometry for a dataset that never gets near zero.
+ *
+ * Layout: a row is a CSS grid — [HTML label] [SVG track] [HTML value]. No text is drawn
+ * inside the SVG. The track SVG has no `viewBox`: bar widths are percentages of the track
+ * and heights are real pixels, so the geometry stretches with the column while nothing
+ * about it scales the page's type. Labels ellipsize (with a `title`) rather than clip.
  */
 
 import type { ChartBaseProps } from './types'
 import { ChartEmptyState, VisuallyHidden } from './a11y'
-import { clamp, linearScale } from './scales'
+import { clamp } from './scales'
 import './charts.css'
 
 export type AvgBarItem = {
@@ -33,11 +38,8 @@ export type AvgBarProps = ChartBaseProps & {
   emphasize?: number
 }
 
-const CHART_W = 340
-const LABEL_W = 104
-const ROW_H = 34
+/** Bar height in CSS pixels. Fixed, because the track no longer scales with the column. */
 const BAR_H = 18
-const PAD = 8
 
 export function AvgBar({ insight, items, scaleMax = 10, ariaSummary, emphasize }: AvgBarProps) {
   if (items.length === 0) {
@@ -47,10 +49,6 @@ export function AvgBar({ insight, items, scaleMax = 10, ariaSummary, emphasize }
   const leadIndex =
     emphasize ??
     items.reduce((best, item, index, all) => (item.value > all[best].value ? index : best), 0)
-
-  const trackW = CHART_W - LABEL_W - PAD
-  const scale = linearScale([0, scaleMax], [0, trackW])
-  const height = items.length * ROW_H + 22
 
   const summary =
     ariaSummary ??
@@ -68,44 +66,41 @@ export function AvgBar({ insight, items, scaleMax = 10, ariaSummary, emphasize }
   return (
     <figure className="k-chart" role="img" aria-label={summary}>
       <figcaption className="k-chart__insight">{insight}</figcaption>
-      <svg className="k-chart__viz" viewBox={`0 0 ${CHART_W} ${height}`} aria-hidden="true">
-        <line
-          className="k-chart__axis"
-          x1={LABEL_W}
-          y1={4}
-          x2={LABEL_W}
-          y2={height - 18}
-        />
+      <div className="k-chart__rows" aria-hidden="true">
         {items.map((item, index) => {
-          const y = index * ROW_H + 6
-          const width = Math.max(0, scale(clamp(item.value, 0, scaleMax)))
+          // Zero-based by construction: the rect's x is 0 and its width is the value's
+          // share of the axis. There is no other number that could be put here.
+          const percent = (clamp(item.value, 0, scaleMax) / scaleMax) * 100
           const isLead = index === leadIndex
           return (
-            <g key={item.label}>
-              <text className="k-chart__label" x={LABEL_W - PAD} y={y + BAR_H - 4} textAnchor="end">
+            <div className="k-chart__row" key={item.label}>
+              <span className="k-chart__label" title={item.label}>
                 {item.label}
-              </text>
-              <rect
-                className={isLead ? 'k-chart__bar' : 'k-chart__bar k-chart__bar--dim'}
-                x={LABEL_W}
-                y={y}
-                width={width}
-                height={BAR_H}
-                rx={3}
-              />
-              <text className="k-chart__value" x={LABEL_W + width + 6} y={y + BAR_H - 4}>
-                {item.value.toFixed(1)}
-              </text>
-            </g>
+              </span>
+              <svg className="k-chart__track" width="100%" height={BAR_H} focusable="false">
+                <line className="k-chart__axis" x1={0} y1={0} x2={0} y2={BAR_H} />
+                <rect
+                  className={isLead ? 'k-chart__bar' : 'k-chart__bar k-chart__bar--dim'}
+                  x={0}
+                  y={0}
+                  width={`${percent}%`}
+                  height={BAR_H}
+                  rx={3}
+                />
+              </svg>
+              <span className="k-chart__value">{item.value.toFixed(1)}</span>
+            </div>
           )
         })}
-        <text className="k-chart__tick" x={LABEL_W} y={height - 4}>
-          0
-        </text>
-        <text className="k-chart__tick" x={LABEL_W + trackW} y={height - 4} textAnchor="end">
-          {scaleMax}
-        </text>
-      </svg>
+        <div className="k-chart__row k-chart__row--ticks">
+          <span />
+          <span className="k-chart__ticks">
+            <span className="k-chart__tick">0</span>
+            <span className="k-chart__tick">{scaleMax}</span>
+          </span>
+          <span />
+        </div>
+      </div>
       <VisuallyHidden>
         <table>
           <caption>{insight}</caption>

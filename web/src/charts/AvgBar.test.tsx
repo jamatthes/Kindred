@@ -30,11 +30,12 @@ describe('AvgBar — honesty rules', () => {
       />,
     )
     const bars = container.querySelectorAll('rect.k-chart__bar, rect.k-chart__bar--dim')
-    const axis = container.querySelector('line.k-chart__axis')
-    expect(axis).not.toBeNull()
-    const axisX = axis!.getAttribute('x1')
+    const axes = container.querySelectorAll('line.k-chart__axis')
+    expect(axes.length).toBe(bars.length)
+    expect(bars.length).toBe(2)
+    axes.forEach((axis) => expect(axis.getAttribute('x1')).toBe('0'))
     bars.forEach((bar) => {
-      expect(bar.getAttribute('x')).toBe(axisX)
+      expect(bar.getAttribute('x')).toBe('0')
     })
   })
 
@@ -44,10 +45,32 @@ describe('AvgBar — honesty rules', () => {
     )
     const bar = container.querySelector('rect.k-chart__bar')!
     const axis = container.querySelector('line.k-chart__axis')!
-    const trackWidth = 340 - 104 - 8 // CHART_W - LABEL_W - PAD, mirrors the component constants
-    // Half of scaleMax (10) should be roughly half the track.
-    expect(Number(bar.getAttribute('width'))).toBeCloseTo(trackWidth / 2, 0)
+    // Widths are a percentage of the track, so half of scaleMax is exactly half of it,
+    // whatever the container width happens to be.
+    expect(bar.getAttribute('width')).toBe('50%')
     expect(axis).toBeTruthy()
+  })
+
+  it('renders every label as HTML text, not SVG <text>, so it obeys the type scale', () => {
+    const { container } = render(
+      <AvgBar
+        insight="test"
+        items={[{ label: 'A destination with a very long name indeed', value: 5 }]}
+      />,
+    )
+    expect(container.querySelectorAll('text')).toHaveLength(0)
+    const label = container.querySelector('.k-chart__label')!
+    expect(label.tagName.toLowerCase()).toBe('span')
+    // Long labels ellipsize rather than clip, and the full string stays reachable.
+    expect(label).toHaveAttribute('title', 'A destination with a very long name indeed')
+  })
+
+  it('prints the axis ticks as HTML under the track', () => {
+    const { container } = render(
+      <AvgBar insight="test" items={[{ label: 'A', value: 5 }]} scaleMax={10} />,
+    )
+    const ticks = [...container.querySelectorAll('.k-chart__tick')].map((t) => t.textContent)
+    expect(ticks).toEqual(['0', '10'])
   })
 })
 

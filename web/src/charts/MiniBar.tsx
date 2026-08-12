@@ -6,6 +6,10 @@
  * aspect ratio to target a ~45° average trend slope (honesty rule 3), and — per the
  * edge-case table in `plan/features/design-system/design.md` — refuses to draw a trend
  * line from a single point, rendering the value with `MiniBar` instead.
+ *
+ * Neither draws any text. Both render at their intrinsic pixel size (`k-chart__viz--fixed`)
+ * rather than stretching to the container: a sparkline whose aspect ratio was computed to
+ * target a ~45° slope stops telling the truth the moment a container rescales it.
  */
 
 import type { ChartBaseProps } from './types'
@@ -35,7 +39,13 @@ export function MiniBar({ insight, values, ariaSummary }: MiniBarProps) {
   return (
     <figure className="k-chart" role="img" aria-label={summary}>
       <figcaption className="k-chart__insight">{insight}</figcaption>
-      <svg className="k-chart__viz" viewBox={`0 0 ${width} ${BAR_H}`} aria-hidden="true">
+      <svg
+        className="k-chart__viz k-chart__viz--fixed"
+        viewBox={`0 0 ${width} ${BAR_H}`}
+        width={width}
+        height={BAR_H}
+        aria-hidden="true"
+      >
         {values.map((value, index) => {
           const h = Math.max(0, scale(Math.max(0, value)))
           const x = index * (BAR_W + BAR_GAP)
@@ -108,7 +118,13 @@ export function Sparkline({ insight, values, ariaSummary }: SparklineProps) {
   return (
     <figure className="k-chart" role="img" aria-label={summary}>
       <figcaption className="k-chart__insight">{insight}</figcaption>
-      <svg className="k-chart__viz" viewBox={`0 0 ${width} ${SPARK_H}`} aria-hidden="true">
+      <svg
+        className="k-chart__viz k-chart__viz--fixed"
+        viewBox={`0 0 ${width} ${SPARK_H}`}
+        width={width}
+        height={SPARK_H}
+        aria-hidden="true"
+      >
         <polyline className="k-chart__axis" fill="none" points={points} />
         <circle className="k-chart__dot" cx={xScale(values.length - 1)} cy={yScale(last)} r={2.5} />
       </svg>
