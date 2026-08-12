@@ -7,11 +7,16 @@ the full metadata (``alembic/env.py`` imports this module for exactly that reaso
 from app.models.attachment import ATTACHMENT_SUBJECT_TYPES, Attachment
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.comment import (
+    COMMENT_RETENTION,
     COMMENT_SUBJECTS,
+    NOTIFICATION_MENTION,
     NOTIFICATION_POLL_NUDGE,
+    SUBJECT_ITINERARY_ITEM,
     SUBJECT_POLL,
+    SUBJECT_SUGGESTION,
     Comment,
     Notification,
+    visible_comments,
 )
 from app.models.family import (
     FAMILY_MANAGER_ROLES,
@@ -62,7 +67,6 @@ from app.models.suggestion import (
     STATUS_SCHEDULED,
     STATUS_SHORTLISTED,
     STATUS_TRANSITIONS,
-    SUBJECT_SUGGESTION,
     SUGGESTION_STATUSES,
     SUGGESTION_TYPES,
     TYPE_ACCOMMODATION,
@@ -90,9 +94,26 @@ from app.models.trip import (
     is_owner_of,
 )
 from app.models.trip_organiser import TripOrganiser
+from app.models.vote import (
+    THUMB_DOWN,
+    THUMB_UP,
+    THUMBS_DOWN_FROM_SCORE,
+    THUMBS_UP_FROM_SCORE,
+    SuggestionVote,
+)
 from app.models.user import THEME_PREFS, User, UserSettings
 
 __all__ = [
+    "COMMENT_RETENTION",
+    "NOTIFICATION_MENTION",
+    "SUBJECT_ITINERARY_ITEM",
+    "SUBJECT_SUGGESTION",
+    "SuggestionVote",
+    "THUMB_DOWN",
+    "THUMB_UP",
+    "THUMBS_DOWN_FROM_SCORE",
+    "THUMBS_UP_FROM_SCORE",
+    "visible_comments",
     "EARTH_RADIUS_M",
     "GROUPABLE_CHILD_TYPES",
     "STATUS_APPROVED",

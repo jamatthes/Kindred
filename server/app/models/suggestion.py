@@ -39,6 +39,7 @@ from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.comment import SUBJECT_SUGGESTION as _SUBJECT_SUGGESTION
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -75,9 +76,9 @@ STATUS_TRANSITIONS: dict[str, tuple[str, ...]] = {
     STATUS_SCHEDULED: (),
 }
 
-#: `comments.subject_type` for a suggestion thread. Imported from here so the string appears
-#: once (`voting-comments` reuses it).
-SUBJECT_SUGGESTION = "suggestion"
+#: `comments.subject_type` for a suggestion thread. Re-exported from `models/comment.py`, which
+#: owns the polymorphic vocabulary, so the string is defined exactly once.
+SUBJECT_SUGGESTION = _SUBJECT_SUGGESTION
 
 
 def centroid(geometry: dict[str, Any] | None) -> tuple[float, float] | None:

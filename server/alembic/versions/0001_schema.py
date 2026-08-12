@@ -646,6 +646,42 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
 
+    # One vote per person per suggestion. The unique constraint is what makes that structural
+    # rather than a race-prone application check: voting is an upsert onto it, and two devices
+    # voting at once converge on last-write-wins instead of silently duplicating.
+    op.create_table(
+        "suggestion_votes",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("suggestion_id", sa.UUID(), nullable=False),
+        sa.Column("user_id", sa.UUID(), nullable=False),
+        # Exactly one is populated, per the category's voting mode at the time of casting.
+        # Unlike `poll_scores` — where both may coexist so a mode switch loses nothing — a
+        # suggestion vote is one answer at a time, and `design.md`'s mode-change rules are a
+        # *display* conversion over the stored column rather than a second stored value.
+        sa.Column("score", sa.SmallInteger(), nullable=True),
+        sa.Column("thumb", sa.String(length=8), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["suggestion_id"], ["suggestions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("suggestion_id", "user_id", name="uq_suggestion_votes_suggestion_user"),
+        sa.CheckConstraint(
+            "score IS NULL OR score BETWEEN 0 AND 10", name="ck_suggestion_votes_range"
+        ),
+        sa.CheckConstraint(
+            f"thumb IS NULL OR thumb IN {THUMBS}", name="ck_suggestion_votes_thumb"
+        ),
+        # Exactly one, not "at least one": a row carrying both would be counted twice by two
+        # different tallies and there would be no honest way to say which the voter meant.
+        sa.CheckConstraint(
+            "(score IS NULL) <> (thumb IS NULL)", name="ck_suggestion_votes_one_answer"
+        ),
+    )
+    op.create_index(
+        "ix_suggestion_votes_suggestion_id", "suggestion_votes", ["suggestion_id"], unique=False
+    )
+    op.create_index("ix_suggestion_votes_user_id", "suggestion_votes", ["user_id"], unique=False)
+
     # Polymorphic, so it carries no foreign key to its subject and cascade is the service
     # layer's job — deleting a poll deletes its comments in the same transaction.
     op.create_table(
@@ -658,14 +694,36 @@ def upgrade() -> None:
         # Set on edit, and shown as an "edited" marker: an edit that left no trace would
         # falsify the discussion record.
         sa.Column("edited_at", sa.DateTime(timezone=True), nullable=True),
+        # Soft delete, backing the undo pattern (`voting-comments` design.md). `design-system.md`
+        # mandates undo over confirm for deleting your own comment, and a hard DELETE cannot be
+        # undone — the window would have to live entirely in the client, so a closed tab or a
+        # crash would lose the text irrecoverably and other readers would watch it vanish and
+        # reappear with no server-side truth. A timestamp makes undo a real server operation.
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        # The second PROPOSED ADDITION `voting-comments/tasks.md` Phase 5 anticipated: "only the
+        # user who performed the delete may undo" is unanswerable from a request-scoped variable
+        # once the tab is closed or the undo arrives on another device, and a rule enforced only
+        # while the session happens to be alive is not the rule the doc states. `ON DELETE SET
+        # NULL`, so removing an account leaves the comment soft-deleted rather than resurrecting
+        # it or deleting the row.
+        sa.Column("deleted_by", sa.UUID(), nullable=True),
         *_timestamps(),
         sa.ForeignKeyConstraint(["author_id"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["deleted_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.CheckConstraint(
             f"subject_type IN {COMMENT_SUBJECTS}", name="ck_comments_subject_type"
         ),
     )
     op.create_index("ix_comments_subject", "comments", ["subject_type", "subject_id"])
+    # Partial, because every thread read filters `deleted_at IS NULL` and soft-deleted rows are
+    # a rounding error the index should not carry.
+    op.create_index(
+        "ix_comments_thread_live",
+        "comments",
+        ["subject_type", "subject_id", "created_at"],
+        postgresql_where=sa.text("deleted_at IS NULL"),
+    )
 
     # --- platform ------------------------------------------------------------------------------
     # Every file behind a row here has been re-encoded server-side with all metadata dropped,
@@ -738,8 +796,13 @@ def downgrade() -> None:
     op.drop_index("ix_notifications_recipient_created", table_name="notifications")
     op.drop_table("notifications")
 
+    op.drop_index("ix_comments_thread_live", table_name="comments")
     op.drop_index("ix_comments_subject", table_name="comments")
     op.drop_table("comments")
+
+    op.drop_index("ix_suggestion_votes_user_id", table_name="suggestion_votes")
+    op.drop_index("ix_suggestion_votes_suggestion_id", table_name="suggestion_votes")
+    op.drop_table("suggestion_votes")
 
     # The poll_options -> suggestions link goes before `suggestions` itself.
     op.drop_constraint("fk_poll_options_suggestion_id", "poll_options", type_="foreignkey")
