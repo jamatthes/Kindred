@@ -405,6 +405,7 @@ async def update_suggestion(
     if moved:
         await service.queue_distance_recompute(db, row.suggestion, background, moved=True)
 
+    own_family = await _own_family_id(db, user, current)
     out = await _out(
         db,
         row,
@@ -412,6 +413,20 @@ async def update_suggestion(
         trip=current,
         organiser=await is_organiser(db, user, current),
         modes=await votes_service.resolve_modes(db, current.id),
+        # Without this, every edit's response (and the suggestion.updated broadcast built
+        # from the same `out`) reported `distances: []` regardless of what distance_cache
+        # actually holds — `_out`'s own `distances or {}` default, silently taken by every
+        # call site that forgets to pass one. Harmless while the client ignored the payload
+        # (found once suggestion.updated started actually being applied, M3 integration
+        # pass); real once it isn't, most visibly right after a move, where a stale-empty
+        # suggestion.updated landing after suggestion.moved would wipe out the "back to
+        # pending" placeholder that event exists to show. Mirrors read_suggestion's own
+        # per-suggestion distances fetch just above.
+        distances={
+            row.suggestion.id: await distance_service.get_distances_for_suggestion(
+                db, row.suggestion, current, own_family_id=own_family
+            )
+        },
     )
     await _broadcast(current, "suggestion.updated", {"suggestion": out.model_dump(mode="json")})
     if moved:
