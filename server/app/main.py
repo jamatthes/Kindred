@@ -33,6 +33,7 @@ from app.routers import (
     polls,
     presence,
     settings as settings_router,
+    suggestions,
     trips,
 )
 from app import ws
@@ -139,6 +140,10 @@ def create_app() -> FastAPI:
     # `voting-comments` (M3) will serve suggestion and itinerary threads from the same
     # routes rather than duplicating them per subject.
     app.include_router(polls.comments_router, prefix=API_PREFIX)
+    app.include_router(suggestions.router, prefix=API_PREFIX)
+    # `/link-preview` is not under `/suggestions`: it takes a URL and returns page metadata,
+    # touching no suggestion at all — the create form calls it before a suggestion exists.
+    app.include_router(suggestions.link_preview_router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     # Same feature, different gate: every role reads the voting modes, so that one route is
     # `require_member` and sits outside the /admin prefix.

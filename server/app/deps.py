@@ -28,6 +28,7 @@ from app.models import (
     Family,
     FamilyMember,
     Session,
+    Suggestion,
     Trip,
     TripOrganiser,
     User,
@@ -259,6 +260,64 @@ async def require_pending_family(db: DbDep, user: CurrentUser, trip: ActiveTrip)
     if await is_pending_family(db, user, trip):
         return user
     raise forbidden("Only someone setting up a new family can do that.")
+
+
+async def can_edit_suggestion(
+    db: AsyncSession, user: User, trip: Trip | None, suggestion: Suggestion
+) -> bool:
+    """The ownership rule for a suggestion, as a predicate.
+
+    Three ways in (`map-suggestions/requirements.md` > Permissions): the **author**; the **head
+    or spouse** of the author's family, who may tidy up after their own household; and an
+    **organiser**, who may edit anything. A member of another family may not, whatever their
+    role inside it — a family-level role governs a family, never the trip.
+
+    Separate from the dependency below because the same question is asked twice per response:
+    once at the door, and once per row when serialising `can_edit`, which the UI renders. One
+    predicate means the flag and the enforcement cannot disagree.
+    """
+    if await is_organiser(db, user, trip):
+        return True
+    if suggestion.created_by is not None and suggestion.created_by == user.id:
+        return True
+    if suggestion.created_by is None:
+        # Authored by an account that has since been deleted. Nobody inherits it; an organiser
+        # (handled above) is the only route left, which is what keeps a stranger's proposal
+        # from becoming editable by whoever happens to be reading it.
+        return False
+    author_family = await db.scalar(
+        select(FamilyMember.family_id).where(FamilyMember.user_id == suggestion.created_by)
+    )
+    if author_family is None:
+        return False
+    mine = await db.scalar(
+        select(FamilyMember).where(
+            FamilyMember.family_id == author_family,
+            FamilyMember.user_id == user.id,
+            FamilyMember.role.in_(FAMILY_MANAGER_ROLES),
+        )
+    )
+    return mine is not None
+
+
+async def require_can_edit_suggestion(
+    suggestion_id: uuid.UUID, db: DbDep, user: CurrentUser, trip: ActiveTrip
+) -> Suggestion:
+    """Author, head or spouse of the author's family, or an organiser — else `403`.
+
+    Declared with `suggestion_id` as a parameter rather than as a factory taking it, for the
+    reason `require_family_manager` records above: a factory is evaluated at import time, and
+    the path value does not exist yet. Returns the loaded row so the handler does not fetch it
+    a second time.
+    """
+    suggestion = await db.get(Suggestion, suggestion_id)
+    if suggestion is None or (trip is not None and suggestion.trip_id != trip.id):
+        # 404 before 403 on a row that is not there at all: a permission error would tell an
+        # outsider that an id they guessed exists.
+        raise ApiError(404, "not_found", "That suggestion does not exist.")
+    if not await can_edit_suggestion(db, user, trip, suggestion):
+        raise forbidden("You can only change a suggestion from your own family.")
+    return suggestion
 
 
 async def current_viewer(db: DbDep, user: CurrentUser, trip: ActiveTrip) -> Viewer:
