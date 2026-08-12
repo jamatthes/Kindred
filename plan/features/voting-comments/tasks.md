@@ -147,115 +147,194 @@ passes with the full permission matrix and mode-change cases green.
 
 ## Phase 7 — Chart widgets
 
-- [ ] Add or extend `web/src/charts/AvgBar.jsx` — bars start at zero, no `baseline` prop
-      exists, `insight` is the title prop.
-- [ ] Add `web/src/charts/DistributionStrip.jsx` for thumbs: up / down / **none** as three
-      visible proportions.
-- [ ] Add or extend `web/src/charts/SpreadDots.jsx` for the panel disagreement view — one dot
-      per member on a 0–10 axis.
-- [ ] All three token-aware: colours, spacing, and type from semantic tokens so the theme
-      switch is free. Use the shared `--scale-pref-0…10` ramp.
-- [ ] Every widget renders its numeric value as text — colour is never the sole carrier.
-- [ ] Empty state per widget for `count: 0`; never render a misleading `0.0` average.
-- [ ] Under `prefers-reduced-motion`, bars snap rather than animate.
+- [x] **Already done — no new chart code required.** `AvgBar`/`DistributionStrip`/
+      `SpreadDots` (`web/src/charts/`) shipped generic during the M2 chart-typography
+      rework (see `design-system.md`'s 2026-08-12 NOTE): `AvgBar` takes any
+      `{label, value, count}[]`, `SpreadDots` any `{label, scores}[]`, `DistributionStrip`
+      any `up`/`down`/`none` — none of them are poll-specific. Every box below was already
+      true of the existing implementation; this feature only had to call them with a
+      suggestion's tally instead of a poll's:
+      - [x] Bars start at zero, no `baseline` prop.
+      - [x] `DistributionStrip` shows up/down/**none** as three visible proportions.
+      - [x] `SpreadDots` — one dot per member, 0–10 axis.
+      - [x] Token-aware throughout; `--scale-pref-0…10` ramp used by `AvgBar`'s emphasis
+            and (via `map-suggestions/prefTint.ts`) the same ramp region tints use.
+      - [x] Numeric value always rendered as text (HTML, not SVG — the chart-typography
+            rework's own rule).
+      - [x] Empty state at `count: 0` (`ChartEmptyState`, `web/src/charts/a11y.tsx`).
+      - [x] Reduced motion: no widget in this library animates its bars in the first place
+            (the chart-typography NOTE moved all motion decisions to plain CSS transitions
+            on HTML elements outside the SVG) — the one new animated element this feature
+            adds, `VoteTally`'s compact list-row bar, has its own
+            `@media (prefers-reduced-motion: reduce)` rule in `voting-comments/voting.css`.
 
-`Verify:` `npm test` in `web/` passes the chart tests, including a case asserting that a
-zero-vote tally renders the empty state and that the numeric label is present in the DOM.
+`Verify:` The pre-existing chart test suites (`AvgBar.test.tsx`, `DistributionStrip.test.tsx`,
+`SpreadDots.test.tsx`) already cover every box above generically. This feature adds
+`SuggestionVotePanel.test.tsx`'s own empty-state/numeric-as-text assertions on top, using a
+suggestion tally rather than poll data, so the honesty rules are proven against this
+feature's actual call sites too, not only the generic widget tests.
 
 ---
 
 ## Phase 8 — Vote UI
 
-- [ ] Add `web/src/features/voting-comments/` with the API client and store.
-- [ ] `ScoreVoteControl`: 0–10, digit-labelled, ramp-tinted, chosen value shown as text,
-      arrow-key navigation with Enter to commit, ≥ 44 px touch targets.
-- [ ] `ThumbsVoteControl`: labelled up/down with icons, distinct current state, clear
-      affordance once a vote exists.
-- [ ] Mode is resolved from `trip_category_settings` per the suggestion's type; on a `422`
-      mode mismatch the client refetches settings and re-renders in the correct mode.
-- [ ] Tally at three densities: compact in the list row, medium on the popover card, full in
-      the side panel with voter attribution and the outstanding list.
-- [ ] Voting is available from the popover card as well as the panel; commenting is panel-only.
-- [ ] Optimistic apply → reconcile on success → visible rollback plus a toast on failure.
-- [ ] Refetch and reconcile the open subject's tally on WS reconnect.
-- [ ] Subscribe to `suggestion.vote.updated` and merge the broadcast tally with the local `my_vote`.
+- [x] `web/src/features/voting-comments/api.ts` (votes + comments REST client) and `store.ts`
+      — **deviation**: no separate store file. The one piece of shared state this feature
+      needed (`needsMyVote`) was added directly to `map-suggestions/store.ts`'s existing
+      `SuggestionFilters`, per the coordinator's own framing ("wired into the shared
+      suggestion filter store you built") — a second store object for one boolean would
+      have split "what's selected/filtered" across two sources of truth, exactly what that
+      store's docblock says the design avoids. Everything else voting-specific is hook
+      state (`useVotes.ts`, `useComments.ts`), not global.
+- [x] `ScoreVoteControl.tsx`: 0–10 `radiogroup`, each step tinted with `--scale-pref-N`,
+      digit shown on the button and the chosen value repeated as text beside the control,
+      roving-tabIndex arrow-key navigation (Enter/Space commit via native button
+      semantics), `--hit-target` sizing (`--vote-step-compact` at the compact density).
+- [x] `ThumbsVoteControl.tsx`: icon + word on both buttons, distinct `is-on` state, a
+      "Clear" affordance that only renders once a vote exists.
+- [x] `useCategoryMode.ts` resolves mode from `trip_category_settings` by the suggestion's
+      `type` — reusing `polls/api.ts`'s `categoryApi` rather than a second client for the
+      same read (see the deviation note in `design.md`); refetches on any vote failure,
+      which covers the `422` mismatch case `design.md` calls out.
+- [x] `VoteTally.tsx`: compact (plain number+bar, list row), medium and full (real
+      `AvgBar`/`DistributionStrip`/`SpreadDots` + `VoterAttribution`, `SuggestionVotePanel`
+      wires density straight through). `CompactVoteTally` reads the list response's own
+      `vote_summary` rather than firing a tally request per row (N+1 avoidance, noted
+      inline in `VoteTally.tsx`).
+- [x] Voting from the popover card: `MapSuggestionsScreen`'s mobile `PopoverCard` renders a
+      `SuggestionVotePanel` at `density="medium"` in its `voteSummary` slot. **Deviation**:
+      on desktop there is no standalone popover at all (documented in `map-suggestions`'
+      own deviation note) — voting is still available without leaving the map view, through
+      the side panel that opens beside it, just not through a separately-anchored card.
+- [x] Optimistic apply → reconcile → visible rollback (`useVotes.ts`, pure math in
+      `voteMath.ts`) → toast on failure (`SuggestionVotePanel.tsx`, fired once per new
+      error via a ref guard so a persisted error state does not re-toast on every render).
+- [x] `resync` refetches and reconciles the open subject's tally (`useVotes.ts`).
+- [x] `suggestion.vote.updated` merged with the locally-known `my_vote` — the broadcast
+      payload's absence of that field never overwrites it.
 
-`Verify:` In the browser with two tabs signed in as different users, vote in one tab and watch
-the tally update live in the other; kill the API and confirm a vote rolls back visibly with a
-toast.
+`Verify:` `useVotes.test.tsx` proves the optimistic-apply/rollback cycle and the WS merge
+directly against a mocked API+socket. The two-tab live-update and kill-the-API browser
+checks are deferred to integration — no backend exists in this worktree (see Phase 12).
 
 ---
 
 ## Phase 9 — Comment thread UI
 
-- [ ] `CommentThread` in the side panel / bottom sheet: flat, oldest first, author name with
-      family colour accent, relative timestamp, "edited" marker when `edited_at` is set.
-- [ ] `CommentComposer` with an `@` member picker inserting `@[Name](user:<uuid>)` markup and
-      rendering it as a distinct token; character counter near the length cap.
-- [ ] Edit and delete affordances driven by `can_edit` / `can_delete` from the API.
-- [ ] **Delete → undo**: collapse the comment immediately and show an inline undo affordance in
-      its position in the thread for ~10 seconds, not only in a toast.
-- [ ] Admin deletion of another person's comment uses a confirm dialog and leaves a
-      "comment removed" tombstone rather than silently reflowing.
-- [ ] Live updates from `comment.created` / `.updated` / `.deleted`, reconciled by `id` so an
-      undo-restore lands back in place.
-- [ ] Empty state: "No comments yet — start the discussion", composer inline.
-- [ ] All six field states on the composer; validate on blur, re-validate on change after the
-      first error; error text beneath the field.
+- [x] `CommentThread.tsx`: flat, oldest first, author + family colour (`IdentityBadge`),
+      relative timestamp, "edited" marker. **Deviation, recorded and reasoned in
+      `design.md`**: a new polymorphic component rather than upgrading
+      `polls/CommentThread.tsx` in place, which that file's own docblock predicted this
+      feature would do — retrofitting a different, already-shipped feature's component
+      mid-build risked regressing poll comments for a change outside this phase's scope.
+- [x] `CommentComposer.tsx` with an `@` picker (`mentions.ts` — `activeMentionQuery`/
+      `insertMention`) inserting well-formed `@[Name](user:<uuid>)` markup, rendered back
+      as a `.comment__mention` token by `splitMentions`; character counter appears once
+      the body nears the 4000-char cap.
+- [x] Edit/delete driven by `can_edit`/`can_delete` from the `Comment` type — never
+      re-derived client-side.
+- [x] Delete → undo: `useComments.ts`'s `removals` overlay keeps the comment in the array
+      (never splices it), rendering an inline "Undo" row in place for `UNDO_WINDOW_MS`
+      (10s) — this is what makes "restores to its original position" true for free, proven
+      in `CommentThread.test.tsx`.
+- [x] Admin deletion of someone else's comment: `ConfirmDialog`, then a permanent
+      "Comment removed." tombstone in place, no undo shown.
+- [x] Live `comment.created`/`.updated`/`.deleted` reconciled by `id`; an undo-restore
+      (`comment.created` per `design.md`) clears the removal overlay and lands the comment
+      back in its existing array position.
+- [x] Empty state exact wording, composer inline.
+- [x] Composer field states via the same `TextField`/error-beneath-field convention every
+      other form in the app uses (validate-on-blur, re-validate-after-first-error).
 
-`Verify:` In the browser, post a comment with a mention and confirm the mentioned user's
-notification bell increments; delete your own comment and undo it, confirming it returns to
-its original position in the thread.
+`Verify:` `CommentThread.test.tsx` covers the empty state, mention-token rendering, own
+delete → undo → restore-to-position, moderation delete → confirm → tombstone, and
+permission-gated edit/delete. The bell-increment and cross-tab browser checks are deferred
+to integration (no backend, no `notifications` feature yet).
 
 ---
 
 ## Phase 10 — Admin controls and "needs my vote"
 
-- [ ] `AdminStatusControls` at the bottom of the side panel, visually separated so it reads as
-      a different kind of authority. Renders only for the main admin.
-- [ ] Buttons only for transitions valid from the current status — invalid ones absent, not
-      disabled-and-mysterious.
-- [ ] **Reject opens a real confirm dialog** naming the suggestion and stating it will be
-      hidden from the default list. Approve and shortlist commit directly (reversible).
-- [ ] Handle `409` from a racing admin by re-rendering from `suggestion.status_changed`.
-- [ ] "Needs my vote" count in the trip chrome from `GET /api/v1/me/pending-votes`; activating
-      it applies a filter chip to the shared suggestion-list filter state and marks the
-      matching pins on the map.
-- [ ] Refresh the count on `suggestion.vote.updated` and `suggestion.created`.
-- [ ] Zero state: "You're all caught up" — the affordance stays visible but quiet.
+- [x] `AdminStatusControls.tsx` — visually separated block (`.admin-status`, a bordered
+      sunken panel), renders for `is_owner || is_organiser` (this codebase's post-2026-08-11
+      role vocabulary; "main admin" in `requirements.md`/`design.md` predates the
+      owner/organiser split and maps onto this pair — same gate `map-suggestions` already
+      used before this phase). Replaces the inline status buttons
+      `map-suggestions/SuggestionDetailPanel.tsx` had as a Phase-8 placeholder.
+- [x] Only valid-from-current-status buttons render (`TRANSITIONS` map, one entry per
+      status) — absent, not disabled.
+- [x] Reject opens `ConfirmDialog` naming the suggestion and the hidden-from-list
+      consequence; Approve/Shortlist/Reopen call `suggestionsApi.setStatus` directly.
+- [x] A `409` shows "Someone else already changed this suggestion's status" rather than
+      retrying; the corrected status arrives through the existing prop chain
+      (`useSuggestionList`'s own `suggestion.status_changed` subscription one level up
+      feeds `MapSuggestionsScreen`'s `selected`, which is `AdminStatusControls`' own
+      `suggestion` prop) — no second subscription needed in this component.
+- [x] `usePendingVotes.ts` + `PendingVotesChip.tsx`: the count, refreshed on
+      `suggestion.vote.updated`/`suggestion.created`/`resync`. Activating it calls
+      `suggestionStore.toggleNeedsMyVote()` (the new field on `map-suggestions/store.ts`'s
+      `SuggestionFilters`). **Deviation**: "marks the matching pins on the map" is achieved
+      by filtering — `MapSuggestionsScreen` intersects the fetched suggestion list with
+      `pending-votes`' id set client-side (there is no server list param for it, per
+      `design.md`'s own REST contract), so only the matching pins render at all rather than
+      the full set with the matching ones highlighted. The net visual effect ("which pins
+      need my vote") is the same; a highlight-without-hiding variant is a smaller follow-up
+      if the group finds pure filtering too aggressive in practice.
+- [x] Zero state: "You're all caught up", chip stays visible and clickable (toggles off an
+      already-inactive filter harmlessly).
 
-`Verify:` In the browser as the main admin, reject a suggestion and confirm the dialog appears
-and the pin restyles for a second signed-in user without a refresh; as a member, confirm the
-admin block does not render at all.
+`Verify:` `AdminStatusControls.test.tsx` covers the transition matrix, the reject-confirms/
+approve-commits-directly split, absence for non-admins, and the 409 message.
+`PendingVotesChip.test.tsx` covers the count, the zero state, and the toggle. The two-user
+browser check (reject in one session, restyle in another) is deferred to integration.
 
 ---
 
 ## Phase 11 — Web tests
 
-- [ ] Correct control renders per mode; mismatch triggers a settings refetch.
-- [ ] Optimistic vote applies, then rolls back visibly on a failed request.
-- [ ] Tally widgets show the numeric value as text and render the empty state at zero votes.
-- [ ] Permission-gated UI: admin controls absent for members; edit/delete affordances follow
-      `can_edit` / `can_delete`.
-- [ ] Undo restores a deleted comment to its original thread position.
-- [ ] Reject shows a confirm dialog; approve does not.
-- [ ] Mention picker inserts well-formed markup and renders it as a token.
-- [ ] Playwright smoke extension: login → vote → comment → admin approve → status visible.
+- [x] `SuggestionVotePanel.test.tsx`: score control renders for score mode, thumbs for
+      thumbs mode, never the wrong one; read-only surfaces render no control at all.
+- [x] `useVotes.test.tsx`: optimistic apply is visible before the request resolves,
+      reconciles on success, and rolls back to the exact previous tally on failure.
+- [x] `SuggestionVotePanel.test.tsx` + `voteMath.test.ts`: numeric values render as text,
+      a zero-vote tally renders the empty state, and a cleared last vote produces `null`
+      (never a fabricated `0.0`) — the honesty rule asserted at the actual optimistic-math
+      layer, not only at the generic chart-widget layer.
+- [x] `AdminStatusControls.test.tsx` + `SuggestionDetailPanel.test.tsx` (map-suggestions):
+      admin block absent for members, present and transition-correct for organisers;
+      `CommentThread.test.tsx`: edit/delete follow `can_edit`/`can_delete` exactly.
+- [x] `CommentThread.test.tsx`: undo restores a comment to its original array position
+      (asserted via row order, not just re-appearance).
+- [x] `AdminStatusControls.test.tsx`: Reject opens `alertdialog` and fires no request until
+      confirmed; Approve/Shortlist fire immediately with no dialog.
+- [x] `mentions.test.ts` (pure insertion/parsing) + `CommentThread.test.tsx` (rendered
+      token, not raw markup, in a real thread).
+- [ ] **Playwright smoke extension — explicitly skipped**, same reasoning as
+      `map-suggestions`'s Phase 11: needs the real backend (login → vote → comment → admin
+      approve), which does not exist in this worktree. Deferred to integration.
 
-`Verify:` `npm test` in `web/` passes, and the Playwright smoke run completes the
-login → vote → comment → confirm path against the compose stack.
+`Verify:` `npm test` (`vitest run`) in `web/`: 418 passing / 4 failing, all 4 pre-existing
+and unrelated (`app/ui/pickers/DatePicker.test.tsx`/`DateRangePicker.test.tsx`, predating
+this branch). `npm run build` and `npm run check:tokens` both pass. The Playwright leg does
+not run — see the skipped box above.
 
 ---
 
 ## Phase 12 — Docs and handoff
 
-- [ ] Re-read `requirements.md` and `design.md` against what shipped; update in the same commit
-      if behaviour diverged.
-- [ ] Confirm the `comments.deleted_at` PROPOSED ADDITION is reflected in
-      `plan/architecture.md`'s schema section now that it is real.
-- [ ] Confirm the retention cleanup task is scheduled and documented in the deploy README.
-- [ ] Cross-check that `map-suggestions/design.md` still describes the status *field*
-      consistently with the transitions implemented here.
+- [x] Re-read both docs against what shipped; deviations recorded in the dated NOTE at the
+      bottom of `design.md` (this web pass only — the server-side Phases 1–6 are a separate
+      agent's work and are not re-verified here).
+- [x] `comments.deleted_at` confirmed already present in `plan/architecture.md` (~line 139)
+      — no change needed, checked rather than assumed.
+- [ ] **Retention cleanup task / deploy README entry — not this phase's work.** Server-side
+      maintenance task (Phase 5), out of scope for a web-only implementer; left for whoever
+      builds `server/`.
+- [x] Cross-checked: `map-suggestions/design.md` still describes `status` as a field this
+      feature transitions, not something it stores independently — `AdminStatusControls`
+      calls `map-suggestions/api.ts`'s `suggestionsApi.setStatus`, the same endpoint
+      `map-suggestions`'s own docs own, so there is exactly one status-write path.
 
-`Verify:` `plan/architecture.md` lists `comments.deleted_at`, both docs in this directory match
-shipped behaviour, and the cleanup task appears in the deploy README.
+`Verify:` `plan/architecture.md` lists `comments.deleted_at` (confirmed). Both docs in this
+directory carry a dated NOTE matching shipped web behaviour. The cleanup task's deploy-README
+entry remains the backend implementer's to add.

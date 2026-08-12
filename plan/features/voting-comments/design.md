@@ -341,3 +341,60 @@ honest option and prompts them to re-vote.
 - `PopoverCard`'s `voteSummary`/`commentCount` props (pre-built, `features/map/PopoverCard.tsx`)
   are filled with a plain string today in the mobile `BottomSheet` peek snap
   (`MapSuggestionsScreen.tsx`) — same swap applies there.
+
+---
+
+## NOTE (2026-08-12) — voting-comments M3 web implementation, deviations from this doc
+
+Built in `web/src/features/voting-comments/` against typed fixtures — still no backend in
+this worktree. Filled every slot the note above described (`SuggestionVotePanel` into
+`.sugg-detail__votes` and `PopoverCard`'s `voteSummary`, `CommentThread` into
+`.sugg-detail__comments-slot`, `AdminStatusControls` replacing the placeholder status
+buttons) plus the "needs my vote" chip in the shell topbar. Full reasoning is inline in
+`tasks.md` next to each checklist item; summarised here per docs-first:
+
+- **No second store file.** `Phase 8` asked for "the API client and store"; the one piece
+  of state this feature actually shares (`needsMyVote`) was added to
+  `map-suggestions/store.ts`'s existing `SuggestionFilters` instead, per the explicit
+  instruction that this phase would wire into "the shared suggestion filter store you
+  built" — a second store object for one boolean would fork the single source of truth
+  `store.ts`'s own docblock exists to prevent.
+- **`categoryApi` is not redefined.** This doc's REST section names
+  `GET /trips/{id}/category-settings`; `polls/api.ts` already calls the equivalent
+  single-trip-scoped `GET /trip/category-settings` (built at M2, before this feature's
+  design was written). Rather than add a second client for the same setting under a
+  differently-shaped path, `useCategoryMode.ts` imports `polls`'s client. If the real
+  backend does ship the path this doc names, either polls' call site or this one needs a
+  one-line change — flagged for whoever wires the real endpoint against both.
+- **`CommentThread` is a new, polymorphic component**, not an upgrade of
+  `polls/CommentThread.tsx` in place, even though that file's own docblock predicted this
+  feature would do exactly that. Retrofitting a different feature's already-shipped,
+  already-tested component mid-build risked a regression in poll comments for a change
+  outside this phase's scope. `polls/CommentThread.tsx` still works exactly as before,
+  unmodified; a follow-up can point it at `voting-comments/CommentThread.tsx` (it only
+  needs `subject_type: 'poll'`) once both are reviewed together — worth doing, since
+  keeping two thread implementations alive is exactly the kind of drift this project
+  otherwise avoids.
+- **No dedicated trip-members endpoint for the `@` picker.** This doc's REST section has
+  none; `useTripMembers.ts` assembles the roster from `families/design.md`'s
+  `GET /families` + `GET /families/{id}` (both `require_member`) instead of inventing one.
+  Cached at module scope for the session, not invalidated on membership-change WS events
+  (a newly-joined member becomes mentionable after the next reload, not instantly) —
+  acceptable because the server remains the authority on who actually gets notified
+  regardless of what a stale picker offered.
+- **"Marks the matching pins on the map" (V5) is filtering, not a highlight overlay.**
+  `MapSuggestionsScreen` intersects the fetched suggestion list with `pending-votes`' id
+  set client-side and renders only those pins — there is no server list parameter for it in
+  this doc's `GET /suggestions` contract. The visible outcome (only the pins that need a
+  vote are shown) satisfies the story; a "highlight without hiding the rest" variant is a
+  smaller follow-up if that reads as too aggressive once real users try it.
+- **"Main admin" throughout this doc and `requirements.md` maps onto `is_owner ||
+  is_organiser`** in the shipped role model (`overview.md`'s 2026-08-11 owner/organiser
+  split postdates both docs in this directory). `AdminStatusControls` and the delete
+  permission checks use that pair, matching the gate `map-suggestions/SuggestionDetailPanel.tsx`
+  already used before this phase.
+- **`comments.deleted_at` is already reflected in `plan/architecture.md`** (line ~139) —
+  Phase 12's checklist item was satisfied before this pass; confirmed, not changed.
+- **The retention-cleanup task and its deploy-README entry are server work** (Phase 5/12's
+  "hard-deletes rows past 30 days" maintenance task) — out of scope for this web-only pass;
+  left unchecked in `tasks.md` for the backend implementer.
