@@ -518,6 +518,70 @@ export type SuggestionUpdateInput = Partial<
   >
 >
 
+// --- voting-comments ------------------------------------------------------------------------
+// The shapes `plan/features/voting-comments/design.md` specifies. Every computed number —
+// average, distribution, up/down/none, can_edit/can_delete — is produced server-side and
+// simply rendered here, same rule as polls' results types above.
+
+export type VoterEntry = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  family_color_custom?: string | null
+  score?: number | null
+  thumb?: Thumb | null
+}
+
+export type NotVotedEntry = { user_id: string; display_name: string; family_id: string | null }
+
+/** `PUT`/`DELETE .../vote` and `GET .../votes` response shape. `my_vote` is per-recipient —
+ * never present in the `suggestion.vote.updated` broadcast, which is why every consumer of
+ * that event merges the broadcast fields into its own locally-known `my_vote` rather than
+ * overwriting it (`design.md` > WebSocket events). */
+export type VoteTally = {
+  mode: VotingMode
+  count: number
+  eligible_count: number
+  average: number | null
+  distribution: number[] | null
+  up: number | null
+  down: number | null
+  none: number | null
+  my_vote: { score?: number; thumb?: Thumb } | null
+  voters: VoterEntry[]
+  not_voted: NotVotedEntry[]
+}
+
+export type PendingVotes = { count: number; suggestion_ids: string[] }
+
+export type CommentSubjectType = 'suggestion' | 'poll' | 'itinerary_item'
+
+export type CommentAuthor = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  family_color_custom?: string | null
+}
+
+export type Comment = {
+  id: string
+  /** Not in `design.md`'s `GET /comments` response sketch, but assumed present on the
+   * `comment.created`/`.updated` WS payload (the same doc's `comment.deleted` payload does
+   * carry them) — a client cannot otherwise route a live comment to the right open thread.
+   * Optional so the type still matches the documented REST shape exactly. */
+  subject_type?: CommentSubjectType
+  subject_id?: string
+  author: CommentAuthor
+  body: string
+  mentions: string[]
+  edited_at: string | null
+  created_at: string
+  can_edit: boolean
+  can_delete: boolean
+}
+
 export type LinkPreview = {
   title?: string
   description?: string
