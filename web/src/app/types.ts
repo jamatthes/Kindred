@@ -351,6 +351,7 @@ export type PollScore = {
   display_name: string
   family_id: string | null
   family_color: number | null
+  family_color_custom: string | null
   score: number | null
   thumb: string | null
 }
@@ -379,6 +380,7 @@ export type MemberResult = {
   display_name: string
   family_id: string | null
   family_color: number | null
+  family_color_custom: string | null
   completion: Completion
 }
 
@@ -403,6 +405,7 @@ export type PollComment = {
   author_name: string
   family_id: string | null
   family_color: number | null
+  family_color_custom: string | null
   body: string
   created_at: string
   edited_at: string | null

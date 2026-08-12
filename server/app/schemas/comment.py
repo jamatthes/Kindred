@@ -28,6 +28,7 @@ class CommentOut(BaseModel):
     author_name: str = "Someone who has left"
     family_id: uuid.UUID | None = None
     family_color: int | None = None
+    family_color_custom: str | None = None
     body: str
     created_at: datetime
     edited_at: datetime | None = None

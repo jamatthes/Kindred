@@ -228,7 +228,7 @@ export class FakeMapProvider implements MapProvider {
 
     if (spec.kind === 'suggestion') {
       el.className = suggestionPinClassName(spec)
-      el.style.background = spec.familyColor ? `var(--family-${spec.familyColor})` : 'var(--color-text-muted)'
+      el.style.background = spec.familyColor ?? 'var(--color-text-muted)'
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
       icon.setAttribute('class', 'k-pin__icon')
       icon.setAttribute('viewBox', '0 0 24 24')
@@ -250,7 +250,7 @@ export class FakeMapProvider implements MapProvider {
       badge.className = ['k-badge', 'k-badge--40', spec.online === false ? 'is-offline' : '']
         .filter(Boolean)
         .join(' ')
-      badge.style.borderColor = `var(--family-${spec.familyColor})`
+      badge.style.borderColor = spec.familyColor
       badge.title = spec.name
       const initials = document.createElement('span')
       initials.className = 'k-badge__initials'

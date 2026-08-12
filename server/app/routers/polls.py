@@ -769,6 +769,7 @@ def _comment_out(comment: Comment, *, caller: User, organiser: bool, family) -> 
         ),
         family_id=family[0] if family else None,
         family_color=family[1] if family else None,
+        family_color_custom=family[2] if family else None,
         body=comment.body,
         created_at=comment.created_at,
         edited_at=comment.edited_at,
@@ -779,11 +780,11 @@ def _comment_out(comment: Comment, *, caller: User, organiser: bool, family) -> 
 
 async def _family_lookup(db: AsyncSession, trip: Trip) -> dict:
     rows = await db.execute(
-        select(FamilyMember.user_id, Family.id, Family.color)
+        select(FamilyMember.user_id, Family.id, Family.color, Family.color_custom)
         .join(Family, Family.id == FamilyMember.family_id)
         .where(Family.trip_id == trip.id)
     )
-    return {row[0]: (row[1], row[2]) for row in rows.all()}
+    return {row[0]: (row[1], row[2], row[3]) for row in rows.all()}
 
 
 @router.get(

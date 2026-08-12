@@ -9,7 +9,7 @@ const base: SuggestionMarkerSpec = {
   position: { lat: 50.4, lng: -4.7 },
   category: 'accommodation',
   status: 'proposed',
-  familyColor: 3,
+  familyColor: 'var(--family-3)',
 }
 
 describe('SuggestionPin', () => {

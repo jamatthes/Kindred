@@ -7,7 +7,7 @@ const base: LiveMarkerSpec = {
   id: 'u1',
   kind: 'live',
   position: { lat: 50.4, lng: -4.7 },
-  familyColor: 5,
+  familyColor: 'var(--family-5)',
   initials: 'JB',
   name: 'Jibby',
   online: true,

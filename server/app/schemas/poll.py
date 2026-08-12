@@ -214,6 +214,7 @@ class ScoreOut(BaseModel):
     display_name: str
     family_id: uuid.UUID | None = None
     family_color: int | None = None
+    family_color_custom: str | None = None
     score: int | None = None
     thumb: str | None = None
 
@@ -242,6 +243,7 @@ class MemberResultOut(BaseModel):
     display_name: str
     family_id: uuid.UUID | None = None
     family_color: int | None = None
+    family_color_custom: str | None = None
     completion: Completion
 
 

@@ -28,8 +28,11 @@ export type SuggestionMarkerSpec = {
   position: LatLng
   category: SuggestionCategory
   status: SuggestionStatus
-  /** 1–8, the family colour slot. Absent for a suggestion with no author family yet. */
-  familyColor?: number | null
+  /** Resolved CSS colour from `design/familyColor.ts` — `var(--family-N)` or a custom hex.
+      Resolved by the caller, not here: a slot number can no longer represent every family
+      (overflow families carry a custom colour). Absent for a suggestion with no author
+      family yet. */
+  familyColor?: string | null
   selected?: boolean
 }
 
@@ -38,8 +41,9 @@ export type LiveMarkerSpec = {
   id: string
   kind: 'live'
   position: LatLng
-  /** 1–8, required — a live marker always belongs to a family. */
-  familyColor: number
+  /** Resolved CSS colour (see `SuggestionMarkerSpec.familyColor`), required — a live
+      marker always belongs to a family. */
+  familyColor: string
   initials: string
   /** Always supplied: the ring/colour is never the only identifier (design-system rule). */
   name: string

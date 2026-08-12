@@ -281,6 +281,8 @@ async def build_results(db: AsyncSession, poll: Poll, trip: Trip) -> dict:
                     "display_name": user.display_name,
                     "family_id": family.id,
                     "family_color": family.color,
+            "family_color_custom": family.color_custom,
+                    "family_color_custom": family.color_custom,
                     "score": row.score if mode == "score" else None,
                     "thumb": row.thumb if mode == "thumbs" else None,
                 }
@@ -311,6 +313,7 @@ async def build_results(db: AsyncSession, poll: Poll, trip: Trip) -> dict:
             "display_name": user.display_name,
             "family_id": family.id,
             "family_color": family.color,
+            "family_color_custom": family.color_custom,
             "completion": completion.get(str(user.id), "none"),
         }
         for user, family in members

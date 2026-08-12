@@ -20,14 +20,14 @@ const suggestion: SuggestionMarkerSpec = {
   position: { lat: 50.4, lng: -4.7 },
   category: 'meal',
   status: 'proposed',
-  familyColor: 2,
+  familyColor: 'var(--family-2)',
 }
 
 const live: LiveMarkerSpec = {
   id: 'u1',
   kind: 'live',
   position: { lat: 50.41, lng: -4.71 },
-  familyColor: 4,
+  familyColor: 'var(--family-4)',
   initials: 'TP',
   name: 'Tom P.',
   online: true,

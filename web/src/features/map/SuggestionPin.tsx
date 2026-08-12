@@ -53,7 +53,7 @@ export type SuggestionPinProps = {
 
 export function SuggestionPin({ marker, onClick, onHoverChange, label }: SuggestionPinProps) {
   const glyph = STATUS_GLYPH[marker.status]
-  const ring = marker.familyColor ? `var(--family-${marker.familyColor})` : 'var(--color-text-muted)'
+  const ring = marker.familyColor ?? 'var(--color-text-muted)'
 
   return (
     <button

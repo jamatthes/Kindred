@@ -18,6 +18,7 @@ import { Banner, Button, TextField } from '../../app/ui/primitives'
 import { ConfirmDialog } from '../../app/ui/ConfirmDialog'
 import { useToast } from '../../app/ui/toastContext'
 import { IdentityBadge } from '../../design/IdentityBadge'
+import { familyColor } from '../../design/familyColor'
 import type { PollComment } from '../../app/types'
 import { pollsApi } from './api'
 
@@ -103,7 +104,10 @@ export function CommentThread({ pollId }: { pollId: string }) {
           <li key={comment.id} className="comment">
             <IdentityBadge
               initials={comment.author_name.slice(0, 2)}
-              familyColor={comment.family_color}
+              familyColor={familyColor({
+                color: comment.family_color,
+                color_custom: comment.family_color_custom,
+              })}
               size={24}
               name={comment.author_name}
             />

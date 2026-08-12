@@ -68,7 +68,7 @@ function results(overrides: Partial<PollResults> = {}): PollResults {
         is_split: false,
         is_close: true,
         rank: 1,
-        scores: [{ user_id: 'me', display_name: 'Me', family_id: null, family_color: 1, score: 8, thumb: null }],
+        scores: [{ user_id: 'me', display_name: 'Me', family_id: null, family_color: 1, family_color_custom: null, score: 8, thumb: null }],
         up_count: 0,
         down_count: 0,
         none_count: 0,

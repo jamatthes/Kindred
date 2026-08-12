@@ -30,14 +30,14 @@ function Panel({ theme, children }: { theme: 'light' | 'dark'; children: ReactNo
 const CORNWALL = { lat: 50.4, lng: -4.7 }
 
 const pinMarkers: MarkerSpec[] = [
-  { id: 'p-accom', kind: 'suggestion', position: { lat: 50.42, lng: -4.74 }, category: 'accommodation', status: 'shortlisted', familyColor: 1 },
-  { id: 'p-activity', kind: 'suggestion', position: { lat: 50.39, lng: -4.68 }, category: 'activity', status: 'approved', familyColor: 6, selected: true },
-  { id: 'p-meal', kind: 'suggestion', position: { lat: 50.41, lng: -4.65 }, category: 'meal', status: 'proposed', familyColor: 5 },
-  { id: 'p-region', kind: 'suggestion', position: { lat: 50.44, lng: -4.71 }, category: 'region', status: 'rejected', familyColor: 3 },
-  { id: 'p-scheduled', kind: 'suggestion', position: { lat: 50.38, lng: -4.73 }, category: 'accommodation', status: 'scheduled', familyColor: 2 },
+  { id: 'p-accom', kind: 'suggestion', position: { lat: 50.42, lng: -4.74 }, category: 'accommodation', status: 'shortlisted', familyColor: 'var(--family-1)' },
+  { id: 'p-activity', kind: 'suggestion', position: { lat: 50.39, lng: -4.68 }, category: 'activity', status: 'approved', familyColor: 'var(--family-6)', selected: true },
+  { id: 'p-meal', kind: 'suggestion', position: { lat: 50.41, lng: -4.65 }, category: 'meal', status: 'proposed', familyColor: 'var(--family-5)' },
+  { id: 'p-region', kind: 'suggestion', position: { lat: 50.44, lng: -4.71 }, category: 'region', status: 'rejected', familyColor: 'var(--family-3)' },
+  { id: 'p-scheduled', kind: 'suggestion', position: { lat: 50.38, lng: -4.73 }, category: 'accommodation', status: 'scheduled', familyColor: 'var(--family-2)' },
   { id: 'p-no-family', kind: 'suggestion', position: { lat: 50.4, lng: -4.62 }, category: 'meal', status: 'proposed', familyColor: null },
-  { id: 'p-live', kind: 'live', position: { lat: 50.405, lng: -4.7 }, familyColor: 5, initials: 'Ji', name: 'Jibby (Jiangs)', online: true },
-  { id: 'p-live-off', kind: 'live', position: { lat: 50.415, lng: -4.68 }, familyColor: 6, initials: 'St', name: 'Stu (Riveras)', online: false },
+  { id: 'p-live', kind: 'live', position: { lat: 50.405, lng: -4.7 }, familyColor: 'var(--family-5)', initials: 'Ji', name: 'Jibby (Jiangs)', online: true },
+  { id: 'p-live-off', kind: 'live', position: { lat: 50.415, lng: -4.68 }, familyColor: 'var(--family-6)', initials: 'St', name: 'Stu (Riveras)', online: false },
 ]
 
 const boundaryPolygon: PolygonSpec[] = [
