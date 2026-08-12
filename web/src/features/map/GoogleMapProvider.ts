@@ -97,6 +97,18 @@ function loadGoogleMaps(apiKey: string): Promise<GoogleMapsApi> {
   return loaderPromise
 }
 
+/** `btoa` only accepts Latin-1 (code points 0x00-0xFF) and throws `InvalidCharacterError`
+ * on anything past it — which every non-empty `STATUS_GLYPH` value is ('★'/'✓'/'✕'/'▸', all
+ * well past 0xFF). Found by the M3 integration pass's live Playwright smoke as a real,
+ * reproducible crash: approve (or shortlist/reject/schedule) a single suggestion, and every
+ * later page load that renders its marker throws here — GoogleMapProvider never finishes
+ * initialising, and with no `ErrorBoundary` anywhere in the app, the whole page goes blank.
+ * The classic escape-hatch (encode to UTF-8 bytes first, then treat *those* bytes as
+ * Latin-1) is the smallest fix that keeps `btoa` itself in the loop. */
+export function toBase64Utf8(str: string): string {
+  return btoa(unescape(encodeURIComponent(str)))
+}
+
 /** Builds a small SVG data-URL icon reusing the exact category/glyph vocabulary
  * `SuggestionPin` renders, so a Google marker and the fake/test marker agree on what a pin
  * looks like (same principle `FakeMapProvider` follows). */
@@ -113,7 +125,7 @@ function suggestionIcon(spec: Extract<MarkerSpec, { kind: 'suggestion' }>): { ur
     <g fill="none" stroke="white" stroke-width="2">${path}</g>
     ${glyph ? `<text x="19" y="6" font-size="8" fill="white">${glyph}</text>` : ''}
   </svg>`
-  const url = `data:image/svg+xml;base64,${btoa(svg)}`
+  const url = `data:image/svg+xml;base64,${toBase64Utf8(svg)}`
   // `scaledSize` needs a live `google.maps.Size`; constructed lazily by the caller, which
   // has the loaded namespace in scope. This function only builds the icon URL.
   return { url, scaledSize: null }
