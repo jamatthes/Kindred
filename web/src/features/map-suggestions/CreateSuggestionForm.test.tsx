@@ -61,6 +61,7 @@ function baseProps() {
     onConsumeClick: vi.fn(),
     existingSuggestions: [] as Suggestion[],
     onFocusExisting: vi.fn(),
+    onModeChange: vi.fn(),
   }
 }
 
@@ -135,6 +136,20 @@ describe('CreateSuggestionForm — drop pin', () => {
     render(<CreateSuggestionForm {...props} initialMode="drop-pin" />)
     expect(screen.getByRole('tab', { name: 'Drop a pin' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Search a place' })).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('tells the parent when the user switches tabs by hand, not just the mode it opened on (M3 integration-pass fix, one layer deeper)', () => {
+    // initialMode fixed the entry-point case, but a user who opens in search mode (the
+    // toolbar's default button) and then clicks the "Drop a pin" tab themselves was still
+    // stuck: MapSuggestionsScreen's onMapClick gates on its own createMode state, which only
+    // ever learned about the mode the form opened on. Found by the same live Playwright
+    // smoke as initialMode, the click still silently did nothing after switching tabs by hand.
+    const props = baseProps()
+    render(<CreateSuggestionForm {...props} />)
+    expect(props.onModeChange).toHaveBeenCalledWith('search')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Drop a pin' }))
+    expect(props.onModeChange).toHaveBeenCalledWith('drop-pin')
   })
 })
 

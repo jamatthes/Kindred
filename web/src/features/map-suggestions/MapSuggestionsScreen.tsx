@@ -233,6 +233,7 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
           {creating ? (
             <CreateSuggestionForm
               initialMode={createMode}
+              onModeChange={setCreateMode}
               onClose={() => {
                 setCreating(false)
                 setPendingClick(null)
@@ -323,6 +324,7 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
         <div className="map-suggestions__create-overlay">
           <CreateSuggestionForm
             initialMode={createMode}
+            onModeChange={setCreateMode}
             onClose={() => {
               setCreating(false)
               setPendingClick(null)

@@ -67,6 +67,15 @@ export type CreateSuggestionFormProps = {
    * `onMapClick` gating, but never passed it in here, so every entry point silently opened
    * on the search tab regardless of which button was clicked. */
   initialMode?: CreateMode
+  /** Fired whenever the user switches tabs inside the form, so the parent's own gating
+   * (`MapSuggestionsScreen`'s `onMapClick`, which only forwards a click when its own
+   * `createMode` state says `'drop-pin'`/`'draw-region'`) tracks the tab that is actually
+   * showing rather than only the one the form opened on. **Found by the same Playwright
+   * smoke as `initialMode`, one layer deeper**: passing `initialMode` fixed the entry-point
+   * case, but a user opening in search mode and then clicking the "Drop a pin" tab by hand
+   * — the ordinary way to reach it from the toolbar's default button — still could not
+   * click the map, because the parent never learned the tab had changed. */
+  onModeChange?: (mode: CreateMode) => void
 }
 
 function validateTitle(value: string): string | null {
@@ -81,6 +90,7 @@ export function CreateSuggestionForm({
   existingSuggestions,
   onFocusExisting,
   initialMode = 'search',
+  onModeChange,
 }: CreateSuggestionFormProps) {
   const [mode, setMode] = useState<CreateMode>(initialMode)
   const [type, setType] = useState<SuggestionType>('accommodation')
@@ -106,6 +116,13 @@ export function CreateSuggestionForm({
 
   useEffect(() => {
     if (mode === 'draw-region') setType('region')
+  }, [mode])
+
+  // Tells the parent which tab is showing now, not just which one the form opened on —
+  // see `onModeChange`'s own doc comment for why this is load-bearing, not a courtesy.
+  useEffect(() => {
+    onModeChange?.(mode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
   // --- Search -------------------------------------------------------------------------
