@@ -124,6 +124,16 @@ describe('CreateSuggestionForm — drop pin', () => {
     expect(sentBody.lng).toBe(0.2)
     expect(sentBody.place_id).toBeUndefined()
   })
+
+  it('opens directly on the Drop a pin tab when the caller passes initialMode (M3 integration-pass fix)', () => {
+    // Found by the live Playwright smoke: MapSuggestionsScreen tracked which entry point was
+    // clicked (search vs. drop-pin vs. draw-region) but never told this component, so every
+    // entry point silently opened on the search tab regardless of which button was pressed.
+    const props = baseProps()
+    render(<CreateSuggestionForm {...props} initialMode="drop-pin" />)
+    expect(screen.getByRole('tab', { name: 'Drop a pin' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Search a place' })).toHaveAttribute('aria-selected', 'false')
+  })
 })
 
 describe('CreateSuggestionForm — validation', () => {

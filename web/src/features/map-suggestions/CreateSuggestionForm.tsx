@@ -60,6 +60,14 @@ export type CreateSuggestionFormProps = {
   onConsumeClick: () => void
   existingSuggestions: Suggestion[]
   onFocusExisting: (id: string) => void
+  /** Which entry point opened the form — `MapSuggestionsScreen`'s "Suggest a place" button
+   * (search), the map toolbar's drop-pin/draw-region buttons, or the empty-state list's
+   * drop-pin shortcut. Defaults to `'search'` so every existing caller that does not pass
+   * this keeps its current behaviour. **Found by the M3 integration pass's own Playwright
+   * smoke**: the parent already tracked a `createMode` state for its toolbar hint text and
+   * `onMapClick` gating, but never passed it in here, so every entry point silently opened
+   * on the search tab regardless of which button was clicked. */
+  initialMode?: CreateMode
 }
 
 function validateTitle(value: string): string | null {
@@ -74,8 +82,9 @@ export function CreateSuggestionForm({
   onConsumeClick,
   existingSuggestions,
   onFocusExisting,
+  initialMode = 'search',
 }: CreateSuggestionFormProps) {
-  const [mode, setMode] = useState<CreateMode>('search')
+  const [mode, setMode] = useState<CreateMode>(initialMode)
   const [type, setType] = useState<SuggestionType>('accommodation')
   const title = useValidatedField(validateTitle)
   const [notes, setNotes] = useState('')
