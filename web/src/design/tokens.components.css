@@ -99,6 +99,11 @@
   --sg-map-canvas-w: 360px;
   --sg-map-canvas-h: 260px;
 
+  /* --- map-suggestions screen (features/map-suggestions) -------------------
+     `MapSuggestionsScreen`'s own canvas and the detail panel's photo strip. */
+  --map-canvas-min-h: 420px;
+  --photo-strip-h: 160px;
+
   /* --- Polls (features/polls) ---------------------------------------------
      The list column holds a question, three tags and a progress line; narrower
      than this and the questions wrap to three lines. The label column in the

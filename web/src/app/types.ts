@@ -417,3 +417,116 @@ export type NudgeResult = { nudged: number; next_nudge_at: string | null; messag
 
 /** `GET /trip/category-settings` — the public read every member may make. */
 export type CategorySettingPublic = { category: VotingCategory; voting_mode: VotingMode }
+
+// --- map-suggestions ------------------------------------------------------------------------
+// The shapes `plan/features/map-suggestions/design.md` specifies. The HARD INVARIANT there
+// governs this file too: nothing Google-sourced beyond `place_id` is ever a field here that
+// gets sent back to the server. `vote_summary`/`comment_count`/`distances` are denormalised
+// into the suggestion by the server (owned by `voting-comments`/`distances`); this feature
+// only ever renders them.
+
+export type SuggestionType = 'region' | 'accommodation' | 'activity' | 'meal'
+export type SuggestionStatus = 'proposed' | 'shortlisted' | 'approved' | 'scheduled' | 'rejected'
+
+/** The GeoJSON `Feature` encoding from `design.md` > "Region geometry encoding". Coordinates
+ * are `[lng, lat]` — GeoJSON order — the one place in the codebase that order is legal; the
+ * conversion to our `LatLng` happens once, in `features/map-suggestions/geometry.ts`. */
+export type RegionGeometry =
+  | {
+      type: 'Feature'
+      geometry: { type: 'Point'; coordinates: [number, number] }
+      properties: { shape: 'circle'; radius_m: number; boundary_source?: 'osm' | 'drawn' }
+    }
+  | {
+      type: 'Feature'
+      geometry: { type: 'Polygon'; coordinates: [number, number][][] }
+      properties: { shape: 'polygon'; boundary_source?: 'osm' | 'drawn'; osm_relation_id?: number }
+    }
+
+export type PlaceSnapshot = { name: string; address: string }
+
+export type SuggestionAuthor = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  /** Not in the `design.md` response sketch, but every other author/member shape in this
+   * codebase carries both palette-slot and overflow-custom colour (`familyColor()` needs
+   * both); optional so the UI degrades if the server does not send it yet. */
+  family_color_custom?: string | null
+}
+
+export type SuggestionVoteSummary = {
+  mode: VotingMode
+  count: number
+  average: number | null
+  up: number | null
+  down: number | null
+  my_vote: number | 'up' | 'down' | null
+}
+
+export type SuggestionDistance = {
+  family_id: string
+  family_name: string
+  duration_s: number | null
+  distance_m: number | null
+  is_estimate: boolean
+}
+
+export type Suggestion = {
+  id: string
+  type: SuggestionType
+  title: string
+  notes: string | null
+  status: SuggestionStatus
+  created_by: SuggestionAuthor
+  lat: number
+  lng: number
+  geometry_geojson: RegionGeometry | null
+  place_id: string | null
+  place_snapshot: PlaceSnapshot | null
+  external_url: string | null
+  vote_summary: SuggestionVoteSummary | null
+  comment_count: number
+  distances: SuggestionDistance[]
+  /** One level only, per `design.md` — a grouped child never has its own `children`. */
+  children: Suggestion[]
+  created_at: string
+  updated_at: string
+}
+
+export type SuggestionSortField = 'votes' | 'distance' | 'category' | 'created'
+export type SuggestionSortDir = 'asc' | 'desc'
+
+export type SuggestionCreateInput = {
+  trip_id: string
+  type: SuggestionType
+  title: string
+  notes?: string
+  lat: number
+  lng: number
+  geometry_geojson?: RegionGeometry
+  place_id?: string
+  place_snapshot?: PlaceSnapshot
+  external_url?: string
+}
+
+export type SuggestionUpdateInput = Partial<
+  Pick<
+    SuggestionCreateInput,
+    'title' | 'notes' | 'type' | 'external_url' | 'lat' | 'lng' | 'geometry_geojson' | 'place_id' | 'place_snapshot'
+  >
+>
+
+export type LinkPreview = {
+  title?: string
+  description?: string
+  image_url?: string
+  site_name?: string
+  /** Airbnb-aware extraction extras (`design.md` "Airbnb-aware extraction"). */
+  facts?: string
+  locality?: string
+  lat?: number
+  lng?: number
+  capacity?: number
+}
