@@ -57,12 +57,14 @@
 
 .k-chart__row {
   display: grid;
-  /* The label column caps at --chart-label-w, but never takes more than 45% of a narrow
-     block (the styleguide's gallery cards) — the track has to stay readable, and the
-     label ellipsizes gracefully where the track cannot. */
+  /* The label column caps at --chart-label-w and never takes more than 40% of the block,
+     so a narrow block shrinks label and track together rather than starving one of them.
+     No media query: the constraint is the block's width, not the viewport's. Labels
+     ellipsize (title + the table keep the full string); the track never can, which is why
+     it gets the larger share. */
   grid-template-columns:
-    minmax(0, min(var(--chart-label-w), 45%))
-    1fr
+    minmax(0, min(var(--chart-label-w), 40%))
+    minmax(0, 1fr)
     minmax(var(--chart-value-w), auto);
   align-items: center;
   gap: var(--space-2);

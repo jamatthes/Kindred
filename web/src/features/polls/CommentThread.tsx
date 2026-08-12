@@ -92,10 +92,13 @@ export function CommentThread({ pollId }: { pollId: string }) {
   }
 
   return (
-    <section className="comments">
-      <h3 className="panel-block__title">
-        Comments <span className="tabular">{comments.length}</span>
-      </h3>
+    // Carries its own `.poll-block` panel rather than being wrapped in one by the screen,
+    // so it stays a single <section> with a single heading.
+    <section className="comments poll-block">
+      <h2 className="poll-block__head">
+        <span>Comments</span>
+        <span className="tabular">{comments.length}</span>
+      </h2>
 
       {error ? <Banner tone="error">{error}</Banner> : null}
 

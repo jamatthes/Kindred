@@ -14,7 +14,7 @@
  * given.
  */
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useSession } from '../../app/session'
 import { useNavigate } from '../../app/router'
 import { useStage } from '../../app/useStage'
@@ -48,16 +48,26 @@ function PollListItem({
   const done = poll.group_completion.complete
   const total = poll.group_completion.total
   const percent = total === 0 ? 0 : Math.round((done / total) * 100)
+  // The button's accessible name is the poll's question and nothing else. Left to its
+  // contents it came out as "Where shall we go? Open Score 1-10 4 options You: Part done
+  // 5 of 9 voted" — a name a screen-reader user has to sit through before they know which
+  // poll it is. The status and progress stay in the accessible tree as the description.
+  const titleId = useId()
+  const metaId = useId()
 
   return (
     <button
       type="button"
       className={`poll-card${selected ? ' is-on' : ''}`}
       onClick={onOpen}
+      aria-labelledby={titleId}
+      aria-describedby={metaId}
       aria-current={selected ? 'true' : undefined}
     >
-      <span className="poll-card__title">{poll.title}</span>
-      <span className="poll-card__tags">
+      <span className="poll-card__title" id={titleId}>
+        {poll.title}
+      </span>
+      <span className="poll-card__tags" id={metaId}>
         <span className={`tag tag--${poll.status}`}>
           {poll.status === 'open' ? 'Open' : 'Closed'}
         </span>
@@ -178,6 +188,7 @@ export function PollsScreen({ selectedId }: { selectedId?: string }) {
   const detail = usePollDetail(selectedId ?? null)
   const [creating, setCreating] = useState(false)
   const [matrixOpen, setMatrixOpen] = useState(true)
+  const headingBase = useId()
 
   const isOrganiser = Boolean(user?.is_organiser)
   const poll = detail.poll
@@ -268,42 +279,60 @@ export function PollsScreen({ selectedId }: { selectedId?: string }) {
               </div>
             ) : null}
 
+            {/* The detail column reads top to bottom as the order a member actually works
+                in: answer it, see who still hasn't, read the result, open the detail, then
+                talk about it. Each stage is one `.poll-block` panel so the boundaries are
+                visible without headings shouting; the nudge line stays a bare strip
+                because it is a status, not a stage. */}
+
+            {/* Closed or ended: no control at all, not a disabled one (PL-17). */}
+            {poll.status === 'open' && stage.canMutate && user ? (
+              <section className="poll-block" aria-labelledby={`${headingBase}-answer`}>
+                <h2 className="poll-block__head" id={`${headingBase}-answer`}>
+                  Your answer
+                </h2>
+                <VotingControl
+                  poll={poll}
+                  results={results}
+                  userId={user.id}
+                  onResults={detail.setResults}
+                />
+              </section>
+            ) : null}
+
             <NonResponders
               results={results}
               poll={poll}
               canNudge={isOrganiser && stage.canMutate}
             />
 
-            {/* Closed or ended: no control at all, not a disabled one (PL-17). */}
-            {poll.status === 'open' && stage.canMutate && user ? (
-              <VotingControl
-                poll={poll}
-                results={results}
-                userId={user.id}
-                onResults={detail.setResults}
-              />
-            ) : null}
+            <section className="poll-block" aria-labelledby={`${headingBase}-results`}>
+              <h2 className="poll-block__head" id={`${headingBase}-results`}>
+                <span>Results</span>
+                {/* The insight itself is the AvgBar's title (charts carry their insight as
+                    their title, honesty rule 6) — repeating it as a heading printed the
+                    same sentence twice back to back. Only the methodology note stays. */}
+                <span className="poll-block__note">
+                  Averages count only cast scores — nobody is treated as a zero.
+                </span>
+              </h2>
+              <Results results={results} />
+            </section>
 
-            {/* The insight itself is the AvgBar's title (charts carry their insight as
-                their title, honesty rule 6) — repeating it here as a bare heading printed
-                the same sentence twice back to back. Only the methodology note stays. */}
-            <p className="insight-sub">
-              Averages count only cast scores — nobody is treated as a zero.
-            </p>
-
-            <Results results={results} />
-
-            <div className="matrix-block">
-              <button
-                type="button"
-                className="matrix-block__toggle"
-                aria-expanded={matrixOpen}
-                onClick={() => setMatrixOpen((open) => !open)}
-              >
-                {matrixOpen ? 'Hide' : 'Show'} everyone&apos;s scores
-              </button>
+            <section className="poll-block matrix-block">
+              <h2 className="poll-block__head">
+                <span>Everyone&apos;s scores</span>
+                <button
+                  type="button"
+                  className="matrix-block__toggle"
+                  aria-expanded={matrixOpen}
+                  onClick={() => setMatrixOpen((open) => !open)}
+                >
+                  {matrixOpen ? 'Hide' : 'Show'}
+                </button>
+              </h2>
               {matrixOpen && user ? <Matrix results={results} userId={user.id} /> : null}
-            </div>
+            </section>
 
             <CommentThread pollId={poll.id} />
 

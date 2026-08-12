@@ -163,10 +163,47 @@
   line-height: var(--leading-tight);
 }
 
-.insight-sub {
+/* ---------- detail blocks ----------
+   Your answer / results / everyone's scores / comments are each one panel, so the eye
+   finds the stage boundaries without a heading hierarchy shouting them. Same raised-surface
+   idiom as .nonresponders and .admin-bar below, and the head reuses .poll-list__head's
+   small-caps label — no new visual language, and the padding stays at --space-3 because
+   this is a data column, not a landing page. */
+
+.poll-block {
+  display: grid;
+  gap: var(--space-2);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-3);
+  align-content: start;
+}
+
+.poll-block__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* The methodology note rides on the results head rather than floating between the head
+   and the first chart, where it used to need a negative margin to stop reading as a
+   caption for the chart above it. */
+.poll-block__note {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
   color: var(--color-text-muted);
-  margin-top: calc(-1 * var(--space-2));
+  text-align: right;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .decision-banner {
@@ -234,11 +271,11 @@
 
 /* ---------- voting control ---------- */
 
+/* No separator of its own: .poll-block is the grouping now, and a rule inside a bordered
+   panel just draws a second boundary a few pixels in from the first. */
 .vote {
   display: grid;
   gap: var(--space-2);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-3);
 }
 
 .vote__legend {
@@ -346,29 +383,27 @@
 
 /* ---------- results and matrix ---------- */
 
-/* Capped: the SVG widgets scale their type with the container, so full-column width
-   renders them at poster size (see --chart-block-max-w). */
+/* Capped at the width past which a 0-10 track stops being comparable row to row — not,
+   since the charts moved their text to HTML, anything to do with type size. See the note
+   on --chart-block-max-w. */
 .results {
   display: grid;
   gap: var(--space-4);
   max-width: var(--chart-block-max-w);
 }
 
-.matrix-block {
-  display: grid;
-  gap: var(--space-2);
-}
-
 .matrix-block__toggle {
-  justify-self: start;
   background: none;
   border: none;
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--color-accent);
   cursor: pointer;
-  padding: var(--space-1) 0;
+  padding: 0;
+  flex: none;
 }
 
 /* ---------- comments ---------- */
@@ -376,8 +411,6 @@
 .comments {
   display: grid;
   gap: var(--space-2);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-3);
 }
 
 .comments__list {
