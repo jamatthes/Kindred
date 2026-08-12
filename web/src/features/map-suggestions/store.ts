@@ -35,6 +35,11 @@ export type SuggestionViewState = {
    * this only matters once something *is* selected — the "List" toggle in `design.md`.
    * Mobile: which bottom sheet is raised. */
   panelView: 'list' | 'details'
+  /** `distances/design.md` Phase 10's sort perspective: `null` means "the caller's own
+   * family" (the default, needing no extra fetch — every suggestion already carries its
+   * own family's row first). A family id switches the distance column, and the list/map,
+   * to see the trip through that family's driving times instead. */
+  distancePerspectiveFamilyId: string | null
 }
 
 const EMPTY_FILTERS: SuggestionFilters = { types: [], statuses: [], familyIds: [], needsMyVote: false }
@@ -44,6 +49,7 @@ let state: SuggestionViewState = {
   selectedId: null,
   sort: null,
   panelView: 'list',
+  distancePerspectiveFamilyId: null,
 }
 
 const listeners = new Set<() => void>()
@@ -97,6 +103,10 @@ export const suggestionStore = {
     setState({ filters: EMPTY_FILTERS })
   },
 
+  setDistancePerspective(familyId: string | null) {
+    setState({ distancePerspectiveFamilyId: familyId })
+  },
+
   /** Tri-state: asc → desc → original (`null`), matching `DataTable`'s cycle
    * (`app/ui/DataTable.tsx`) so the list's own header click and this shared sort agree. */
   cycleSort(field: SuggestionSortField) {
@@ -112,7 +122,13 @@ export const suggestionStore = {
 
   /** Test-only: resets the module singleton between test cases. */
   reset() {
-    state = { filters: EMPTY_FILTERS, selectedId: null, sort: null, panelView: 'list' }
+    state = {
+      filters: EMPTY_FILTERS,
+      selectedId: null,
+      sort: null,
+      panelView: 'list',
+      distancePerspectiveFamilyId: null,
+    }
     notify()
   },
 }

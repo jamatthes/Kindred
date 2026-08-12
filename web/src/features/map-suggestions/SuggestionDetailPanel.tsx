@@ -15,6 +15,11 @@
  * components (`SuggestionVotePanel`, `CommentThread`, `AdminStatusControls`) — this panel
  * used plain placeholders for all three ahead of that feature; this is the swap the NOTE at
  * the bottom of `plan/features/map-suggestions/design.md` described.
+ *
+ * The distance block is `distances`' `FamilyDistanceExpander` (own family first, then every
+ * family on request) plus a single-suggestion force-recompute for organisers — the plain
+ * duration list this panel shipped as a Phase-8 placeholder is the swap
+ * `distances/design.md`'s own handoff NOTE described.
  */
 
 import { useEffect, useState } from 'react'
@@ -23,6 +28,7 @@ import { ConfirmDialog } from '../../app/ui/ConfirmDialog'
 import { useToast } from '../../app/ui/toastContext'
 import { useSession } from '../../app/session'
 import { useStage } from '../../app/useStage'
+import { useNavigate } from '../../app/router'
 import { IdentityBadge } from '../../design/IdentityBadge'
 import { familyColor } from '../../design/familyColor'
 import { getPlaceDetails, placesAvailable } from './placesClient'
@@ -31,6 +37,9 @@ import { suggestionStore } from './store'
 import { SuggestionVotePanel } from '../voting-comments/SuggestionVotePanel'
 import { CommentThread } from '../voting-comments/CommentThread'
 import { AdminStatusControls } from '../voting-comments/AdminStatusControls'
+import { FamilyDistanceExpander } from '../distances/FamilyDistanceExpander'
+import { RecomputeButton } from '../distances/RecomputeButton'
+import { useRecompute } from '../distances/useRecompute'
 import type { Suggestion, SuggestionStatus } from '../../app/types'
 import './suggestionsList.css'
 import './SuggestionDetailPanel.css'
@@ -54,13 +63,6 @@ function openInMapsUrl(s: Suggestion): string {
   if (s.type === 'region') return `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`
   const dest = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`
   return s.place_id ? `${dest}&destination_place_id=${s.place_id}` : dest
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds === null) return '—'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.round((seconds % 3600) / 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
 function PhotoStrip({ suggestion }: { suggestion: Suggestion }) {
@@ -135,10 +137,15 @@ export type SuggestionDetailPanelProps = {
 export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack }: SuggestionDetailPanelProps) {
   const { user } = useSession()
   const stage = useStage()
+  const navigate = useNavigate()
   const showToast = useToast()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A failed distance chip's "Retry" is the same suggestion-scoped recompute the panel's
+  // own button below triggers (the endpoint has no per-family granularity) — a second
+  // instance so its own toast/busy state doesn't fight the button's.
+  const chipRetry = useRecompute()
 
   const isAuthor = user?.id === suggestion.created_by.user_id
   const isFamilyLead =
@@ -221,17 +228,22 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
       {suggestion.distances.length > 0 ? (
         <div className="sugg-detail__distances">
           <h3>Distance from each family</h3>
-          <ul>
-            {suggestion.distances.map((d) => (
-              <li key={d.family_id}>
-                <span>{d.family_name}</span>
-                <span className="tabular">
-                  {formatDuration(d.duration_s)}
-                  {d.is_estimate ? ' (estimate)' : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <FamilyDistanceExpander
+            distances={suggestion.distances}
+            ownFamilyId={user?.family?.id ?? null}
+            suggestionType={suggestion.type}
+            canRetryFailed={canAdminister}
+            onRetryFamily={() => {
+              if (!user?.trip) return
+              void chipRetry.run(user.trip.id, suggestion.id).then((result) => {
+                if (result) showToast(`Queued ${result.queued_pairs} pair${result.queued_pairs === 1 ? '' : 's'}.`)
+              })
+            }}
+            onSetHomeFor={(familyId) => navigate({ name: 'families', familyId })}
+          />
+          {canAdminister && user?.trip ? (
+            <RecomputeButton tripId={user.trip.id} suggestionId={suggestion.id} label="Force recompute this suggestion" />
+          ) : null}
         </div>
       ) : null}
 

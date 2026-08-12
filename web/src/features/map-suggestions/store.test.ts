@@ -65,6 +65,14 @@ describe('suggestionStore', () => {
     expect(suggestionStore.getState().filters.needsMyVote).toBe(false)
   })
 
+  it('setDistancePerspective switches whose family the sort/column reflects (distances Phase 10)', () => {
+    expect(suggestionStore.getState().distancePerspectiveFamilyId).toBeNull()
+    suggestionStore.setDistancePerspective('fam-hendersons')
+    expect(suggestionStore.getState().distancePerspectiveFamilyId).toBe('fam-hendersons')
+    suggestionStore.setDistancePerspective(null)
+    expect(suggestionStore.getState().distancePerspectiveFamilyId).toBeNull()
+  })
+
   it('notifies subscribers on every state change', () => {
     let calls = 0
     const unsubscribe = suggestionStore.subscribe(() => {

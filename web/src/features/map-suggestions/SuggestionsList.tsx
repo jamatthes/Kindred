@@ -13,6 +13,11 @@ import type { Suggestion } from '../../app/types'
 import { hasActiveFilters, suggestionStore, useSuggestionView } from './store'
 import { familyColor } from '../../design/familyColor'
 import { CompactVoteTally } from '../voting-comments/VoteTally'
+import { useFamilies } from '../families/useFamilies'
+import { DistanceCell } from '../distances/DistanceCell'
+import { DistancePerspectiveSelector } from '../distances/DistancePerspectiveSelector'
+import { useBulkDistances } from '../distances/useBulkDistances'
+import { distanceForFamily, distanceSortValue } from '../distances/distanceOrder'
 import './suggestionsList.css'
 
 const TYPE_LABEL: Record<Suggestion['type'], string> = {
@@ -30,26 +35,41 @@ const STATUS_LABEL: Record<Suggestion['status'], string> = {
   rejected: 'Rejected',
 }
 
-function primaryDistanceM(s: Suggestion): number | null {
-  const withValue = s.distances.filter((d) => d.distance_m !== null)
-  if (withValue.length === 0) return null
-  return Math.min(...withValue.map((d) => d.distance_m as number))
-}
-
-function formatDistance(s: Suggestion): string {
-  const m = primaryDistanceM(s)
-  if (m === null) return '—'
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`
-}
-
 export type SuggestionsListProps = {
   suggestions: Suggestion[]
+  /** Needed only to refetch another family's perspective (`useBulkDistances`); the default
+   * own-family view needs neither, which is why both are optional rather than plumbed
+   * through every existing call site and test. */
+  tripId?: string
+  ownFamilyId?: string | null
   onCreate?: () => void
   emptyAction?: boolean
 }
 
-export function SuggestionsList({ suggestions, onCreate, emptyAction = true }: SuggestionsListProps) {
+export function SuggestionsList({
+  suggestions,
+  tripId = undefined,
+  ownFamilyId = null,
+  onCreate,
+  emptyAction = true,
+}: SuggestionsListProps) {
   const view = useSuggestionView()
+  const { families } = useFamilies()
+  const perspectiveId = view.distancePerspectiveFamilyId
+  // Own perspective needs no extra request — every suggestion already carries its own
+  // family's row first (`design.md`'s own reasoning for the bulk endpoint existing at all).
+  const { bySuggestion } = useBulkDistances(tripId ?? null, perspectiveId)
+
+  const perspectiveName =
+    perspectiveId === null
+      ? 'you'
+      : (families.find((f) => f.id === perspectiveId)?.name ?? 'that family')
+
+  function distanceFor(row: Suggestion) {
+    if (perspectiveId === null) return distanceForFamily(row.distances, ownFamilyId)
+    const rows = bySuggestion[row.id] ?? row.distances
+    return distanceForFamily(rows, perspectiveId)
+  }
 
   const columns = useMemo<Column<Suggestion>[]>(
     () => [
@@ -98,13 +118,17 @@ export function SuggestionsList({ suggestions, onCreate, emptyAction = true }: S
       },
       {
         key: 'distance',
-        header: 'Distance',
+        header: `Distance (from ${perspectiveName})`,
         numeric: true,
-        render: formatDistance,
-        sortBy: primaryDistanceM,
+        render: (row) => <DistanceCell distance={distanceFor(row)} />,
+        sortBy: (row) => distanceSortValue(distanceFor(row)),
       },
     ],
-    [],
+    // `distanceFor` itself is deliberately not a dep: it is a plain closure recreated every
+    // render, and listing it would make this memo useless (a "stable" dep that never is).
+    // Its own inputs are, so recomputing exactly when they change is what this list gives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [perspectiveId, bySuggestion, ownFamilyId, perspectiveName],
   )
 
   if (suggestions.length === 0) {
@@ -128,12 +152,15 @@ export function SuggestionsList({ suggestions, onCreate, emptyAction = true }: S
   }
 
   return (
-    <DataTable
-      caption="Trip suggestions"
-      columns={columns}
-      rows={suggestions}
-      rowKey={(row) => row.id}
-      onRowClick={(row) => suggestionStore.select(row.id)}
-    />
+    <>
+      <DistancePerspectiveSelector ownFamilyId={ownFamilyId} />
+      <DataTable
+        caption="Trip suggestions"
+        columns={columns}
+        rows={suggestions}
+        rowKey={(row) => row.id}
+        onRowClick={(row) => suggestionStore.select(row.id)}
+      />
+    </>
   )
 }

@@ -144,3 +144,31 @@ describe('SuggestionDetailPanel — open in Google Maps', () => {
     )
   })
 })
+
+describe('SuggestionDetailPanel — force-recompute affordance (distances D7)', () => {
+  const oneDistance: Suggestion['distances'] = [
+    { family_id: 'fam-1', family_name: 'Parkers', family_color: 1, status: 'failed', duration_s: null, distance_m: null, is_estimate: false, computed_at: null },
+  ]
+
+  it('is absent for an ordinary member, even with a trip in session', () => {
+    mockUser = { id: 'viewer', is_owner: false, is_organiser: false, family: null, trip: { id: 't1', name: 'Cornwall', stage: 'planning', start_date: null, end_date: null, timezone: 'Europe/London' } }
+    renderPanel({ distances: oneDistance })
+    expect(screen.queryByRole('button', { name: 'Force recompute this suggestion' })).not.toBeInTheDocument()
+  })
+
+  it('renders for an organiser', () => {
+    mockUser = { id: 'org-1', is_owner: false, is_organiser: true, family: null, trip: { id: 't1', name: 'Cornwall', stage: 'planning', start_date: null, end_date: null, timezone: 'Europe/London' } }
+    renderPanel({ distances: oneDistance })
+    expect(screen.getByRole('button', { name: 'Force recompute this suggestion' })).toBeInTheDocument()
+  })
+
+  it('a failed chip offers a Retry to the organiser but not to a member', () => {
+    mockUser = { id: 'viewer', is_owner: false, is_organiser: false, family: null, trip: { id: 't1', name: 'Cornwall', stage: 'planning', start_date: null, end_date: null, timezone: 'Europe/London' } }
+    renderPanel({ distances: oneDistance })
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+
+    mockUser = { id: 'org-1', is_owner: false, is_organiser: true, family: null, trip: { id: 't1', name: 'Cornwall', stage: 'planning', start_date: null, end_date: null, timezone: 'Europe/London' } }
+    renderPanel({ distances: oneDistance })
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+})

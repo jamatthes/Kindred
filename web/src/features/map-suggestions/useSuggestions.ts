@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { socket } from '../../app/socket'
 import type { WsEnvelope } from '../../app/wsClient'
-import type { Suggestion, SuggestionStatus } from '../../app/types'
+import type { DistanceStatus, Suggestion, SuggestionStatus } from '../../app/types'
 import { suggestionsApi } from './api'
 import type { SuggestionListParams } from './api'
 
@@ -82,7 +82,22 @@ export function useSuggestionList(params: SuggestionListParams | null): Suggesti
     const onMoved = (envelope: WsEnvelope) => {
       const payload = envelope.payload as Pick<Suggestion, 'id' | 'lat' | 'lng' | 'geometry_geojson'>
       setSuggestions((current) =>
-        current.map((s) => (s.id === payload.id ? { ...s, ...payload } : s)),
+        current.map((s) =>
+          s.id === payload.id
+            ? {
+                ...s,
+                ...payload,
+                // distances/design.md D5: "the chip returns to its estimate state while the
+                // new value is being fetched." The pin's old position made every real
+                // duration stale; reverting to `pending` here (rather than waiting for a
+                // refetch) is what makes that revert visible immediately instead of lagging
+                // behind the recompute the server has just queued.
+                distances: s.distances.map((d) =>
+                  d.status === 'ok' ? { ...d, status: 'pending' as DistanceStatus, duration_s: null, is_estimate: true } : d,
+                ),
+              }
+            : s,
+        ),
       )
     }
     const onStatusChanged = (envelope: WsEnvelope) => {
@@ -110,6 +125,42 @@ export function useSuggestionList(params: SuggestionListParams | null): Suggesti
       const id = payload.suggestion_id ?? payload.id
       if (id) void refetchOne(id)
     }
+    // `distance.updated`'s payload shape is fixed by `distances/design.md` precisely enough
+    // to patch the one family row in place — swapping the chip "as soon as its own answer
+    // lands rather than waiting for the slowest sibling," which is that doc's own reason the
+    // event is per-row rather than per-batch. A full refetch (the `onDerivedFieldChanged`
+    // path other sibling-feature events still use) would reintroduce that wait.
+    const onDistanceUpdated = (envelope: WsEnvelope) => {
+      const payload = envelope.payload as {
+        suggestion_id: string
+        family_id: string
+        status: DistanceStatus
+        duration_s: number | null
+        distance_m: number | null
+        is_estimate: boolean
+        computed_at: string | null
+      }
+      setSuggestions((current) =>
+        current.map((s) => {
+          if (s.id !== payload.suggestion_id) return s
+          const index = s.distances.findIndex((d) => d.family_id === payload.family_id)
+          if (index === -1) return s // a family this client has no row for yet — nothing to patch
+          const nextDistances = s.distances.map((d, i) =>
+            i === index
+              ? {
+                  ...d,
+                  status: payload.status,
+                  duration_s: payload.duration_s,
+                  distance_m: payload.distance_m,
+                  is_estimate: payload.is_estimate,
+                  computed_at: payload.computed_at,
+                }
+              : d,
+          )
+          return { ...s, distances: nextDistances }
+        }),
+      )
+    }
 
     const unsubscribes = [
       socket.subscribe('suggestion.created', onFullRecord),
@@ -118,7 +169,7 @@ export function useSuggestionList(params: SuggestionListParams | null): Suggesti
       socket.subscribe('suggestion.status_changed', onStatusChanged),
       socket.subscribe('suggestion.deleted', onDeleted),
       socket.subscribe('suggestion.vote.updated', onDerivedFieldChanged),
-      socket.subscribe('distance.updated', onDerivedFieldChanged),
+      socket.subscribe('distance.updated', onDistanceUpdated),
       socket.subscribe('comment.created', onDerivedFieldChanged),
       socket.subscribe('comment.deleted', onDerivedFieldChanged),
       socket.subscribe('stage.changed', () => void load()),

@@ -117,6 +117,69 @@ describe('useSuggestionList', () => {
     await waitFor(() => expect(result.current.suggestions[0].status).toBe('approved'))
   })
 
+  it('patches the one family row in place on distance.updated, without a refetch (distances Phase 9)', async () => {
+    list.mockResolvedValueOnce([
+      suggestion({
+        id: 's1',
+        distances: [
+          { family_id: 'fam-a', family_name: 'Parkers', family_color: 1, status: 'pending', duration_s: null, distance_m: 48_000, is_estimate: true, computed_at: null },
+          { family_id: 'fam-b', family_name: 'Hendersons', family_color: 2, status: 'pending', duration_s: null, distance_m: 20_000, is_estimate: true, computed_at: null },
+        ],
+      }),
+    ])
+    const { result } = renderHook(() => useSuggestionList({ trip_id: 't1' }))
+    await waitFor(() => expect(result.current.suggestions).toHaveLength(1))
+
+    act(() =>
+      emit('distance.updated', {
+        suggestion_id: 's1',
+        family_id: 'fam-a',
+        status: 'ok',
+        duration_s: 9600,
+        distance_m: 210_000,
+        is_estimate: false,
+        computed_at: '2027-01-02T00:00:00Z',
+      }),
+    )
+
+    await waitFor(() => {
+      const patched = result.current.suggestions[0].distances.find((d) => d.family_id === 'fam-a')
+      expect(patched?.status).toBe('ok')
+      expect(patched?.duration_s).toBe(9600)
+    })
+    // The sibling family's still-pending row is untouched — this is a per-row patch, not a
+    // whole-suggestion refetch.
+    const other = result.current.suggestions[0].distances.find((d) => d.family_id === 'fam-b')
+    expect(other?.status).toBe('pending')
+    expect(list).toHaveBeenCalledTimes(1) // no refetch triggered
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('reverts real distances to the estimate state on suggestion.moved (D5)', async () => {
+    list.mockResolvedValueOnce([
+      suggestion({
+        id: 's1',
+        lat: 50.4,
+        lng: -4.7,
+        distances: [
+          { family_id: 'fam-a', family_name: 'Parkers', family_color: 1, status: 'ok', duration_s: 9600, distance_m: 210_000, is_estimate: false, computed_at: '2027-01-01T00:00:00Z' },
+        ],
+      }),
+    ])
+    const { result } = renderHook(() => useSuggestionList({ trip_id: 't1' }))
+    await waitFor(() => expect(result.current.suggestions).toHaveLength(1))
+
+    act(() => emit('suggestion.moved', { id: 's1', lat: 51.0, lng: -3.9, geometry_geojson: null }))
+
+    await waitFor(() => {
+      const reverted = result.current.suggestions[0].distances[0]
+      expect(reverted.status).toBe('pending')
+      expect(reverted.duration_s).toBeNull()
+      expect(reverted.is_estimate).toBe(true)
+    })
+    expect(result.current.suggestions[0].lat).toBe(51.0)
+  })
+
   it('refetches and reconciles on resync (reconnect)', async () => {
     list.mockResolvedValueOnce([suggestion({ id: 's1' })])
     const { result } = renderHook(() => useSuggestionList({ trip_id: 't1' }))

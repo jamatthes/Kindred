@@ -86,4 +86,39 @@ describe('SuggestionsList — sortable columns', () => {
     rows = screen.getAllByRole('row').slice(1)
     expect(rows[0]).toHaveTextContent('Low')
   })
+
+  it('sorts distance real -> estimate -> failed/no_home -> no_route (distances design.md)', () => {
+    const own = (d: Partial<Suggestion['distances'][number]>): Suggestion['distances'] => [
+      {
+        family_id: 'own',
+        family_name: 'Us',
+        family_color: 1,
+        status: 'ok',
+        duration_s: null,
+        distance_m: null,
+        is_estimate: false,
+        computed_at: null,
+        ...d,
+      },
+    ]
+    render(
+      <SuggestionsList
+        ownFamilyId="own"
+        suggestions={[
+          suggestion({ id: 'route', title: 'NoRoute', distances: own({ status: 'no_route', duration_s: null, distance_m: null }) }),
+          suggestion({ id: 'real', title: 'Real', distances: own({ status: 'ok', duration_s: 1800 }) }),
+          suggestion({ id: 'est', title: 'Estimate', distances: own({ status: 'pending', duration_s: null, distance_m: 5000, is_estimate: true }) }),
+          suggestion({ id: 'fail', title: 'Failed', distances: own({ status: 'failed', duration_s: null, distance_m: null }) }),
+        ]}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Distance/ })) // asc
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Real'),
+      expect.stringContaining('Estimate'),
+      expect.stringContaining('Failed'),
+      expect.stringContaining('NoRoute'),
+    ])
+  })
 })

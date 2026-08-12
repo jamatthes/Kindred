@@ -41,6 +41,8 @@ import { CreateSuggestionForm } from './CreateSuggestionForm'
 import type { CreateMode } from './CreateSuggestionForm'
 import { SuggestionVotePanel } from '../voting-comments/SuggestionVotePanel'
 import { usePendingVotes } from '../voting-comments/usePendingVotes'
+import { DistanceChip } from '../distances/DistanceChip'
+import { distanceForFamily } from '../distances/distanceOrder'
 import type { Suggestion } from '../../app/types'
 import './mapSuggestions.css'
 
@@ -179,7 +181,12 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
         ) : error ? (
           <Banner tone="error">{error}</Banner>
         ) : (
-          <SuggestionsList suggestions={sorted} onCreate={() => openCreate('drop-pin')} />
+          <SuggestionsList
+            suggestions={sorted}
+            tripId={tripId}
+            ownFamilyId={user?.family?.id ?? null}
+            onCreate={() => openCreate('drop-pin')}
+          />
         )}
       </>
     )
@@ -259,6 +266,14 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
                     canVote={Boolean(user) && stage.canMutate}
                     controlSize="compact"
                   />
+                }
+                distanceChips={
+                  // Popover stays glanceable — the caller's own family only (`design.md` >
+                  // "Placement"); the full per-family breakdown lives in the panel.
+                  (() => {
+                    const own = distanceForFamily(selected.distances, user?.family?.id ?? null)
+                    return own ? <DistanceChip distance={own} isRegion={selected.type === 'region'} /> : null
+                  })()
                 }
                 onDetails={() => setMobileSnap('full')}
               />
