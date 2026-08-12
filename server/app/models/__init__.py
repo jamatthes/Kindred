@@ -6,6 +6,13 @@ the full metadata (``alembic/env.py`` imports this module for exactly that reaso
 
 from app.models.attachment import ATTACHMENT_SUBJECT_TYPES, Attachment
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.comment import (
+    COMMENT_SUBJECTS,
+    NOTIFICATION_POLL_NUDGE,
+    SUBJECT_POLL,
+    Comment,
+    Notification,
+)
 from app.models.family import (
     FAMILY_MANAGER_ROLES,
     FAMILY_ROLES,
@@ -27,6 +34,21 @@ from app.models.family import (
     location_block_reason,
     next_free_color,
     spouse_may_act_on,
+)
+from app.models.poll import (
+    KIND_OPTIONS,
+    KIND_SCORE_MATRIX,
+    OPTIONS_POLL_SCORE,
+    POLL_KINDS,
+    POLL_STATUSES,
+    SCORE_MAX,
+    SCORE_MIN,
+    STATUS_CLOSED,
+    STATUS_OPEN,
+    THUMBS,
+    Poll,
+    PollOption,
+    PollScore,
 )
 from app.models.session import LoginAttempt, Session
 from app.models.setting import (
@@ -50,6 +72,19 @@ from app.models.trip_organiser import TripOrganiser
 from app.models.user import THEME_PREFS, User, UserSettings
 
 __all__ = [
+    "THUMBS",
+    "SUBJECT_POLL",
+    "STATUS_OPEN",
+    "STATUS_CLOSED",
+    "SCORE_MIN",
+    "SCORE_MAX",
+    "POLL_STATUSES",
+    "POLL_KINDS",
+    "OPTIONS_POLL_SCORE",
+    "NOTIFICATION_POLL_NUDGE",
+    "KIND_SCORE_MATRIX",
+    "KIND_OPTIONS",
+    "COMMENT_SUBJECTS",
     "ATTACHMENT_SUBJECT_TYPES",
     "FAMILY_MANAGER_ROLES",
     "FAMILY_ROLES",
@@ -78,6 +113,11 @@ __all__ = [
     "FamilyMember",
     "Invite",
     "LoginAttempt",
+    "Comment",
+    "Notification",
+    "Poll",
+    "PollOption",
+    "PollScore",
     "Session",
     "Setting",
     "TimestampMixin",

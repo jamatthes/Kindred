@@ -30,6 +30,7 @@ from app.routers import (
     health,
     invites,
     me,
+    polls,
     presence,
     settings as settings_router,
     trips,
@@ -133,6 +134,11 @@ def create_app() -> FastAPI:
     app.include_router(families.router, prefix=API_PREFIX)
     app.include_router(invites.router, prefix=API_PREFIX)
     app.include_router(attachments.router, prefix=API_PREFIX)
+    app.include_router(polls.router, prefix=API_PREFIX)
+    # `/comments/{id}` is deliberately not under `/polls`: the table is polymorphic, and
+    # `voting-comments` (M3) will serve suggestion and itinerary threads from the same
+    # routes rather than duplicating them per subject.
+    app.include_router(polls.comments_router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
     # Same feature, different gate: every role reads the voting modes, so that one route is
     # `require_member` and sits outside the /admin prefix.

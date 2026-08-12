@@ -277,3 +277,133 @@ export type Stats = {
   checkins: number
   notifications_unread: number
 }
+
+// --- polls --------------------------------------------------------------------------------
+// The shapes `plan/features/polls/design.md` specifies. Every computed number — average,
+// spread, split and close flags, ranks, completion, the insight sentence — is produced
+// server-side and simply rendered here. The frontend never recomputes any of it, so the
+// table, the charts and the map cannot disagree.
+
+export type PollKind = 'score_matrix' | 'options'
+export type PollStatus = 'open' | 'closed'
+export type Completion = 'none' | 'partial' | 'complete'
+export type Thumb = 'up' | 'down'
+
+export type PollOption = {
+  id: string
+  label: string
+  lat: number | null
+  lng: number | null
+  place_id: string | null
+  sort: number
+  created_by: string | null
+  suggestion_id: string | null
+  /** Computed per caller — the client never derives permission. */
+  can_delete: boolean
+}
+
+export type GroupCompletion = {
+  complete: number
+  partial: number
+  none: number
+  /** The membership, not the respondents — the denominator for "3 of 9 haven't voted". */
+  total: number
+}
+
+export type PollDecision = { option_id: string; label: string }
+
+export type PollSummary = {
+  id: string
+  title: string
+  kind: PollKind
+  status: PollStatus
+  option_count: number
+  comment_count: number
+  my_completion: Completion
+  group_completion: GroupCompletion
+  decision: PollDecision | null
+  created_at: string
+}
+
+export type Poll = PollSummary & {
+  description: string | null
+  allow_member_options: boolean
+  options: PollOption[]
+  voting_mode: VotingMode
+  closed_at: string | null
+  decided_at: string | null
+  decided_by: string | null
+  can_nudge: boolean
+  next_nudge_at: string | null
+  /** False at M2 — `map-suggestions` has not shipped, so the action is never rendered. */
+  can_seed_region: boolean
+}
+
+export type PollScore = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  score: number | null
+  thumb: string | null
+}
+
+export type OptionResult = {
+  option_id: string
+  label: string
+  lat: number | null
+  lng: number | null
+  /** Null when nobody has scored. **Never 0.0** — a silence is not a zero. */
+  average: number | null
+  response_count: number
+  /** Null below two responses: the spread of one number is undefined, not zero. */
+  spread: number | null
+  is_split: boolean
+  is_close: boolean
+  rank: number
+  scores: PollScore[]
+  up_count: number
+  down_count: number
+  none_count: number
+}
+
+export type MemberResult = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  completion: Completion
+}
+
+export type NonResponder = { user_id: string; display_name: string; completion: Completion }
+
+export type PollResults = {
+  poll_id: string
+  voting_mode: VotingMode
+  status: PollStatus
+  options: OptionResult[]
+  members: MemberResult[]
+  non_responders: { count: number; total: number; users: NonResponder[] }
+  /** Generated server-side so every view carries the same sentence. */
+  insight: string
+}
+
+export type PollComment = {
+  id: string
+  subject_type: string
+  subject_id: string
+  author_id: string | null
+  author_name: string
+  family_id: string | null
+  family_color: number | null
+  body: string
+  created_at: string
+  edited_at: string | null
+  can_edit: boolean
+  can_delete: boolean
+}
+
+export type NudgeResult = { nudged: number; next_nudge_at: string | null; message: string }
+
+/** `GET /trip/category-settings` — the public read every member may make. */
+export type CategorySettingPublic = { category: VotingCategory; voting_mode: VotingMode }

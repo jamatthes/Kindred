@@ -30,7 +30,7 @@ const STAGE_LABEL: Record<TripStage, string> = {
 const NAV = [
   { key: 'home', label: 'Home', ready: true, to: { name: 'home' } as const },
   { key: 'map', label: 'Map', ready: false, arrives: 'the map & suggestions feature' },
-  { key: 'polls', label: 'Polls', ready: false, arrives: 'the polls feature' },
+  { key: 'polls', label: 'Polls', ready: true, to: { name: 'polls' } as const },
   { key: 'itinerary', label: 'Itinerary', ready: false, arrives: 'the itinerary feature' },
   { key: 'families', label: 'Families', ready: true, to: { name: 'families' } as const },
 ] as const

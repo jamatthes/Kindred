@@ -98,4 +98,12 @@
      gallery card stays a predictable size next to the chart/picker cards around it. */
   --sg-map-canvas-w: 360px;
   --sg-map-canvas-h: 260px;
+
+  /* --- Polls (features/polls) ---------------------------------------------
+     The list column holds a question, three tags and a progress line; narrower
+     than this and the questions wrap to three lines. The label column in the
+     voting control is sized so a destination name sits on one line beside its
+     1-10 scale. */
+  --poll-list-width: 280px;
+  --poll-label-width: 160px;
 }

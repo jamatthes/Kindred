@@ -14,7 +14,9 @@ Features covered so far:
   member, invite.
 * `admin-console` — trip settings, voting modes, user removal, organiser appointment.
 
-Still to add, as each lands: `polls` (M2), `map-suggestions` / `voting-comments` (M3),
+* `polls` — create, score, add an option, close, decide, nudge and comment.
+
+Still to add, as each lands: `map-suggestions` / `voting-comments` (M3),
 `itinerary-timeline` (M4), `holiday-stage` check-ins and live locations (M5).
 """
 
@@ -26,7 +28,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Family, Invite, Trip, TripOrganiser, User
+from app.models import Family, Invite, Poll, PollOption, Trip, TripOrganiser, User
 from tests.conftest import add_member, login_as, make_family, make_user
 
 pytestmark = pytest.mark.asyncio
@@ -204,3 +206,94 @@ async def test_the_stage_itself_can_still_be_changed(client, db, trip: Trip, fro
     )
     assert response.status_code == 200
     assert response.json()["stage"] == "holiday"
+
+
+# --- polls -------------------------------------------------------------------------------------
+#
+# Every mutating shape this feature has, because the freeze is `require_stage` on each route
+# individually — one representative call would only prove one decorator was present.
+
+
+@pytest.fixture
+async def frozen_poll(db: AsyncSession, trip: Trip, frozen) -> tuple[User, Poll, PollOption]:
+    """A poll that already exists when the trip freezes, so its routes can be exercised."""
+    owner, _family, _victim = frozen
+    poll = Poll(trip_id=trip.id, title="Where shall we go?", kind="score_matrix")
+    db.add(poll)
+    await db.flush()
+    option = PollOption(poll_id=poll.id, label="Cornwall", sort=0, created_by=owner.id)
+    db.add(option)
+    await db.commit()
+    return owner, poll, option
+
+
+async def test_creating_a_poll_is_frozen(client, db, frozen) -> None:
+    owner, _family, _victim = frozen
+    await login_as(client, db, owner)
+    assert _stage_forbidden(
+        await client.post(
+            "/api/v1/polls",
+            json={"title": "Too late", "kind": "score_matrix", "options": []},
+        )
+    )
+
+
+async def test_scoring_is_frozen(client, db, frozen_poll) -> None:
+    owner, poll, option = frozen_poll
+    await login_as(client, db, owner)
+    assert _stage_forbidden(
+        await client.put(
+            f"/api/v1/polls/{poll.id}/scores",
+            json={"scores": [{"option_id": str(option.id), "score": 7}]},
+        )
+    )
+
+
+async def test_adding_an_option_is_frozen(client, db, frozen_poll) -> None:
+    owner, poll, _option = frozen_poll
+    await login_as(client, db, owner)
+    assert _stage_forbidden(
+        await client.post(f"/api/v1/polls/{poll.id}/options", json={"label": "Late idea"})
+    )
+
+
+async def test_closing_a_poll_is_frozen(client, db, frozen_poll) -> None:
+    owner, poll, _option = frozen_poll
+    await login_as(client, db, owner)
+    assert _stage_forbidden(
+        await client.post(f"/api/v1/polls/{poll.id}/close", json={"confirm": True})
+    )
+
+
+async def test_deciding_is_frozen(client, db, frozen_poll) -> None:
+    owner, poll, option = frozen_poll
+    await login_as(client, db, owner)
+    assert _stage_forbidden(
+        await client.put(
+            f"/api/v1/polls/{poll.id}/decision", json={"option_id": str(option.id)}
+        )
+    )
+
+
+async def test_nudging_is_frozen(client, db, frozen_poll) -> None:
+    owner, poll, _option = frozen_poll
+    await login_as(client, db, owner)
+    assert _stage_forbidden(await client.post(f"/api/v1/polls/{poll.id}/nudge"))
+
+
+async def test_commenting_is_frozen(client, db, frozen_poll) -> None:
+    owner, poll, _option = frozen_poll
+    await login_as(client, db, owner)
+    assert _stage_forbidden(
+        await client.post(f"/api/v1/polls/{poll.id}/comments", json={"body": "Late thought"})
+    )
+
+
+async def test_reading_a_poll_is_not_frozen(client, db, frozen_poll) -> None:
+    """PL-17: in End every poll is readable in full — options, matrix, averages, spread and
+    the recorded decision. The freeze is on writing, not on the record."""
+    owner, poll, _option = frozen_poll
+    await login_as(client, db, owner)
+    assert (await client.get(f"/api/v1/polls/{poll.id}")).status_code == 200
+    assert (await client.get(f"/api/v1/polls/{poll.id}/results")).status_code == 200
+    assert (await client.get("/api/v1/polls")).status_code == 200

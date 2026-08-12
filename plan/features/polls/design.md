@@ -203,6 +203,11 @@ sets `last_nudge_at`, and emits `notification.new` to each recipient. Rate-limit
 | DELETE | `/polls/{id}/decision` | — | `PollOut` | `require_main_admin` |
 | POST | `/polls/{id}/decision/seed-region` | — | `{suggestion_id}` | `require_main_admin` |
 
+> NOTE (implementation): `design.md`'s permission column throughout this section says
+> `require_main_admin`. That dependency was renamed **`require_organiser`** when the role
+> hierarchy was revised (`plan/overview.md` > Roles, 2026-08-11): the trip's owner, or an
+> organiser they appointed. Family heads and spouses have no elevated rights in polls.
+
 `seed-region` requires a decided option with coordinates. It creates a `region` suggestion at
 that point with the option's label as the title and a note recording the poll it came from,
 then writes `poll_options.suggestion_id`. If that column is already set, it returns the
@@ -280,6 +285,23 @@ inline for the main admin, and an explanatory line for everyone else.
 The standard layout: map centre (~62%) with the right side panel (~38%) **when the poll has
 located options**. When it does not, the poll takes the full content width as a table view,
 because an empty map would be noise (PL-15).
+
+> NOTE (implementation, Phase 8): shipped as a **poll-list column beside a detail column**,
+> following the agreed mockup `design-preview/screen-polls.html`, not the map-plus-panel
+> above. `plan/overview.md`'s UI-first rule says feature UI starts from the agreed mockup, and
+> the mockup is right: a poll's centre of gravity is the matrix, which is wide, and giving it
+> 62% of the width while a map beside it shows five circles is the wrong trade. The mockup
+> also has no map on this screen at all. What survived from this paragraph is the rule that
+> mattered — a poll with no located options must not render an empty map — which is now true
+> trivially.
+>
+> **The map overlay (PL-15, Phase 9) is not built.** There is no configured
+> `GOOGLE_MAPS_BROWSER_KEY` in this environment and no map component in the app yet; the
+> browser SDK arrives with `map-suggestions` (M3). The **data** side is complete: options
+> store `lat`/`lng`/`place_id`, `PollResultsOut.options` carries the coordinates and the
+> average, and the tint value is the shared `--scale-pref-N` ramp — so the overlay is a
+> rendering job over an API that already answers it. `map-suggestions` picks this up; see the
+> hand-off notes.
 
 Panel contents, top to bottom:
 
