@@ -230,7 +230,30 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
 
       {!narrow ? (
         <aside className="map-suggestions__panel" aria-label="Suggestions">
-          {panelBody(selected ? () => suggestionStore.select(null) : undefined)}
+          {creating ? (
+            <CreateSuggestionForm
+              tripId={tripId}
+              initialMode={createMode}
+              onClose={() => {
+                setCreating(false)
+                setPendingClick(null)
+              }}
+              onCreated={(created) => {
+                upsert(created)
+                suggestionStore.select(created.id)
+                setCreating(false)
+              }}
+              pendingClick={pendingClick}
+              onConsumeClick={() => setPendingClick(null)}
+              existingSuggestions={sorted}
+              onFocusExisting={(id) => {
+                setCreating(false)
+                suggestionStore.select(id)
+              }}
+            />
+          ) : (
+            panelBody(selected ? () => suggestionStore.select(null) : undefined)
+          )}
         </aside>
       ) : (
         <>
@@ -288,7 +311,16 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
         </>
       )}
 
-      {creating ? (
+      {/* Mobile only: on desktop the form now renders inside the side panel above, beside
+          the map rather than over it — a full-screen overlay here made drop-pin/draw-region
+          structurally impossible (the smoke that caught it: `01-map-suggestions.spec.ts`),
+          because its backdrop intercepted every click meant for the map underneath.
+          `BottomSheet`'s own backdrop has the identical property (`.sheet-backdrop`,
+          `position: absolute; inset: 0`) and blocking clicks on it is *also* its job when it
+          is showing a suggestion's details — so drop-pin/draw-region on mobile keep this
+          known limitation for now; a non-blocking peek affordance for that one flow is a
+          real follow-up, not something to redesign inline here. */}
+      {narrow && creating ? (
         <div className="map-suggestions__create-overlay">
           <CreateSuggestionForm
             tripId={tripId}
