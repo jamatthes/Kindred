@@ -263,3 +263,47 @@ def test_insight_is_callable_on_its_own() -> None:
     """It is exported separately because the router builds it from already-computed stats."""
     results = _results(cornwall=CORNWALL, lake_district=LAKE_DISTRICT)
     assert insight(results.options) == results.insight
+
+
+# --- the matrix row's colour fields ------------------------------------------------------------
+
+
+async def test_a_custom_family_colour_reaches_the_matrix_row(
+    db, trip
+) -> None:
+    """Regression: `build_results` built each matrix row's dict with `family_color_custom`
+    written twice — once at the wrong indentation, once correctly — so the literal silently
+    depended on which line Python evaluated last. It happened to be right, and the next edit to
+    either line would have made it wrong invisibly. A family past the 24-slot palette carries
+    its colour only in `color_custom`, so this is the case that would have failed.
+    """
+    from sqlalchemy import select
+
+    from app.models import Family, Poll, PollOption, TripCategorySetting
+    from app.services import polls as service
+    from tests.conftest import add_member, make_family, make_user
+
+    db.add(TripCategorySetting(trip_id=trip.id, category="poll", voting_mode="score"))
+    family = await make_family(db, trip, "Overflowers", color=5)
+    family.color = None
+    family.color_custom = "#4433ff"
+    voter = await make_user(db, "overflowvoter")
+    await add_member(db, family, voter, role="head")
+
+    poll = Poll(trip_id=trip.id, title="Where?", kind="score_matrix")
+    db.add(poll)
+    await db.flush()
+    option = PollOption(poll_id=poll.id, label="Cornwall", sort=0)
+    db.add(option)
+    await db.commit()
+
+    poll = await service.load_poll(db, poll.id, trip)
+    await service.upsert_scores(db, poll, voter, [(option.id, 8, None)], "score")
+    await db.commit()
+
+    results = await service.build_results(db, await service.load_poll(db, poll.id, trip), trip)
+
+    row = results["options"][0]["scores"][0]
+    assert row["family_color"] is None
+    assert row["family_color_custom"] == "#4433ff"
+    assert await db.scalar(select(Family.color_custom).where(Family.id == family.id)) == "#4433ff"

@@ -73,6 +73,75 @@ conventions, Google cost rules) and `plan/design-system.md` (layout, tokens, pat
 >   satisfying "never colour alone" without inventing itinerary data it doesn't have. The M3
 >   implementer can extend the glyph to a numbered badge once a sequence value exists.
 
+> **NOTE (server build, branch `feat/m3-suggestions-server`):** Phases 1-6 and 11b of
+> `tasks.md` are implemented — migration, models, schemas, service layer, router, server tests,
+> and the poll-decision → region hand-off. Phases 7-11 (web) and 12 (docs/ops handoff) are not.
+> Files: `server/app/models/suggestion.py`, `server/app/models/geo.py`,
+> `server/app/schemas/suggestion.py`, `server/app/services/suggestions.py`,
+> `server/app/routers/suggestions.py`, `deps.require_can_edit_suggestion`, plus the
+> `suggestions` table and the deferred `poll_options.suggestion_id` FK in
+> `alembic/versions/0001_schema.py`. Tests: `test_models_suggestion.py`,
+> `test_schemas_suggestion.py`, `test_service_suggestions.py`, `test_router_suggestions.py`,
+> `test_seed_region.py` (145 cases).
+>
+> **Deviations from this doc, and why:**
+> - **The polygon vertex cap is 500, not 200.** This document names both numbers — "≤ 500
+>   points" for simplified OSM boundaries, and "a vertex-count cap (target 200)" in the
+>   edge-case table. They cannot both govern one validator: 200 would reject the very
+>   boundaries the doc instructs the server to fetch and store, since
+>   `services/boundaries.py` simplifies to `MAX_RING_POINTS = 500`. The larger number wins and
+>   the two constants now agree (`schemas/suggestion.py`, `MAX_POLYGON_POINTS`).
+> - **`vote_summary` and `distances` ship as honest zeros.** `suggestion_votes` belongs to
+>   `voting-comments` and `distance_cache` to `distances` — sibling M3 features, neither
+>   table created yet. `SuggestionOut` carries both fields in their documented shape, filled
+>   with a zero tally and an empty list, rather than omitting them: the wire contract does not
+>   change when those features land, and the web agent can build the card against the real
+>   shape today. Marked `NOTE (voting-comments)` / `NOTE (distances)` at both sites.
+> - **`sort=votes_*` and `sort=distance_*` are accepted and currently order by creation**, for
+>   the same reason — the columns they sort on do not exist yet. Accepted rather than rejected
+>   so the sort control the web agent is building has a stable contract; a `422` on a control
+>   the user can see is the worse failure. `sort=category_*` and `created_*` are real.
+> - **`DELETE` checks `status = 'scheduled'` only, and does not name the itinerary day.**
+>   `itinerary_items` arrives with `itinerary-timeline` (M4). The `409` and its code are final;
+>   M4 adds the row lookup and the day to the message.
+> - **Named-locality regions are created through a `boundary_query` field on
+>   `POST /suggestions`**, not a separate lookup endpoint. This doc specifies the behaviour
+>   ("one server-side fetch at region creation") but not the wire shape; one create route with
+>   an alternative seed keeps every creation flow converging on one endpoint, as the four UI
+>   entry points already do. Nominatim finding nothing is `404 boundary_not_found`; finding a
+>   place but no boundary stores the fitted ellipse, `properties.boundary_source =
+>   "fallback_ellipse"`, which the UI marks approximate. `boundary_source` is lifted to a
+>   top-level `SuggestionOut` field so the ODbL attribution has one thing to key off.
+> - **`SuggestionCreate` forbids unknown fields**, so an inflated payload carrying Google's
+>   photos or rating is a `422` rather than being silently trimmed. The HARD INVARIANT is
+>   thereby enforced at the edge as well as by the absence of columns, and a client sending
+>   Places details is told to stop rather than left thinking it worked.
+> - **Capability flags added to `SuggestionOut`** (`can_edit`, `can_delete`,
+>   `can_change_status`), matching `schemas/poll.py`'s rule that the frontend renders
+>   permission and never derives it. They are computed from the same predicate
+>   `require_can_edit_suggestion` enforces, so the button and the route cannot disagree.
+> - **`seed_region` refuses a non-geographic option with `422 option_not_located`**, where the
+>   M2 shell returned `409`. `tasks.md` Phase 11b asks for `422`, and it is the better answer:
+>   the request is well-formed and the poll is in the right state; the option is what cannot be
+>   honoured.
+> - **`PATCH /{id}/status` treats re-sending the current status as a no-op**, not an invalid
+>   transition. Two organisers pressing "shortlist" at once should not produce an error for
+>   whichever lost.
+> - **`queue_distance_recompute` is a placed no-op.** The create path and the move path both
+>   call it, and the epsilon behaviour is tested through it (5 m does not reach it, 500 m
+>   does), so `distances` has one function to fill in rather than two call sites to find.
+> - **`Suggestion` declares one relationship, `author`, not the four `tasks.md` Phase 2 lists.**
+>   `trip` is unused — every read is already trip-scoped through a `WHERE`, and an eager
+>   relationship would fetch the trip row once per suggestion for nothing. `suggestion_votes`
+>   has no table yet. `comments` is polymorphic and *cannot* carry a relationship: it has no FK
+>   to its subject, which is the documented cost of one thread implementation serving three
+>   subjects — the count comes from a grouped query in `services/suggestions.py` and the delete
+>   cascade is the router's, in the same transaction, exactly as `polls` does it.
+> - **Implementation note, not a deviation:** `geometry_geojson` and `place_snapshot_json` are
+>   `JSONB(none_as_null=True)`. Without it SQLAlchemy writes a Python `None` as the JSON value
+>   `null`, which is not SQL NULL — and `ck_suggestions_geometry_iff_region` would then reject
+>   every non-region row ever inserted.
+
 ---
 
 ## HARD INVARIANT — Google Places and the Terms of Service

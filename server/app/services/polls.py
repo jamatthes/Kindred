@@ -25,6 +25,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.models import (
     KIND_OPTIONS,
     NOTIFICATION_POLL_NUDGE,
@@ -32,17 +33,18 @@ from app.models import (
     STATUS_CLOSED,
     STATUS_OPEN,
     SUBJECT_POLL,
-    Comment,
+    TYPE_REGION,
     Family,
     FamilyMember,
     Notification,
     Poll,
     PollOption,
     PollScore,
+    Suggestion,
     Trip,
-    TripCategorySetting,
     User,
 )
+from app.models.suggestion import STATUS_PROPOSED as SUGGESTION_PROPOSED
 from app.schemas.common import ApiError
 from app.services.poll_stats import Vote, compute_results
 
@@ -66,13 +68,13 @@ async def get_voting_mode(db: AsyncSession, trip_id: uuid.UUID) -> str:
     ones. The fallback exists so a missing row degrades to the documented default rather than
     to a 500.
     """
-    mode = await db.scalar(
-        select(TripCategorySetting.voting_mode).where(
-            TripCategorySetting.trip_id == trip_id,
-            TripCategorySetting.category == POLL_CATEGORY,
-        )
-    )
-    return mode or "score"
+    from app.services.votes import resolve_voting_mode  # noqa: PLC0415 - see below
+
+    # Delegated to `votes.resolve_voting_mode` since M3 so that polls and suggestions cannot
+    # drift on what "the mode" means or where it is read from. Imported inside the function
+    # rather than at module scope only because `services.polls` is imported very early by the
+    # capability probe; the call itself is unconditional.
+    return await resolve_voting_mode(db, trip_id, POLL_CATEGORY)
 
 
 # --- loading -----------------------------------------------------------------------------------
@@ -281,7 +283,6 @@ async def build_results(db: AsyncSession, poll: Poll, trip: Trip) -> dict:
                     "display_name": user.display_name,
                     "family_id": family.id,
                     "family_color": family.color,
-            "family_color_custom": family.color_custom,
                     "family_color_custom": family.color_custom,
                     "score": row.score if mode == "score" else None,
                     "thumb": row.thumb if mode == "thumbs" else None,
@@ -432,43 +433,83 @@ def suggestions_available() -> bool:
     """Whether `map-suggestions` has shipped.
 
     A capability check rather than a version flag: the module either exists and can create a
-    region, or it does not. At M2 it does not, `can_seed_region` reads false, and the button
-    is never rendered — so the `501` below is a backstop for a direct call, not a path a user
-    can reach through the UI.
+    region, or it does not. It shipped at M3, so this now reads true and `can_seed_region`
+    turns on by itself — which is what the check was for. The `501` below survives as the
+    backstop for an installation where the module is somehow absent.
     """
-    try:  # pragma: no cover - the M3 branch
+    try:
         import app.services.suggestions  # noqa: F401
-    except ModuleNotFoundError:
+    except ModuleNotFoundError:  # pragma: no cover - map-suggestions shipped at M3
         return False
     return True
 
 
-def seed_region(poll: Poll, option: PollOption) -> uuid.UUID:
-    """PL-14. Returns the existing suggestion when already seeded, rather than duplicating."""
+async def seed_region(
+    db: AsyncSession, trip: Trip, poll: Poll, option: PollOption, actor: User
+) -> uuid.UUID:
+    """PL-14: turn a decided geographic option into a region on the map.
+
+    **Idempotent by design.** The button is a link once it has been pressed, so a second press
+    — or a double-click, or two organisers pressing at once — returns the existing
+    `suggestion_id` rather than creating a second overlapping region nobody asked for. That is
+    checked before anything else, so the idempotent path costs one attribute read.
+
+    The seeded shape is a **circle** of `settings.region_seed_radius_m` centred on the option's
+    point: a first sketch of "somewhere around here", meant to be redrawn with the polygon tool
+    (`map-suggestions/design.md` — polygon is the primary shape). A circle is honest about
+    being a placeholder in a way a fabricated outline would not be; the option carries a point,
+    not an area, and inventing a boundary from one coordinate would claim knowledge nobody has.
+
+    Status is `proposed`, not `approved`: deciding *where* is not deciding what the region's
+    outline should be, and the region enters the same confirm flow as any other suggestion.
+    """
     if option.suggestion_id is not None:
         return option.suggestion_id
-    if not suggestions_available():
+    if not suggestions_available():  # pragma: no cover - map-suggestions shipped at M3
         raise ApiError(
             501,
             "not_available",
             "Map regions arrive with the map feature.",
         )
-    raise ApiError(  # pragma: no cover - unreachable until M3 implements the branch above
-        501, "not_available", "Map regions arrive with the map feature."
+
+    # Imported here rather than at module scope: `suggestions_available()` probes for this
+    # module by import, and a top-level import would mean the prober imports the module that
+    # imports the prober.
+    from app.services.suggestions import circle_feature  # noqa: PLC0415
+
+    suggestion = Suggestion(
+        trip_id=trip.id,
+        type=TYPE_REGION,
+        title=option.label,
+        notes=f"Seeded from the decision on “{poll.title}”.",
+        status=SUGGESTION_PROPOSED,
+        created_by=actor.id,
+        lat=option.lat,
+        lng=option.lng,
+        geometry_geojson=circle_feature(
+            option.lat, option.lng, settings.region_seed_radius_m
+        ),
+        # The option's `place_id` carries over — it is the one Google value we may persist, and
+        # dropping it would make the region's card unable to fetch its own photos.
+        place_id=option.place_id,
     )
+    db.add(suggestion)
+    await db.flush()
+    option.suggestion_id = suggestion.id
+    return suggestion.id
 
 
 # --- comments ------------------------------------------------------------------------------------
+#
+# The thread itself belongs to `app/services/comments.py` (`voting-comments`, M3), which serves
+# polls, suggestions and itinerary items from one implementation. These two names survive as
+# delegates because the poll routes and tests read better naming the subject once.
 
 
 async def comment_count(db: AsyncSession, poll_id: uuid.UUID) -> int:
-    return (
-        await db.scalar(
-            select(func.count())
-            .select_from(Comment)
-            .where(Comment.subject_type == SUBJECT_POLL, Comment.subject_id == poll_id)
-        )
-    ) or 0
+    from app.services.comments import count_for_subject  # noqa: PLC0415 - avoids a cycle
+
+    return await count_for_subject(db, SUBJECT_POLL, poll_id)
 
 
 async def delete_poll_comments(db: AsyncSession, poll_id: uuid.UUID) -> None:
@@ -476,8 +517,6 @@ async def delete_poll_comments(db: AsyncSession, poll_id: uuid.UUID) -> None:
 
     Called in the same transaction as the poll delete — see `models/comment.py`.
     """
-    await db.execute(
-        delete(Comment).where(
-            Comment.subject_type == SUBJECT_POLL, Comment.subject_id == poll_id
-        )
-    )
+    from app.services.comments import delete_for_subject  # noqa: PLC0415 - avoids a cycle
+
+    await delete_for_subject(db, SUBJECT_POLL, poll_id)

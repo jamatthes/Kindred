@@ -11,38 +11,49 @@ colours and geocoded homes) are complete.
 
 ## Phase 1 — Migration
 
-- [ ] Confirm `suggestions` exists as specified in `plan/architecture.md`; if `foundation`
+- [x] Confirm `suggestions` exists as specified in `plan/architecture.md`; if `foundation`
       did not create it, write the Alembic migration now: `id`, `trip_id` (FK, indexed),
       `type`, `title`, `notes`, `status`, `created_by` (FK), `lat`, `lng`,
       `geometry_geojson` (JSONB), `place_id`, `place_snapshot_json` (JSONB), `external_url`,
       `created_at`, `updated_at`.
-- [ ] Add enum-or-check constraints for `type` (`region`/`accommodation`/`activity`/`meal`)
+- [x] Add enum-or-check constraints for `type` (`region`/`accommodation`/`activity`/`meal`)
       and `status` (`proposed`/`shortlisted`/`approved`/`scheduled`/`rejected`).
-- [ ] Add a composite index on `(trip_id, status)` and one on `(trip_id, type)` — both list
+- [x] Add a composite index on `(trip_id, status)` and one on `(trip_id, type)` — both list
       filters hit these.
-- [ ] Add an index on `place_id` (nullable, non-unique) to support grouping lookups.
-- [ ] Add a check constraint: `geometry_geojson IS NOT NULL` when `type = 'region'`, and
+- [x] Add an index on `place_id` (nullable, non-unique) to support grouping lookups.
+- [x] Add a check constraint: `geometry_geojson IS NOT NULL` when `type = 'region'`, and
       `IS NULL` otherwise.
-- [ ] Run `alembic upgrade head` against a scratch database, then `alembic downgrade -1` to
+- [x] Run `alembic upgrade head` against a scratch database, then `alembic downgrade -1` to
       confirm the migration reverses cleanly.
 
 `Verify:` `alembic upgrade head` succeeds on an empty database and `\d suggestions` in psql
 shows every column, constraint, and index listed above.
 
+> **NOTE (M3 implementation).** The one-file migration rule (`CLAUDE.md`, set after this
+> checklist was written) supersedes "write the Alembic migration now": `suggestions` and the
+> `poll_options.suggestion_id` foreign key were added **in place** to
+> `alembic/versions/0001_schema.py`, not as a second revision. The verify step was run as
+> written — `upgrade head` then `downgrade -1` against a scratch database, both clean — and
+> then extended with the check the one-file rule actually needs: `\d suggestions` and
+> `\d poll_options` from a migrated database were diffed against the same tables built by
+> `create_all` from the models, and are identical down to constraint names. That is the
+> contract `plan/architecture.md` > Migration policy states, and it is what the pytest suite
+> (which builds its schema with `create_all`) depends on being true.
+
 ---
 
 ## Phase 2 — Models
 
-- [ ] Add `server/app/models/suggestion.py` with the SQLAlchemy 2 `Suggestion` model mapping
+- [x] Add `server/app/models/suggestion.py` with the SQLAlchemy 2 `Suggestion` model mapping
       every column, typed with `Mapped[...]` annotations.
-- [ ] Relationships: `trip`, `author` (`created_by` → `User`), and back-references from
+- [x] Relationships: `trip`, `author` (`created_by` → `User`), and back-references from
       `suggestion_votes` and `comments` (comments are polymorphic — join on
       `subject_type='suggestion'` and `subject_id`).
-- [ ] Add a `centroid()` helper that derives `(lat, lng)` from `geometry_geojson`: circle →
+- [x] Add a `centroid()` helper that derives `(lat, lng)` from `geometry_geojson`: circle →
       the point itself; polygon → vertex average. Pure function, no I/O.
-- [ ] Add a `haversine_m(lat1, lng1, lat2, lng2)` SQL expression helper in
+- [x] Add a `haversine_m(lat1, lng1, lat2, lng2)` SQL expression helper in
       `server/app/models/geo.py` — reused by grouping here and by `distances`.
-- [ ] Unit-test `centroid()` for both shapes, including a polygon crossing no meridian and
+- [x] Unit-test `centroid()` for both shapes, including a polygon crossing no meridian and
       one that does, and confirm GeoJSON `[lng, lat]` ordering is respected.
 
 `Verify:` `pytest server/tests/test_models_suggestion.py` passes, covering `centroid()` for
@@ -52,18 +63,18 @@ circle and polygon and the `[lng, lat]` ordering assertion.
 
 ## Phase 3 — Schemas
 
-- [ ] Add `server/app/schemas/suggestion.py`: `SuggestionCreate`, `SuggestionUpdate`,
+- [x] Add `server/app/schemas/suggestion.py`: `SuggestionCreate`, `SuggestionUpdate`,
       `SuggestionStatusUpdate`, `SuggestionOut`, `SuggestionListParams`, `LinkPreviewIn`,
       `LinkPreviewOut`.
-- [ ] Add a `RegionGeometry` validator enforcing the encoding in `design.md`: required
+- [x] Add a `RegionGeometry` validator enforcing the encoding in `design.md`: required
       `properties.shape`; circle needs positive `radius_m` clamped to the maximum; polygon
       needs a closed ring of ≥ 4 positions and a vertex-count cap.
-- [ ] `SuggestionCreate` validates geometry-iff-region and requires `lat`/`lng`.
-- [ ] `SuggestionOut` nests `created_by` (with `family_id` and `family_color`),
+- [x] `SuggestionCreate` validates geometry-iff-region and requires `lat`/`lng`.
+- [x] `SuggestionOut` nests `created_by` (with `family_id` and `family_color`),
       `place_snapshot`, `vote_summary`, `distances`, `comment_count`, and one level of
       `children`. Add a comment in the file stating that no Google-sourced detail fields
       belong in this schema, ever.
-- [ ] Unit-test the geometry validator's rejection paths (open ring, too few points,
+- [x] Unit-test the geometry validator's rejection paths (open ring, too few points,
       negative radius, oversized radius, missing `shape`).
 
 `Verify:` `pytest server/tests/test_schemas_suggestion.py` passes, with every geometry
@@ -73,21 +84,21 @@ rejection path asserted.
 
 ## Phase 4 — Service layer
 
-- [ ] Add `server/app/services/suggestions.py` with the query-time grouping described in
+- [x] Add `server/app/services/suggestions.py` with the query-time grouping described in
       `design.md`: nest activities/meals under an accommodation on equal `place_id` or
       haversine proximity below the threshold, resolving ties by nearest then oldest.
-- [ ] Put the proximity threshold (150 m) and move epsilon (25 m) in `core/config.py` as
+- [x] Put the proximity threshold (150 m) and move epsilon (25 m) in `core/config.py` as
       named settings, not literals in the query.
-- [ ] Add `list_suggestions(...)` applying trip scope, filters, sort, and grouping, and
+- [x] Add `list_suggestions(...)` applying trip scope, filters, sort, and grouping, and
       joining vote tallies, comment counts, and `distance_cache` rows in one query. Avoid
       N+1 — assert the query count in a test.
-- [ ] Add `moved_beyond_epsilon(old, new)` used by the router to decide whether to re-queue
+- [x] Add `moved_beyond_epsilon(old, new)` used by the router to decide whether to re-queue
       the distance task.
-- [ ] Add `server/app/services/link_preview.py`: http/https scheme check, DNS resolution
+- [x] Add `server/app/services/link_preview.py`: http/https scheme check, DNS resolution
       followed by a private/loopback/link-local address rejection (SSRF guard), timeout,
       redirect limit, response-size cap, OpenGraph-then-`<title>` parsing, in-memory LRU with
       a short TTL. **No database writes.**
-- [ ] Fake the outbound fetch behind an interface so tests never touch the network.
+- [x] Fake the outbound fetch behind an interface so tests never touch the network.
 
 `Verify:` `pytest server/tests/test_service_suggestions.py server/tests/test_link_preview.py`
 passes, including a grouping test with a mixed cluster, an N+1 query-count assertion, and an
@@ -97,28 +108,28 @@ SSRF test proving a URL resolving to a private address is refused.
 
 ## Phase 5 — Router
 
-- [ ] Add `server/app/routers/suggestions.py` mounted at `/api/v1/suggestions`.
-- [ ] Implement `GET /` (list, `require_member`) with all query parameters from `design.md`.
-- [ ] Implement `POST /` (`require_member` + `require_stage("planning","holiday")`);
+- [x] Add `server/app/routers/suggestions.py` mounted at `/api/v1/suggestions`.
+- [x] Implement `GET /` (list, `require_member`) with all query parameters from `design.md`.
+- [x] Implement `POST /` (`require_member` + `require_stage("planning","holiday")`);
       server recomputes the centroid for regions rather than trusting the client.
-- [ ] Implement `GET /{id}` (`require_member`) returning the record plus its comment thread.
-- [ ] Add a `require_can_edit_suggestion(id)` dependency in `deps.py`: author, family admin
+- [x] Implement `GET /{id}` (`require_member`) returning the record plus its comment thread.
+- [x] Add a `require_can_edit_suggestion(id)` dependency in `deps.py`: author, family admin
       of the author's family, or main admin.
-- [ ] Implement `PATCH /{id}` and `DELETE /{id}` behind that dependency and the stage guard;
+- [x] Implement `PATCH /{id}` and `DELETE /{id}` behind that dependency and the stage guard;
       `DELETE` returns `409` when the suggestion is `scheduled` or referenced by an
       `itinerary_items` row, naming the day in the message.
-- [ ] Implement `PATCH /{id}/status` (`require_main_admin`), validating the transition table
+- [x] Implement `PATCH /{id}/status` (`require_main_admin`), validating the transition table
       in `design.md` and rejecting `scheduled` with `422`.
-- [ ] Implement `POST /api/v1/link-preview` returning `200` or `204`.
-- [ ] Airbnb-aware extraction in the link-preview service per `design.md`: parse facts/
+- [x] Implement `POST /api/v1/link-preview` returning `200` or `204`.
+- [x] Airbnb-aware extraction in the link-preview service per `design.md`: parse facts/
       locality from `og:title`/`<title>` (stable OG contract), plus best-effort `lat`/`lng`/
       `capacity` from embedded page JSON — regex-level, wrapped so any parse failure
       degrades to the plain OG result. Unit-test against a saved HTML fixture; never fetch
       airbnb.co.uk in tests.
-- [ ] Wire WS broadcasts: `suggestion.created`, `.updated`, `.moved`, `.status_changed`,
+- [x] Wire WS broadcasts: `suggestion.created`, `.updated`, `.moved`, `.status_changed`,
       `.deleted` to the trip room.
-- [ ] Queue the background distance task on create and on a move beyond the epsilon.
-- [ ] Register the router in `main.py`.
+- [x] Queue the background distance task on create and on a move beyond the epsilon.
+- [x] Register the router in `main.py`.
 
 `Verify:` Start the API, open `/docs`, and manually exercise: create an accommodation via
 `POST /api/v1/suggestions`; create a region and confirm the response centroid matches the
@@ -129,17 +140,17 @@ and confirm `422`; attempt a `DELETE` as a non-owning member and confirm `403`.
 
 ## Phase 6 — Server tests
 
-- [ ] Happy path per endpoint: create (each of the four types), list, get, patch, delete.
-- [ ] Permission-denied tests: member editing another family's suggestion; family admin
+- [x] Happy path per endpoint: create (each of the four types), list, get, patch, delete.
+- [x] Permission-denied tests: member editing another family's suggestion; family admin
       editing outside their family; non-admin changing status.
-- [ ] Stage-guard tests: every mutation returns the guard's rejection in `end` stage while
+- [x] Stage-guard tests: every mutation returns the guard's rejection in `end` stage while
       `GET` still succeeds.
-- [ ] Transition tests covering each allowed and each forbidden status move.
-- [ ] Grouping tests: activity sharing a `place_id` with an accommodation nests; one 100 m
+- [x] Transition tests covering each allowed and each forbidden status move.
+- [x] Grouping tests: activity sharing a `place_id` with an accommodation nests; one 100 m
       away nests; one 5 km away does not; a tie resolves to the nearer parent.
-- [ ] Delete-blocked test: a scheduled suggestion returns `409`.
-- [ ] Move-epsilon test: a 5 m move queues no distance task, a 500 m move queues one.
-- [ ] A test asserting no Google detail field is ever persisted — create a suggestion with an
+- [x] Delete-blocked test: a scheduled suggestion returns `409`.
+- [x] Move-epsilon test: a 5 m move queues no distance task, a 500 m move queues one.
+- [x] A test asserting no Google detail field is ever persisted — create a suggestion with an
       inflated payload and confirm only `place_id` and user-authored fields land in the row.
 
 `Verify:` `pytest server/tests/test_router_suggestions.py` passes with every case above green.
@@ -261,18 +272,18 @@ The `polls` feature (M2) ships `POST /polls/{id}/decision/seed-region` returning
 **no FK constraint** (the `suggestions` table did not exist yet). This phase completes both
 ends. See `plan/features/polls/design.md` (decision + seed_region) for the contract.
 
-- [ ] Migration: add FK `poll_options.suggestion_id → suggestions.id` with
+- [x] Migration: add FK `poll_options.suggestion_id → suggestions.id` with
       `ON DELETE SET NULL`.
-- [ ] Implement `seed_region`: for a decided, geographic poll option, create a `region`
+- [x] Implement `seed_region`: for a decided, geographic poll option, create a `region`
       suggestion centred on the option's `lat`/`lng` (default radius, `properties.shape:
       "circle"`), status `proposed`, `created_by` = acting main admin; write the new id back
       to `poll_options.suggestion_id`. Idempotent — returns the existing `suggestion_id` when
       already set.
-- [ ] Replace the `501` response with the real implementation; permission `require_main_admin`,
+- [x] Replace the `501` response with the real implementation; permission `require_main_admin`,
       stages planning/holiday.
-- [ ] Emit `suggestion.created`; the polls UI's "seed region" action becomes a link to the
+- [x] Emit `suggestion.created`; the polls UI's "seed region" action becomes a link to the
       created region (wiring already present per `polls/tasks.md`).
-- [ ] Tests: non-geographic option → `422`; undecided poll → `409`; idempotent second call;
+- [x] Tests: non-geographic option → `422`; undecided poll → `409`; idempotent second call;
       FK null-out when the region suggestion is deleted.
 
 `Verify:` in the browser — decide a geographic poll option, seed the region, confirm the
@@ -291,3 +302,41 @@ confirm the poll option's link clears.
 
 `Verify:` Both docs in this directory match the shipped behaviour, and the Cloud Console shows
 quota caps, a billing alert, and two separately restricted keys.
+
+## Hand-off notes (server, M3)
+
+- **`vote_summary` is `voting-comments`' to fill.** `SuggestionOut.vote_summary` already ships
+  in its documented shape (`mode`, `count`, `average`, `up`, `down`, `my_vote`, `my_thumb`),
+  currently as a zero tally. Fill it in `services/suggestions.py` — the marked
+  `NOTE (voting-comments)` in `serialise()` — and add the tally join to `_base_query()` or a
+  second grouped query beside `_comment_counts()`. Do **not** add a per-row lookup:
+  `tests/test_service_suggestions.py` asserts the list costs exactly two queries. The `votes_*`
+  sort keys are accepted and currently order by creation; point them at the real column in
+  `_apply_sort()`. `comment_count` is already real, and `GET /suggestions/{id}` already returns
+  the thread in `CommentOut` shape — the write routes for a suggestion thread are yours.
+- **`distances` owns two placed hooks.** `services/suggestions.py::queue_distance_recompute` is
+  a no-op called on create and on a move past the epsilon, and
+  `SuggestionOut.distances` is an empty list of the documented `DistanceOut` shape. The epsilon
+  behaviour is already tested through the hook (5 m does not reach it, 500 m does), so filling
+  the function in needs no router change. `models/geo.py::haversine_m` is the SQL expression for
+  the straight-line estimate; `haversine_m_py` is the same formula for Python callers.
+  `settings.suggestion_move_epsilon_m` is the shared threshold — do not restate 25 anywhere.
+- **`itinerary-timeline` completes the delete guard.** `DELETE /suggestions/{id}` returns
+  `409 suggestion_scheduled` on `status = 'scheduled'`; when `itinerary_items` exists, add the
+  row lookup and name the day in the message, per this doc's edge-case table. `scheduled` is
+  refused by `PATCH /{id}/status` (`422`) and has no outgoing transition, so the itinerary is
+  the only thing that can set or clear it.
+- **The web agent's contract.** `GET /api/v1/suggestions` takes `type`, `status`, `family_id`
+  (all repeatable), `sort`, `group`, `include_rejected`; `group=false` is the map's call and
+  returns every child as a top-level row. Five WS events are emitted:
+  `suggestion.created` / `.updated` / `.moved` / `.status_changed` / `.deleted`. Region
+  geometry is GeoJSON `[lng, lat]` throughout — convert once, in the map wrapper.
+  `boundary_source == "osm"` is what the "boundary © OpenStreetMap contributors" line keys off,
+  and `"fallback_ellipse"` is the approximate-outline case that offers "refine the outline".
+  Every capability flag the UI needs (`can_edit`, `can_delete`, `can_change_status`) is on the
+  response — never re-derive one client-side.
+- **The Places ToS is enforced in four places and must stay that way**: no column
+  (`models/suggestion.py`), no schema field with `extra="forbid"` (`schemas/suggestion.py`), no
+  server route returning details, and four tests that fail if any of those changes
+  (`tests/test_schemas_suggestion.py`, `tests/test_router_suggestions.py`). The browser fetches
+  photos, hours and ratings itself on card-open and never POSTs them back.

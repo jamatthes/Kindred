@@ -12,18 +12,18 @@ are complete.
 
 ## Phase 1 — Migration
 
-- [ ] Confirm `distance_cache` matches `plan/architecture.md`; create it if `foundation` did
+- [x] Confirm `distance_cache` matches `plan/architecture.md`; create it if `foundation` did
       not: `id`, `family_id` (FK), `suggestion_id` (FK), `duration_s` (int, nullable),
       `distance_m` (int, nullable), `mode` (default `driving`), `computed_at` (nullable),
       `created_at`, `updated_at`.
-- [ ] Add the unique constraint on `(family_id, suggestion_id)` — the upsert depends on it.
-- [ ] **PROPOSED ADDITION** — add `status` (varchar, not null, default `'pending'`) with a
+- [x] Add the unique constraint on `(family_id, suggestion_id)` — the upsert depends on it.
+- [x] **PROPOSED ADDITION** — add `status` (varchar, not null, default `'pending'`) with a
       check constraint restricting it to `pending` / `ok` / `no_route` / `failed`.
-- [ ] **PROPOSED ADDITION** — add `attempts` (int, not null, default 0).
-- [ ] Add an index on `(suggestion_id, status)` — the read path filters on it constantly.
-- [ ] Add an index on `(family_id)` for the home-change invalidation sweep.
-- [ ] Confirm ON DELETE CASCADE from both `families` and `suggestions`.
-- [ ] Run `alembic upgrade head` then `alembic downgrade -1` to confirm the migration reverses.
+- [x] **PROPOSED ADDITION** — add `attempts` (int, not null, default 0).
+- [x] Add an index on `(suggestion_id, status)` — the read path filters on it constantly.
+- [x] Add an index on `(family_id)` for the home-change invalidation sweep.
+- [x] Confirm ON DELETE CASCADE from both `families` and `suggestions`.
+- [x] Run `alembic upgrade head` then `alembic downgrade -1` to confirm the migration reverses.
 
 `Verify:` `alembic upgrade head` succeeds on an empty database; `\d distance_cache` shows
 `status`, `attempts`, the unique pair constraint, and both indexes; inserting a duplicate
@@ -33,12 +33,12 @@ are complete.
 
 ## Phase 2 — Models
 
-- [ ] Add `server/app/models/distance.py` with the `DistanceCache` model and relationships to
+- [x] Add `server/app/models/distance.py` with the `DistanceCache` model and relationships to
       `Family` and `Suggestion`.
-- [ ] Add a `DistanceStatus` enum mirroring the check constraint.
-- [ ] Reuse the `haversine_m` SQL expression helper from `server/app/models/geo.py` (added by
+- [x] Add a `DistanceStatus` enum mirroring the check constraint.
+- [x] Reuse the `haversine_m` SQL expression helper from `server/app/models/geo.py` (added by
       `map-suggestions`); do not write a second implementation.
-- [ ] Add named settings in `core/config.py`: `DISTANCE_MAX_ORIGINS` (25),
+- [x] Add named settings in `core/config.py`: `DISTANCE_MAX_ORIGINS` (25),
       `DISTANCE_MAX_DESTINATIONS` (25), `DISTANCE_MAX_ELEMENTS` (100),
       `DISTANCE_MAX_ATTEMPTS` (3). No literals in the service.
 
@@ -49,14 +49,14 @@ correctness check against two known coordinate pairs.
 
 ## Phase 3 — Schemas
 
-- [ ] Add `server/app/schemas/distance.py`: `DistanceOut` (family_id, family_name,
+- [x] Add `server/app/schemas/distance.py`: `DistanceOut` (family_id, family_name,
       family_color, status, duration_s, distance_m, is_estimate, computed_at),
       `SuggestionDistancesOut`, `BulkDistancesParams`, `BulkDistancesOut`,
       `RecomputeIn`, `RecomputeOut` (queued_pairs, estimated_api_calls).
-- [ ] `status` in the response includes `no_home`, which is a *presentation* state derived from
+- [x] `status` in the response includes `no_home`, which is a *presentation* state derived from
       a family lacking coordinates — it is not stored in the database. Document this in the
       schema file so nobody adds it to the check constraint.
-- [ ] Assert in the schema docstring that an estimate carries `distance_m` only and never a
+- [x] Assert in the schema docstring that an estimate carries `distance_m` only and never a
       fabricated `duration_s`.
 
 `Verify:` `pytest server/tests/test_schemas_distance.py` passes, including a case asserting an
@@ -66,13 +66,13 @@ estimate response has `duration_s is None` and `is_estimate is True`.
 
 ## Phase 4 — Read service (no external calls)
 
-- [ ] Add `server/app/services/distances.py` with the read half first:
+- [x] Add `server/app/services/distances.py` with the read half first:
       `get_distances_for_suggestion(...)` and `get_distances_bulk(...)`.
-- [ ] Reads join `distance_cache` and compute the haversine fallback in SQL in the same query —
+- [x] Reads join `distance_cache` and compute the haversine fallback in SQL in the same query —
       one query per request, no N+1.
-- [ ] Families with null `home_lat`/`home_lng` are returned as `no_home`, never omitted.
-- [ ] Ordering places the calling user's own family first.
-- [ ] Add a test-visible guard: the read service must not import or reference the Google client
+- [x] Families with null `home_lat`/`home_lng` are returned as `no_home`, never omitted.
+- [x] Ordering places the calling user's own family first.
+- [x] Add a test-visible guard: the read service must not import or reference the Google client
       at all. Keep the external client in a separate module so this is structurally true rather
       than a matter of discipline.
 
@@ -84,26 +84,26 @@ null duration.
 
 ## Phase 5 — Google client and background task
 
-- [ ] Add the Distance Matrix client to `server/app/services/google.py` behind an interface so
+- [x] Add the Distance Matrix client to `server/app/services/google.py` behind an interface so
       tests fake it and never hit the network (per `architecture.md`).
-- [ ] Add the write half of `distances.py`: `queue_for_suggestion(suggestion_id)`,
+- [x] Add the write half of `distances.py`: `queue_for_suggestion(suggestion_id)`,
       `queue_for_family(family_id)`, and `recompute(trip_id, suggestion_id=None)`.
-- [ ] Implement the batching strategy from `design.md`: one call (all homes → one suggestion)
+- [x] Implement the batching strategy from `design.md`: one call (all homes → one suggestion)
       on create/move; chunked calls (one home → all suggestions) on a home change, respecting
       the origin/destination/element caps from config.
-- [ ] Chunk boundaries deterministic, ordered by suggestion `created_at`, so retries re-issue
+- [x] Chunk boundaries deterministic, ordered by suggestion `created_at`, so retries re-issue
       identical chunks.
-- [ ] Upsert `pending` rows before calling, so concurrent reads show pending rather than nothing.
-- [ ] Map element statuses per `design.md`: `OK` → `ok`; `ZERO_RESULTS` → `no_route` **cached
+- [x] Upsert `pending` rows before calling, so concurrent reads show pending rather than nothing.
+- [x] Map element statuses per `design.md`: `OK` → `ok`; `ZERO_RESULTS` → `no_route` **cached
       permanently, never auto-retried**; `NOT_FOUND` → `failed` with an attempt increment;
       transport/timeout/`OVER_QUERY_LIMIT`/5xx → increment `attempts`, back off, settle at
       `failed` at the cap.
-- [ ] Add an advisory lock or `pending` guard so overlapping tasks cannot duplicate calls for
+- [x] Add an advisory lock or `pending` guard so overlapping tasks cannot duplicate calls for
       the same pair.
-- [ ] Never raise into the request that queued the task — a distance failure must not fail a
+- [x] Never raise into the request that queued the task — a distance failure must not fail a
       suggestion creation.
-- [ ] Emit `distance.updated` per written row, not per batch.
-- [ ] Add the End-stage assertion: the task refuses to run when the trip is in `end`.
+- [x] Emit `distance.updated` per written row, not per batch.
+- [x] Add the End-stage assertion: the task refuses to run when the trip is in `end`.
 
 `Verify:` `pytest server/tests/test_service_distances_write.py` passes with the fake client,
 covering: one call for six families on create; correct chunking for 60 suggestions on a home
@@ -114,17 +114,17 @@ test asserting the task raises nothing when the fake client errors.
 
 ## Phase 6 — Router
 
-- [ ] Add `server/app/routers/distances.py`.
-- [ ] `GET /api/v1/suggestions/{id}/distances` (`require_member`, all stages).
-- [ ] `GET /api/v1/distances` bulk form with `trip_id`, optional `suggestion_ids[]` and
+- [x] Add `server/app/routers/distances.py`.
+- [x] `GET /api/v1/suggestions/{id}/distances` (`require_member`, all stages).
+- [x] `GET /api/v1/distances` bulk form with `trip_id`, optional `suggestion_ids[]` and
       `family_id` (`require_member`, all stages).
-- [ ] `POST /api/v1/distances/recompute` (`require_main_admin` +
+- [x] `POST /api/v1/distances/recompute` (`require_main_admin` +
       `require_stage("planning","holiday")`), returning `queued_pairs` and
       `estimated_api_calls` **before** the work runs.
-- [ ] Recompute resets matching rows to `pending` with `attempts = 0`, including rows at
+- [x] Recompute resets matching rows to `pending` with `attempts = 0`, including rows at
       `no_route` and `failed` — this is the only path that retries a settled negative.
-- [ ] Register the router in `main.py`.
-- [ ] Wire the triggers: `map-suggestions` POST and PATCH-beyond-epsilon call
+- [x] Register the router in `main.py`.
+- [x] Wire the triggers: `map-suggestions` POST and PATCH-beyond-epsilon call
       `queue_for_suggestion`; `families` home geocode/change calls `queue_for_family`.
 
 `Verify:` In `/docs`: create a suggestion and confirm `GET /api/v1/suggestions/{id}/distances`
@@ -136,23 +136,23 @@ confirm the response states the call count before the work runs; call it with th
 
 ## Phase 7 — Server tests
 
-- [ ] Happy path: create a suggestion, run the faked task, confirm one `ok` row per family.
-- [ ] Estimate path: a suggestion with no cached rows returns haversine values with
+- [x] Happy path: create a suggestion, run the faked task, confirm one `ok` row per family.
+- [x] Estimate path: a suggestion with no cached rows returns haversine values with
       `is_estimate: true` and null durations.
-- [ ] `no_home`: a family without coordinates is present in the response with `no_home` and is
+- [x] `no_home`: a family without coordinates is present in the response with `no_home` and is
       absent from the API call's origins.
-- [ ] `no_route` is cached permanently and a subsequent create/read queues no further call —
+- [x] `no_route` is cached permanently and a subsequent create/read queues no further call —
       assert the fake client's call count does not increase.
-- [ ] Move epsilon: a 5 m move queues nothing; a 500 m move resets rows to `pending` and queues
+- [x] Move epsilon: a 5 m move queues nothing; a 500 m move resets rows to `pending` and queues
       one call.
-- [ ] Home change resets only that family's rows and leaves other families' values intact.
-- [ ] Permission tests: a member calling recompute gets `403`; every member can read all
+- [x] Home change resets only that family's rows and leaves other families' values intact.
+- [x] Permission tests: a member calling recompute gets `403`; every member can read all
       families' distances.
-- [ ] Stage guard: recompute rejected in `end`; reads still succeed in `end`.
-- [ ] **Render-path test**: exercise `GET /api/v1/suggestions` and
+- [x] Stage guard: recompute rejected in `end`; reads still succeed in `end`.
+- [x] **Render-path test**: exercise `GET /api/v1/suggestions` and
       `GET /api/v1/distances` with the fake Google client asserting **zero** calls. This test
       is the enforcement of the hard invariant — mark it as such in a comment.
-- [ ] Concurrency test: two overlapping queues for the same suggestion produce one call.
+- [x] Concurrency test: two overlapping queues for the same suggestion produce one call.
 
 `Verify:` `pytest server/tests/test_router_distances.py` passes, with the zero-calls-in-render-
 path test green.
@@ -246,3 +246,39 @@ no blocked suggestion creation.
 
 `Verify:` `npm test` in `web/` passes; `plan/architecture.md` lists `distance_cache.status` and
 `distance_cache.attempts`; both docs in this directory match shipped behaviour.
+
+## Hand-off notes (server, M3)
+
+- **The web agent's contract.** `GET /api/v1/suggestions/{id}/distances` returns
+  `{suggestion_id, distances[]}` with the caller's own family first;
+  `GET /api/v1/distances?suggestion_ids=&family_id=` returns `{distances: {suggestion_id: [...]}}`
+  (no `trip_id` — the active trip is server-side, as everywhere else in v1);
+  `POST /api/v1/distances/recompute` takes `{suggestion_id?}` and returns
+  `{queued_pairs, estimated_api_calls}` **before** the work runs. `GET /api/v1/suggestions`
+  already embeds the caller's own family's chip per row, and `GET /api/v1/suggestions/{id}`
+  embeds every family's — the bulk endpoint is for the refetch case (switching the sort
+  perspective), not for the first render.
+- **Five states, and `is_estimate` is the one to branch on first.** `ok` (real duration and
+  distance), `pending`/`failed` (estimate: distance only, **`duration_s` is always null** —
+  never render a duration for an estimate, and never compute one client-side), `no_route`
+  (both null; information, not an error), `no_home` (both null; actionable for that family's
+  head). The server will never send an estimate carrying a duration — a validator refuses to
+  build one — so a chip that needs a duration can trust `is_estimate: false`.
+- **`distance.updated` arrives per row**, carrying `{suggestion_id, family_id, status,
+  duration_s, distance_m, is_estimate: false, computed_at}`. Swap that one chip in place;
+  do not refetch the list. On `suggestion.moved`, revert that suggestion's chips to the estimate
+  state — the server has already reset those rows to `pending`.
+- **Never show a spinner on a chip.** An estimate is a real number and renders immediately; the
+  transition to the real value is a crossfade. A spinner would imply the first number was not
+  information.
+- **Do not use the preference ramp (`--scale-pref-0…10`) for distance.** That ramp means "how
+  much the group likes this"; reusing it for "how far away this is" would make two different
+  meanings look identical on one card.
+- **`itinerary-timeline` (M4)** has a shape waiting for it: `get_distances_pairwise` on
+  `services/distance_matrix.py` batches independent legs by shared origin only and never into a
+  dense grid — an N-leg itinerary costs N elements, not N². `route_cache` is its own table and
+  its own feature; do not extend `distance_cache` for legs.
+- **Ops, before real use** (`architecture.md`, and Phase 11 of this checklist): quota caps at
+  the free-tier thresholds, a billing alert, the **server** key restricted by IP and the browser
+  key by HTTP referrer — two separate keys. The app degrades to estimates everywhere with no
+  key at all, which is deliberate but is not a substitute for the caps.

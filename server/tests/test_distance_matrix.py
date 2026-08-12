@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.distances import (
+from app.services.distance_matrix import (
     DEFAULT_CACHE_TTL_SECONDS,
     DISTANCE_MATRIX_URL,
     MAX_DESTINATIONS_PER_REQUEST,

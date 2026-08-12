@@ -501,9 +501,14 @@ async def test_deleting_the_decided_option_clears_the_decision(
     assert (await client.get(f"{POLLS}/{poll['id']}")).json()["decision"] is None
 
 
-async def test_seeding_a_region_is_not_available_at_m2(
+async def test_the_seed_region_action_is_offered_for_a_located_decision(
     client: httpx.AsyncClient, db: AsyncSession, household: tuple[User, User, User]
 ) -> None:
+    """Was `test_seeding_a_region_is_not_available_at_m2` until `map-suggestions` shipped: the
+    capability check probes for `app.services.suggestions`, so implementing that module turned
+    the action on without an edit here. The route's own behaviour is covered in
+    `tests/test_seed_region.py`, which belongs to `map-suggestions`.
+    """
     owner, _, _ = household
     await login_as(client, db, owner)
     poll = await _create(client)
@@ -511,11 +516,11 @@ async def test_seeding_a_region_is_not_available_at_m2(
     await client.put(f"{POLLS}/{poll['id']}/decision", json={"option_id": cornwall["id"]})
 
     detail = (await client.get(f"{POLLS}/{poll['id']}")).json()
-    assert detail["can_seed_region"] is False
+    assert detail["can_seed_region"] is True
 
-    response = await client.post(f"{POLLS}/{poll['id']}/decision/seed-region")
-    assert response.status_code == 501
-    assert code(response) == "not_available"
+    somerset = poll["options"][2]  # no coordinates — nothing to put on the map
+    await client.put(f"{POLLS}/{poll['id']}/decision", json={"option_id": somerset["id"]})
+    assert (await client.get(f"{POLLS}/{poll['id']}")).json()["can_seed_region"] is False
 
 
 # --- nudge ---------------------------------------------------------------------------------------------

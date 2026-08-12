@@ -19,7 +19,6 @@ property of the shape rather than a check that could be forgotten.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import func, select
@@ -32,6 +31,7 @@ from app.deps import (
     DbDep,
     enforce_password_change,
     is_organiser,
+    moderated_family_id,
     require_member,
     require_organiser,
     require_stage,
@@ -40,10 +40,8 @@ from app.models import (
     SUBJECT_POLL,
     Comment,
     Family,
-    FamilyMember,
     Poll,
     PollOption,
-    PollScore,
     Trip,
     User,
 )
@@ -65,7 +63,10 @@ from app.schemas.poll import (
     PollSummaryOut,
     ScoresPutIn,
 )
+from app.routers.comments import _notify as notify_mentions
+from app.services import comments as comment_service
 from app.services import polls as service
+from app.services import suggestions as suggestion_service
 
 router = APIRouter(
     prefix="/polls",
@@ -132,7 +133,7 @@ async def _summary(
         kind=poll.kind,
         status=poll.status,
         option_count=len(poll.options),
-        comment_count=await service.comment_count(db, poll.id),
+        comment_count=await comment_service.count_for_subject(db, SUBJECT_POLL, poll.id),
         my_completion=completion.get(str(caller.id), "none"),
         group_completion=GroupCompletion(
             complete=counts["complete"],
@@ -328,8 +329,10 @@ async def delete_poll(poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip) -> Respon
     current = _require_trip(trip)
     poll = await service.load_poll(db, poll_id, current)
     # `comments` is polymorphic and carries no FK to its subject, so this cascade is ours —
-    # in the same transaction as the poll delete.
-    await service.delete_poll_comments(db, poll.id)
+    # in the same transaction as the poll delete. A *hard* delete, not the soft one the undo
+    # pattern uses: the thing being discussed is gone, so there is nothing for an undo to
+    # restore the discussion to.
+    await comment_service.delete_for_subject(db, SUBJECT_POLL, poll.id)
     await db.delete(poll)
     await db.commit()
 
@@ -737,11 +740,14 @@ async def clear_decision_route(
     dependencies=[Depends(require_organiser), PLANNING_OR_HOLIDAY],
     summary="Turn the winning option into a region on the map",
 )
-async def seed_region(poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip) -> dict:
-    """PL-14. `501 not_available` at M2 — `map-suggestions` has not shipped.
+async def seed_region(
+    poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip, user: CurrentUser
+) -> dict:
+    """PL-14, implemented by `map-suggestions` at M3 (its `tasks.md` Phase 11b).
 
-    `can_seed_region` is false, so the button is never rendered and this is a backstop for a
-    direct call rather than a path a user can reach.
+    Idempotent: a second call returns the same `suggestion_id` rather than creating a second
+    overlapping region. The rules live in `services/polls.py::seed_region`; this route is the
+    HTTP shell plus the broadcast, so a member with the map open watches the region appear.
     """
     current = _require_trip(trip)
     poll = await service.load_poll(db, poll_id, current)
@@ -749,42 +755,37 @@ async def seed_region(poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip) -> dict:
         raise ApiError(409, "no_decision", "Record a winning option first.")
     option = _find_option(poll, poll.decision_option_id)
     if not option.is_located:
+        # A `422` rather than a `409`: the request is well-formed and the poll is in the right
+        # state — the *option* is the thing that cannot be honoured, which is what
+        # `map-suggestions/tasks.md` Phase 11b asks for ("non-geographic option -> 422").
         raise ApiError(
-            409, "option_not_located", "That option has no location to put on the map."
+            422, "option_not_located", "That option has no location to put on the map."
         )
-    return {"suggestion_id": str(service.seed_region(poll, option))}
+
+    already = option.suggestion_id
+    suggestion_id = await service.seed_region(db, current, poll, option, user)
+    await db.commit()
+
+    if already is None:
+        row = await suggestion_service.load_suggestion(db, suggestion_id, current)
+        await ws.broadcast(
+            current.id,
+            "suggestion.created",
+            {
+                "suggestion": suggestion_service.serialise(
+                    row, can_edit=True, can_change_status=True
+                ).model_dump(mode="json")
+            },
+        )
+    return {"suggestion_id": str(suggestion_id)}
 
 
 # --- comments ----------------------------------------------------------------------------------
-
-
-def _comment_out(comment: Comment, *, caller: User, organiser: bool, family) -> CommentOut:
-    return CommentOut(
-        id=comment.id,
-        subject_type=comment.subject_type,
-        subject_id=comment.subject_id,
-        author_id=comment.author_id,
-        author_name=(
-            comment.author.display_name if comment.author else "Someone who has left"
-        ),
-        family_id=family[0] if family else None,
-        family_color=family[1] if family else None,
-        family_color_custom=family[2] if family else None,
-        body=comment.body,
-        created_at=comment.created_at,
-        edited_at=comment.edited_at,
-        can_edit=comment.author_id == caller.id,
-        can_delete=organiser or comment.author_id == caller.id,
-    )
-
-
-async def _family_lookup(db: AsyncSession, trip: Trip) -> dict:
-    rows = await db.execute(
-        select(FamilyMember.user_id, Family.id, Family.color, Family.color_custom)
-        .join(Family, Family.id == FamilyMember.family_id)
-        .where(Family.trip_id == trip.id)
-    )
-    return {row[0]: (row[1], row[2], row[3]) for row in rows.all()}
+# Thin delegates to `app/services/comments.py`. The generic `/api/v1/comments` routes
+# (`voting-comments`, M3) are the full implementation — mentions, soft delete, undo — and these
+# two exist only because a thread hung off `/polls/{id}` already knows its subject and should
+# not have to restate it. **No comment logic lives here**, so a poll thread and a suggestion
+# thread cannot behave differently.
 
 
 @router.get(
@@ -798,21 +799,15 @@ async def list_comments(
 ) -> list[CommentOut]:
     current = _require_trip(trip)
     await service.load_poll(db, poll_id, current)
-    organiser = await is_organiser(db, user, current)
-    families = await _family_lookup(db, current)
-    rows = (
-        await db.scalars(
-            select(Comment)
-            .where(Comment.subject_type == SUBJECT_POLL, Comment.subject_id == poll_id)
-            .order_by(Comment.created_at)
-        )
-    ).unique().all()
-    return [
-        _comment_out(
-            row, caller=user, organiser=organiser, family=families.get(row.author_id)
-        )
-        for row in rows
-    ]
+    return await comment_service.list_thread(
+        db,
+        SUBJECT_POLL,
+        poll_id,
+        current,
+        caller=user,
+        organiser=await is_organiser(db, user, current),
+        moderates_family_id=await moderated_family_id(db, user),
+    )
 
 
 @router.post(
@@ -829,26 +824,28 @@ async def add_comment(
     trip: ActiveTrip,
     user: CurrentUser,
 ) -> CommentOut:
-    """PL-11. A plain thread — @mention parsing belongs to `voting-comments` (M3), which
-    upgrades this in place."""
+    """PL-11. @mention parsing and the mention notifications arrived with `voting-comments`
+    (M3), which upgraded this thread in place exactly as its docs said it would."""
     current = _require_trip(trip)
     await service.load_poll(db, poll_id, current)
-    comment = Comment(
+    comment, mentioned = await comment_service.create(
+        db,
         subject_type=SUBJECT_POLL,
         subject_id=poll_id,
-        author_id=user.id,
-        body=payload.body.strip(),
+        body=payload.body,
+        author=user,
+        trip=current,
     )
-    db.add(comment)
     await db.commit()
     await db.refresh(comment)
 
-    families = await _family_lookup(db, current)
-    out = _comment_out(
+    out = comment_service.serialise(
         comment,
         caller=user,
         organiser=await is_organiser(db, user, current),
-        family=families.get(user.id),
+        families=await comment_service.family_lookup(db, current),
+        members=await comment_service.trip_member_ids(db, current),
+        moderates_family_id=await moderated_family_id(db, user),
     )
     await ws.broadcast(
         current.id,
@@ -859,76 +856,5 @@ async def add_comment(
             "comment": out.model_dump(mode="json"),
         },
     )
+    await notify_mentions(mentioned, comment, user)
     return out
-
-
-comments_router = APIRouter(
-    prefix="/comments",
-    tags=["polls"],
-    dependencies=[Depends(enforce_password_change), Depends(require_member)],
-)
-
-
-async def _load_comment(db: AsyncSession, comment_id: uuid.UUID) -> Comment:
-    comment = await db.scalar(select(Comment).where(Comment.id == comment_id))
-    if comment is None:
-        raise ApiError(404, "not_found", "That comment does not exist.")
-    return comment
-
-
-@comments_router.patch(
-    "/{comment_id}",
-    response_model=CommentOut,
-    dependencies=[PLANNING_OR_HOLIDAY],
-    summary="Edit my own comment",
-)
-async def edit_comment(
-    comment_id: uuid.UUID,
-    payload: CommentIn,
-    db: DbDep,
-    trip: ActiveTrip,
-    user: CurrentUser,
-) -> CommentOut:
-    """Author only. `edited_at` is set and shown as an "edited" marker — an edit that left no
-    trace would falsify the discussion record."""
-    current = _require_trip(trip)
-    comment = await _load_comment(db, comment_id)
-    if comment.author_id != user.id:
-        raise forbidden("You can only edit your own comment.")
-
-    comment.body = payload.body.strip()
-    comment.edited_at = datetime.now(UTC)
-    await db.commit()
-    await db.refresh(comment)
-
-    families = await _family_lookup(db, current)
-    return _comment_out(
-        comment,
-        caller=user,
-        organiser=await is_organiser(db, user, current),
-        family=families.get(user.id),
-    )
-
-
-@comments_router.delete(
-    "/{comment_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[PLANNING_OR_HOLIDAY],
-    summary="Delete a comment",
-)
-async def delete_comment(
-    comment_id: uuid.UUID, db: DbDep, trip: ActiveTrip, user: CurrentUser
-) -> Response:
-    """Own comment, or an organiser deleting anyone's.
-
-    The UI treats the two differently — undo for your own (low stakes, reversible by
-    retyping), a real confirm for somebody else's, because it is not your content.
-    """
-    current = _require_trip(trip)
-    comment = await _load_comment(db, comment_id)
-    if comment.author_id != user.id and not await is_organiser(db, user, current):
-        raise forbidden("You can only delete your own comment.")
-
-    await db.delete(comment)
-    await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
