@@ -23,6 +23,10 @@ dist/
 # Playwright e2e harness (web/e2e) — reports, traces and screenshots from local runs.
 web/e2e/report/
 web/e2e/test-results/
+# playwright.live.config.ts's own reporter/output dirs (smokes against the already-running
+# deploy stack, not the isolated one above).
+web/e2e/report-live/
+web/e2e/test-results-live/
 
 # Editor / OS
 .vscode/
