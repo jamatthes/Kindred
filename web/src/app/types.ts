@@ -465,12 +465,27 @@ export type SuggestionVoteSummary = {
   my_vote: number | 'up' | 'down' | null
 }
 
-export type SuggestionDistance = {
+/** One family's distance to one suggestion — `distances/design.md`'s `DistanceOut` shape,
+ * reused verbatim on `Suggestion.distances` per that doc's own note: "`map-suggestions`'
+ * `GET /api/v1/suggestions` already embeds a `distances` array per item for exactly this
+ * reason" (avoiding a distance request per row). `status` is the DB's three real values
+ * (`pending`/`ok`/`no_route`/`failed`) widened with the presentation-only `no_home` — a
+ * family lacking a geocoded home, computed server-side, never stored. */
+export type DistanceStatus = 'pending' | 'ok' | 'no_route' | 'failed' | 'no_home'
+
+export type DistanceOut = {
   family_id: string
   family_name: string
+  family_color: number | null
+  family_color_custom?: string | null
+  status: DistanceStatus
   duration_s: number | null
   distance_m: number | null
+  /** True for a haversine fallback (`status: 'pending'`) — never true alongside a real
+   * `status: 'ok'` row. An estimate never carries `duration_s`: inventing a driving
+   * duration from a straight line would violate design-system.md's honesty rules. */
   is_estimate: boolean
+  computed_at: string | null
 }
 
 export type Suggestion = {
@@ -488,7 +503,7 @@ export type Suggestion = {
   external_url: string | null
   vote_summary: SuggestionVoteSummary | null
   comment_count: number
-  distances: SuggestionDistance[]
+  distances: DistanceOut[]
   /** One level only, per `design.md` — a grouped child never has its own `children`. */
   children: Suggestion[]
   created_at: string
@@ -594,3 +609,20 @@ export type LinkPreview = {
   lng?: number
   capacity?: number
 }
+
+// --- distances ------------------------------------------------------------------------------
+// The shapes `plan/features/distances/design.md` specifies. `DistanceOut` itself lives with
+// `Suggestion` above (reused verbatim on `Suggestion.distances`); these are the standalone
+// endpoints' envelopes — used when the client needs distances without a full suggestion
+// fetch, e.g. after switching the sort perspective to another family.
+
+export type SuggestionDistancesOut = { suggestion_id: string; distances: DistanceOut[] }
+
+/** `GET /api/v1/distances` bulk response: one trip's suggestions, keyed by id. */
+export type BulkDistancesOut = Record<string, DistanceOut[]>
+
+export type RecomputeRequest = { trip_id: string; suggestion_id?: string }
+
+/** Returned *before* the background work runs, so the UI can state the cost
+ * (`design.md` D7) rather than discover it after the fact. */
+export type RecomputeResult = { queued_pairs: number; estimated_api_calls: number }
