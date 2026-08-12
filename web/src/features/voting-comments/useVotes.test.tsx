@@ -106,17 +106,24 @@ describe('useVoteTally — WS merge', () => {
     act(() =>
       emit('suggestion.vote.updated', {
         suggestion_id: 's1',
-        mode: 'score',
-        count: 5,
-        eligible_count: 5,
-        average: 8,
-        distribution: null,
-        up: null,
-        down: null,
-        none: null,
-        voters: [],
-        not_voted: [],
-        // Deliberately no my_vote key — the broadcast never carries it.
+        // The real broadcast nests the tally under `tally` (`_tally_and_broadcast` in
+        // `server/app/routers/votes.py`) — a flattened mock here is exactly the mismatch the
+        // M3 integration pass's live Playwright smoke found (a real 'Cannot read properties
+        // of undefined (reading map)' crash the instant a second, already-open tab received
+        // this event).
+        tally: {
+          mode: 'score',
+          count: 5,
+          eligible_count: 5,
+          average: 8,
+          distribution: null,
+          up: null,
+          down: null,
+          none: null,
+          voters: [],
+          not_voted: [],
+          // Deliberately no my_vote key — the broadcast never carries it.
+        },
       }),
     )
 
@@ -130,7 +137,7 @@ describe('useVoteTally — WS merge', () => {
     const { result } = renderHook(() => useVoteTally('s1'))
     await waitFor(() => expect(result.current.tally).not.toBeNull())
 
-    act(() => emit('suggestion.vote.updated', { suggestion_id: 'other', count: 99 }))
+    act(() => emit('suggestion.vote.updated', { suggestion_id: 'other', tally: { count: 99 } }))
     expect(result.current.tally?.count).not.toBe(99)
   })
 })

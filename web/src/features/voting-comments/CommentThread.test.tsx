@@ -172,7 +172,13 @@ describe('CommentThread — live comment.created for the open subject', () => {
     render(<CommentThread subjectType="suggestion" subjectId="s1" />)
     await screen.findByText('No comments yet — start the discussion.')
 
-    emit('comment.created', comment({ id: 'live-1', body: 'From another tab', subject_type: 'suggestion', subject_id: 's1' }))
+    // The real broadcast nests the comment under `comment` alongside the subject fields
+    // (`server/app/routers/comments.py`'s `_broadcast` calls) — a flattened mock here is
+    // exactly the mismatch the M3 integration pass's live Playwright smoke found (the
+    // handler read `id`/`body`/`author` straight off the envelope and got `undefined` for
+    // all of them).
+    const created = comment({ id: 'live-1', body: 'From another tab' })
+    emit('comment.created', { subject_type: 'suggestion', subject_id: 's1', comment: created })
     expect(await screen.findByText('From another tab')).toBeInTheDocument()
   })
 })

@@ -71,12 +71,18 @@ export function useVoteTally(suggestionId: string | null): VoteTallyState {
 
   useEffect(() => {
     const onVoteUpdated = (envelope: WsEnvelope) => {
-      const payload = envelope.payload as { suggestion_id: string } & Omit<VoteTally, 'my_vote'>
+      // The broadcast nests the tally under `tally` alongside `suggestion_id`
+      // (`server/app/routers/votes.py`'s `_tally_and_broadcast`) — it is not the tally's
+      // fields flattened onto the envelope. Found by the M3 integration pass's live
+      // Playwright smoke: the old flattened cast produced a `VoteTally` whose `voters`/
+      // `not_voted`/`mode`/`count` were all `undefined`, which crashed `VoteTally.tsx`'s
+      // `.map()` calls the instant a second, already-open tab received this event.
+      const payload = envelope.payload as { suggestion_id: string; tally: Omit<VoteTally, 'my_vote'> }
       if (payload.suggestion_id !== idRef.current) return
       setTally((current) => {
         // `my_vote` is per-recipient and never in the broadcast (design.md) — this client's
         // own knowledge of it survives the merge untouched.
-        const next: VoteTally = { ...payload, my_vote: current?.my_vote ?? null }
+        const next: VoteTally = { ...payload.tally, my_vote: current?.my_vote ?? null }
         lastGoodRef.current = next
         return next
       })

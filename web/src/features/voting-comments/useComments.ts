@@ -108,9 +108,15 @@ export function useCommentThread(
         ? true // no subject fields on the payload: assume relevant rather than silently drop
         : payload.subject_type === subjectType && payload.subject_id === subjectRef.current
 
+    // `comment.created`/`comment.updated` broadcasts nest the actual comment under `comment`
+    // alongside the subject fields (`server/app/routers/comments.py`'s `_broadcast` calls) —
+    // unlike `comment.deleted`, which is flat. Found by the M3 integration pass's live
+    // Playwright smoke: casting the envelope straight to `Comment` produced an object with no
+    // `id`/`body`/`author`, which crashed `upsertById` callers reading those fields.
     const onCreated = (envelope: WsEnvelope) => {
-      const comment = envelope.payload as Comment
-      if (!matchesSubject(comment)) return
+      const payload = envelope.payload as { subject_type?: string; subject_id?: string; comment: Comment }
+      if (!matchesSubject(payload)) return
+      const comment = payload.comment
       setComments((current) => upsertById(current, comment))
       // A restore (undo-delete broadcasts comment.created, design.md) clears the overlay.
       setRemovals((current) => {
@@ -126,9 +132,9 @@ export function useCommentThread(
       }
     }
     const onUpdated = (envelope: WsEnvelope) => {
-      const comment = envelope.payload as Comment
-      if (!matchesSubject(comment)) return
-      setComments((current) => upsertById(current, comment))
+      const payload = envelope.payload as { subject_type?: string; subject_id?: string; comment: Comment }
+      if (!matchesSubject(payload)) return
+      setComments((current) => upsertById(current, payload.comment))
     }
     const onDeleted = (envelope: WsEnvelope) => {
       const payload = envelope.payload as { id: string; subject_type?: string; subject_id?: string }

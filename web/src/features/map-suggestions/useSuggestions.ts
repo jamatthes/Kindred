@@ -76,8 +76,14 @@ export function useSuggestionList(params: SuggestionListParams | null): Suggesti
 
   useEffect(() => {
     const onFullRecord = (envelope: WsEnvelope) => {
-      const suggestion = envelope.payload as Suggestion
-      if (suggestion?.id) upsert(suggestion)
+      // `suggestion.created`/`suggestion.updated` nest the record under `suggestion`
+      // (`server/app/routers/suggestions.py`'s `_broadcast` calls) rather than sending it
+      // flattened onto the envelope — unlike `suggestion.moved`/`.deleted`/`.status_changed`,
+      // which are flat. Found by the M3 integration pass: the old flattened cast meant
+      // `suggestion?.id` was always `undefined`, so this event silently did nothing — a
+      // second tab never picked up a create/edit live, only on its next full reload.
+      const payload = envelope.payload as { suggestion: Suggestion }
+      if (payload.suggestion?.id) upsert(payload.suggestion)
     }
     const onMoved = (envelope: WsEnvelope) => {
       const payload = envelope.payload as Pick<Suggestion, 'id' | 'lat' | 'lng' | 'geometry_geojson'>

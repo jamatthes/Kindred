@@ -82,7 +82,11 @@ describe('useSuggestionList', () => {
     const { result } = renderHook(() => useSuggestionList({ trip_id: 't1' }))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    act(() => emit('suggestion.created', suggestion({ id: 'new-1' })))
+    // The real broadcast nests the record under `suggestion` (`_broadcast` calls in
+    // `server/app/routers/suggestions.py`) — a flattened mock here is exactly the mismatch
+    // the M3 integration pass's live Playwright smoke found (the old flattened cast made
+    // `suggestion?.id` always `undefined`, so the event silently did nothing).
+    act(() => emit('suggestion.created', { suggestion: suggestion({ id: 'new-1' }) }))
     await waitFor(() => expect(result.current.suggestions.map((s) => s.id)).toContain('new-1'))
     expect(list).toHaveBeenCalledTimes(1) // no refetch triggered
   })
@@ -93,7 +97,7 @@ describe('useSuggestionList', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     act(() => result.current.upsert(suggestion({ id: 'opt-1' })))
-    act(() => emit('suggestion.created', suggestion({ id: 'opt-1', title: 'Confirmed title' })))
+    act(() => emit('suggestion.created', { suggestion: suggestion({ id: 'opt-1', title: 'Confirmed title' }) }))
 
     await waitFor(() => expect(result.current.suggestions).toHaveLength(1))
     expect(result.current.suggestions[0].title).toBe('Confirmed title')
