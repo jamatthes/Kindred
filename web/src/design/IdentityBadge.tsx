@@ -12,9 +12,11 @@
  * - A circle, holding the avatar image when there is one and the server-computed `initials`
  *   otherwise. `initials` is never derived here — the server computes it so the map, the
  *   member list and the admin console cannot drift.
- * - A 2px ring in the member's `--family-N` token, **always**, image or not. The ring is the
+ * - A 2px ring in the member's family colour, **always**, image or not. The ring is the
  *   family carrier and is never the only carrier: a name label or `title` always accompanies
- *   it, per the "colour is never the sole signal" rule.
+ *   it, per the "colour is never the sole signal" rule. The colour arrives pre-resolved
+ *   (`familyColor(family)`, `web/src/design/familyColor.ts`) so this component never has to
+ *   know whether it is drawing a palette slot or a 2026-08-11-ruling overflow custom hex.
  * - Initials sit on a neutral fill, not the family colour, so contrast does not depend on
  *   which of the eight slots a family happens to hold.
  * - **The badge has no broken state.** A missing, failing or slow image renders the initials
@@ -30,8 +32,10 @@ export type BadgeSize = 24 | 32 | 40 | 64
 
 export type IdentityBadgeProps = {
   initials: string
-  /** 1–8. Omitted for someone with no family yet, who gets a neutral ring. */
-  familyColor?: number | null
+  /** A resolved CSS colour (`var(--family-N)` or a custom hex) — see `familyColor()` in
+   * `web/src/design/familyColor.ts`. Omitted for someone with no family yet, who gets a
+   * neutral ring. */
+  familyColor?: string | null
   size?: BadgeSize
   /** 256px rendition. Used at 64; ignored below it, where the thumb is enough. */
   avatarUrl?: string | null
@@ -60,7 +64,7 @@ export function IdentityBadge({
   // initials for the rest of the session even after a successful re-upload.
   useEffect(() => setFailed(false), [src])
 
-  const ring = familyColor ? `var(--family-${familyColor})` : 'var(--color-border-strong)'
+  const ring = familyColor ?? 'var(--color-border-strong)'
   const classes = [
     'k-badge',
     `k-badge--${size}`,

@@ -65,9 +65,14 @@ FAMILY_MANAGER_ROLES = (ROLE_HEAD, ROLE_SPOUSE)
 #: had its address cleared goes back to it rather than to `not_found`.
 GEOCODE_STATUSES = ("pending", "ok", "not_found", "error")
 
-#: The palette defines eight slots (`--family-1…8`); a ninth family is refused rather than
-#: silently reusing a colour.
-MAX_COLOR_SLOTS = 8
+#: The curated palette defines 24 slots (`--family-1…24`; grown from 8 on 2026-08-11, slots
+#: 1-8 unchanged). Once every slot on a trip is taken, the 25th and later families get a
+#: free-choice colour wheel (`Family.color_custom`) instead of a refusal — see
+#: `plan/features/families/design.md` > Family colour palette.
+MAX_COLOR_SLOTS = 24
+
+#: `#RRGGBB` — the only shape `Family.color_custom` accepts.
+HEX_COLOR_RE = r"^#[0-9A-Fa-f]{6}$"
 
 #: Allowed invite lifetimes, in hours: 24 hours, 7 days, 30 days.
 INVITE_EXPIRY_CHOICES = (24, 168, 720)
@@ -91,9 +96,15 @@ class Family(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    #: Token slot 1-8, mapping to `--family-1…8`. A smallint rather than a hex colour so the
-    #: design system can retune the palette without a data migration.
-    color: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    #: Token slot 1-24, mapping to `--family-1…24`. A smallint rather than a hex colour so the
+    #: design system can retune the palette without a data migration. Nullable since
+    #: 2026-08-11: exactly one of `color` / `color_custom` is ever set, enforced by
+    #: `ck_families_color_xor`.
+    color: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    #: The overflow colour wheel's `#RRGGBB` value, set only when every palette slot on the
+    #: trip was taken at pick time. Escapes the palette's tuning and distinguishability
+    #: guarantees by design — accepted because it only occurs from the 25th family on.
+    color_custom: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     home_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     home_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -140,7 +151,13 @@ class Family(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             f"geocode_status IN {GEOCODE_STATUSES}", name="ck_families_geocode_status"
         ),
         CheckConstraint(
-            f"color BETWEEN 1 AND {MAX_COLOR_SLOTS}", name="ck_families_color_range"
+            f"color IS NULL OR color BETWEEN 1 AND {MAX_COLOR_SLOTS}",
+            name="ck_families_color_range",
+        ),
+        CheckConstraint(
+            "(color IS NOT NULL AND color_custom IS NULL) OR "
+            "(color IS NULL AND color_custom IS NOT NULL)",
+            name="ck_families_color_xor",
         ),
     )
 
@@ -342,17 +359,28 @@ def location_block_reason(
 
 
 async def next_free_color(db: AsyncSession, trip_id: uuid.UUID) -> int | None:
-    """The lowest colour slot 1-8 not in use on this trip, or ``None`` when all are taken.
+    """The lowest colour slot 1-24 not in use on this trip, or ``None`` when all are taken.
 
     Lowest-first rather than random so a trip's first family is always `--family-1`: it makes
-    a fresh install look deliberate, and it makes tests deterministic.
+    a fresh install look deliberate, and it makes tests deterministic. Only ``color`` is
+    consulted — a family holding a `color_custom` overflow value never occupies or frees a
+    slot, since it never held one.
     """
-    taken = set(
-        (await db.execute(select(Family.color).where(Family.trip_id == trip_id)))
-        .scalars()
-        .all()
-    )
+    taken = await taken_colors(db, trip_id)
     for slot in range(1, MAX_COLOR_SLOTS + 1):
         if slot not in taken:
             return slot
     return None
+
+
+async def taken_colors(db: AsyncSession, trip_id: uuid.UUID) -> set[int]:
+    """Every palette slot currently claimed on this trip.
+
+    Shared by `next_free_color` and `GET /families/palette` (`routers/families.py`), so the
+    exhaustion check the picker relies on and the check the create/patch routes enforce can
+    never disagree about what "taken" means.
+    """
+    rows = await db.execute(
+        select(Family.color).where(Family.trip_id == trip_id, Family.color.isnot(None))
+    )
+    return set(rows.scalars().all())

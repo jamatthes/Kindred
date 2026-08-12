@@ -114,9 +114,9 @@ function BottomSheetDemo() {
 function BadgeGallery() {
   return (
     <div className="k-sg-row">
-      <IdentityBadge initials="AR" familyColor={1} name="Ana R." size={24} />
-      <IdentityBadge initials="TP" familyColor={4} name="Tom P." size={32} />
-      <IdentityBadge initials="MJ" familyColor={7} name="Mei J." size={40} offline />
+      <IdentityBadge initials="AR" familyColor="var(--family-1)" name="Ana R." size={24} />
+      <IdentityBadge initials="TP" familyColor="var(--family-4)" name="Tom P." size={32} />
+      <IdentityBadge initials="MJ" familyColor="var(--family-7)" name="Mei J." size={40} offline />
       <IdentityBadge initials="SK" familyColor={null} name="Sam K. (no family yet)" size={32} />
     </div>
   )

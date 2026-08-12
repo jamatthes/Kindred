@@ -12,7 +12,10 @@ export type TripStage = 'planning' | 'holiday' | 'end'
 export type FamilyBrief = {
   id: string
   name: string
-  color: number
+  /** Exactly one of `color` / `color_custom` is set. Resolve with `familyColor()`, never
+   * branch on which is present at the call site. */
+  color: number | null
+  color_custom: string | null
   role: FamilyRole
 }
 
@@ -108,7 +111,11 @@ export type Member = {
 export type Family = {
   id: string
   name: string
-  color: number
+  /** Exactly one of `color` / `color_custom` is set (2026-08-11 palette ruling — the
+   * palette grew from 8 to 24 slots, and a 25th+ family may hold a free-choice hex
+   * instead). Resolve with `familyColor(family)`; never branch on which is present. */
+  color: number | null
+  color_custom: string | null
   member_count: number
   home_locality: string | null
   home_placed: boolean
@@ -144,7 +151,7 @@ export type Invite = {
   used_by_name: string | null
   used_at: string | null
   revoked_at: string | null
-  family: { id: string; name: string; color: number } | null
+  family: { id: string; name: string; color: number | null; color_custom: string | null } | null
   status: InviteStatus
 }
 
@@ -153,7 +160,7 @@ export type InviteCreated = {
   id: string
   url: string
   expires_at: string
-  family: { id: string; name: string; color: number } | null
+  family: { id: string; name: string; color: number | null; color_custom: string | null } | null
 }
 
 export type InvitePreview = {

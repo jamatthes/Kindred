@@ -29,9 +29,12 @@ class FamilyBrief(BaseModel):
 
     id: uuid.UUID
     name: str
-    #: Token slot 1-8, mapping to `--family-1…8`. Not a colour value — the palette belongs to
-    #: the design tokens, so DesignSync can retune it without a data migration.
+    #: Token slot 1-24, mapping to `--family-1…24`. Not a colour value — the palette belongs to
+    #: the design tokens, so DesignSync can retune it without a data migration. Exactly one of
+    #: `color` / `color_custom` is set (2026-08-11 palette ruling); resolve with
+    #: `familyColor(family)` client-side rather than branching on which.
     color: int | None = None
+    color_custom: str | None = None
     role: FamilyRole
 
 

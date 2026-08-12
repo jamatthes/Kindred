@@ -20,6 +20,7 @@ import { useSession } from '../../app/session'
 import { useNavigate } from '../../app/router'
 import { Banner, Skeleton } from '../../app/ui/primitives'
 import { IdentityBadge } from '../../design/IdentityBadge'
+import { familyColor } from '../../design/familyColor'
 import type { Family, FamilyDetail } from '../../app/types'
 import { useFamilies, useFamilyDetail } from './useFamilies'
 import { FamilyPanel } from './FamilyPanel'
@@ -34,7 +35,7 @@ function MemberLine({ family }: { family: FamilyDetail }) {
         <li key={member.user_id} className="mrow">
           <IdentityBadge
             initials={member.initials}
-            familyColor={family.color}
+            familyColor={familyColor(family)}
             avatarThumbUrl={member.avatar_thumb_url}
             size={24}
             name={member.display_name}
@@ -69,7 +70,7 @@ function FamilyCard({
       <span className="fcard__head">
         <span
           className="fcard__dot"
-          style={{ background: `var(--family-${family.color})` }}
+          style={{ background: familyColor(family) ?? 'var(--color-border-strong)' }}
           aria-hidden="true"
         />
         <span className="fcard__name">{family.name}</span>

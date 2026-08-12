@@ -73,7 +73,11 @@ async def build_user_out(db: AsyncSession, user: User, trip: Trip | None) -> Use
         if membership is not None:
             family, member = membership
             family_brief = FamilyBrief(
-                id=family.id, name=family.name, color=family.color, role=member.role
+                id=family.id,
+                name=family.name,
+                color=family.color,
+                color_custom=family.color_custom,
+                role=member.role,
             )
     return UserOut(
         id=user.id,

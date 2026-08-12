@@ -1,0 +1,87 @@
+/* The family colour picker. `src/design/**` is exempt from the raw-value token check
+   (scripts/check-tokens.mjs), same reasoning as IdentityBadge.css: a handful of literal
+   pixel sizes here is this component's own vocabulary, not the spacing scale's. */
+
+.color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.color-picker__label {
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.color-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-2);
+  max-width: 260px;
+}
+
+.color-picker__swatch {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.color-picker__swatch:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.color-picker__swatch.is-selected {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.color-picker__swatch.is-taken {
+  cursor: not-allowed;
+  opacity: 0.3;
+  filter: grayscale(0.6);
+}
+
+.color-picker__check {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-on-accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.color-picker--wheel {
+  gap: var(--space-2);
+}
+
+.color-picker__wheel-label {
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.color-picker__wheel {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  background: none;
+}
+
+.color-picker__hint {
+  font-size: var(--text-sm, 13px);
+  color: var(--color-text-muted);
+  max-width: 320px;
+  margin: 0;
+}

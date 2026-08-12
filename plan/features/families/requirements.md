@@ -58,9 +58,13 @@ will run it — and that is the only way a family comes into existence.**
   family": they issue a new-family invite, and the recipient names the family and becomes its
   head.
 - Required at setup: name. Optional: home address.
-- A colour slot from `--family-1…8` is assigned automatically, choosing the lowest-numbered
-  slot not currently in use on the trip. Nobody picks a slot at creation — the colour is
-  changed afterwards from the family panel (FM-2), where the taken slots are visible.
+- The recipient — the new head — picks a colour from the 24-swatch palette on the family
+  setup screen (revised 2026-08-11); already-claimed swatches are shown disabled, and the grid
+  defaults to the first free slot so a founder who does not touch the picker still gets a
+  valid, uncontested colour. The colour can be changed afterwards from the family panel
+  (FM-2), where the taken slots are likewise visible. Once all 24 slots on the trip are
+  claimed, the 25th and later founders get a free colour wheel instead of a slot — see
+  `plan/features/families/design.md` > Family colour palette.
 - The family is created on the active trip (`families.trip_id`).
 - A family name that duplicates an existing name on the trip is rejected with a clear message.
 
@@ -80,6 +84,9 @@ will run it — and that is the only way a family comes into existence.**
 - A head or spouse can edit only their own family; the owner and organisers can edit any.
 - Changing the colour slot to one already taken is rejected with a message naming the family
   holding it.
+- If every one of the 24 slots is taken, a custom colour from the colour wheel may be chosen
+  instead (revised 2026-08-11) — the same picker component used at setup, gated to the same
+  free/taken exclusivity rule, reused from the family panel.
 - The change is reflected immediately on the map and in any list showing family colours, for
   every connected user.
 
@@ -496,5 +503,7 @@ because by then they describe a finished trip rather than governing anything liv
   ("show me to my family but not to the Smiths"). The switches are all-or-nothing per person.
 - Email delivery of invites. Links are copied and shared by whatever channel the family
   already uses; v1 has no mail transport.
-- More than eight families. The colour palette defines eight slots; a ninth family is refused
-  with a clear message rather than silently reusing a colour.
+- More than 24 families with a distinguishability guarantee. The palette defines 24 curated
+  slots; the 25th and later families get a free-choice colour wheel instead (revised
+  2026-08-11) rather than a refusal or a silently reused colour — see
+  `plan/features/families/design.md` > Family colour palette.

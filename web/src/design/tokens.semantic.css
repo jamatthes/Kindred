@@ -61,6 +61,22 @@
   --family-6: var(--family-sky);
   --family-7: var(--family-indigo);
   --family-8: var(--family-plum);
+  --family-9: var(--family-amber);
+  --family-10: var(--family-olive);
+  --family-11: var(--family-fern);
+  --family-12: var(--family-grass);
+  --family-13: var(--family-jade);
+  --family-14: var(--family-emerald);
+  --family-15: var(--family-aqua);
+  --family-16: var(--family-azure);
+  --family-17: var(--family-cornflower);
+  --family-18: var(--family-violet);
+  --family-19: var(--family-iris);
+  --family-20: var(--family-orchid);
+  --family-21: var(--family-magenta);
+  --family-22: var(--family-berry);
+  --family-23: var(--family-cherry);
+  --family-24: var(--family-terracotta);
 
   /* Preference ramp — the light-theme mapping onto the primitive scale. Charts and
      HeatMatrix reference `--scale-pref-N` only; which theme block wins is the whole
@@ -119,7 +135,14 @@
   --color-skeleton: #332E29;
   --color-skeleton-sheen: #453E37;
 
-  /* Family colors: lifted for dark surfaces */
+  /* Family colors: lifted for dark surfaces. Slots 1-8 unchanged. Slots 9-24 (added for the
+     24-colour palette expansion) follow the same tuning pattern measured off the original
+     eight rather than a naive lightness inversion: hue held fixed, lightness raised ~11.5pts
+     for every slot, and saturation nudged by hue family the same direction the original 8
+     move — green/teal hues (fern through azure) desaturate ~12pts so they don't vibrate
+     against `--stone-850`, blue/violet hues (cornflower/violet) gain ~3pts, and the
+     remaining warm/magenta hues gain ~5pts, mirroring rose/orange/sky/indigo's small gains
+     and moss/teal's larger desaturation on the original set. */
   --family-1: #D66A8C;
   --family-2: #E68A55;
   --family-3: #D9B84E;
@@ -128,6 +151,22 @@
   --family-6: #74A9DE;
   --family-7: #8286D9;
   --family-8: #B573B8;
+  --family-9: #E4A452;
+  --family-10: #C7D047;
+  --family-11: #73A859;
+  --family-12: #57A955;
+  --family-13: #52A969;
+  --family-14: #4EA982;
+  --family-15: #5BB4BB;
+  --family-16: #6FAEC7;
+  --family-17: #7E98DC;
+  --family-18: #8F7ED2;
+  --family-19: #9D76CD;
+  --family-20: #AC70C5;
+  --family-21: #C56AB3;
+  --family-22: #CC69A1;
+  --family-23: #DA6570;
+  --family-24: #E07160;
 
   /* Preference ramp — re-tuned for dark, not inverted: same hue journey (red 5°→ amber
      38°→ yellow-green 63°→ teal 172°) and the same relative step separation as the light

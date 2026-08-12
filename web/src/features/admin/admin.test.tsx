@@ -252,7 +252,7 @@ const baseUser: User = {
   next_step: 'app',
   theme_pref: 'light',
   locale: 'en-GB',
-  family: { id: 'f1', name: 'The Jiangs', color: 5, role: 'member' },
+  family: { id: 'f1', name: 'The Jiangs', color: 5, color_custom: null, role: 'member' },
   trip: {
     id: 't1',
     name: 'Cornwall · July 2027',
@@ -382,6 +382,7 @@ describe('the member table role column', () => {
           id: 'f2',
           name: 'The Riveras',
           color: 6,
+          color_custom: null,
           member_count: 3,
           home_locality: 'Newcastle',
           home_placed: true,

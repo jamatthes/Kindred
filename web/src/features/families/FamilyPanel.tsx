@@ -18,6 +18,9 @@ import { BottomSheet } from '../../app/BottomSheet'
 import { Banner, Button, Skeleton, TextField } from '../../app/ui/primitives'
 import { useToast } from '../../app/ui/toastContext'
 import { IdentityBadge } from '../../design/IdentityBadge'
+import { familyColor } from '../../design/familyColor'
+import { ColorPicker } from '../../design/ColorPicker'
+import type { ColorPickerValue } from '../../design/ColorPicker'
 import { PANEL_SHEET_QUERY } from '../../design/breakpoints'
 import type { FamilyDetail, Member } from '../../app/types'
 import { familiesApi } from './api'
@@ -98,7 +101,7 @@ function MemberRow({
     <li className="member-row">
       <IdentityBadge
         initials={member.initials}
-        familyColor={family.color}
+        familyColor={familyColor(family)}
         avatarThumbUrl={member.avatar_thumb_url}
         size={32}
         name={member.display_name}
@@ -157,6 +160,58 @@ function PanelBody({
   const viewerIsSpouse = mine?.role === 'spouse'
   const manages = Boolean(user?.is_organiser) || mine?.role === 'head' || viewerIsSpouse
 
+  // The colour picker's own state — every slot claimed on the trip, and whether the palette
+  // is exhausted (`GET /families/palette`). Only fetched for someone who can actually change
+  // the colour; a plain member never needs the taken set. `family.color` (this family's own
+  // slot, if any) is filtered out of `takenColors` by `ColorPicker` itself.
+  const [takenColors, setTakenColors] = useState<number[]>([])
+  const [exhausted, setExhausted] = useState(false)
+  const [colorBusy, setColorBusy] = useState(false)
+  const [colorError, setColorError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!manages) return
+    let cancelled = false
+    void familiesApi.palette().then((availability) => {
+      if (cancelled) return
+      setTakenColors(availability.taken_colors)
+      setExhausted(availability.exhausted)
+    })
+    return () => {
+      cancelled = true
+    }
+    // Re-fetches whenever the panel re-opens for a different family, or a colour lands from
+    // elsewhere on this same family (`family.color` / `family.color_custom` in the deps).
+  }, [manages, family.id, family.color, family.color_custom])
+
+  async function changeColor(next: ColorPickerValue) {
+    const previous: ColorPickerValue = { color: family.color, color_custom: family.color_custom }
+    // Optimistic, rolled back on failure — same pattern as `rename` below. The other side
+    // learns of the change over `family.updated` (`useFamilyDetail` refetches on it), so a
+    // second open session recolors live without polling.
+    onChanged({ ...family, ...next })
+    setColorBusy(true)
+    setColorError(null)
+    try {
+      const updated = await familiesApi.update(family.id, {
+        color: next.color ?? undefined,
+        color_custom: next.color_custom ?? undefined,
+      })
+      onChanged(updated)
+      toast('Family colour updated.')
+    } catch (cause) {
+      onChanged({ ...family, ...previous })
+      if (cause instanceof ApiError && cause.code === 'color_taken') {
+        const availability = await familiesApi.palette()
+        setTakenColors(availability.taken_colors)
+        setExhausted(availability.exhausted)
+      }
+      setColorError(cause instanceof ApiError ? cause.message : 'That colour could not be saved.')
+    } finally {
+      setColorBusy(false)
+    }
+  }
+
   async function rename() {
     const previous = family.name
     const next = draft.trim()
@@ -184,7 +239,7 @@ function PanelBody({
       <header className="family-panel__head">
         <span
           className="fcard__dot"
-          style={{ background: `var(--family-${family.color})` }}
+          style={{ background: familyColor(family) ?? 'var(--color-border-strong)' }}
           aria-hidden="true"
         />
         {renaming ? (
@@ -206,6 +261,21 @@ function PanelBody({
           </>
         )}
       </header>
+
+      {manages ? (
+        <section className="panel-block">
+          <h3 className="panel-block__title">Colour</h3>
+          {colorError ? <Banner tone="error">{colorError}</Banner> : null}
+          <ColorPicker
+            value={{ color: family.color, color_custom: family.color_custom }}
+            takenColors={takenColors}
+            exhausted={exhausted}
+            onChange={(next) => void changeColor(next)}
+            disabled={colorBusy}
+            label="Family colour"
+          />
+        </section>
+      ) : null}
 
       <HomeAddressBlock family={family} editable={manages} onChanged={onChanged} />
 

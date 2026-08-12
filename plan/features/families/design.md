@@ -25,7 +25,7 @@ and `requirements.md` in this directory.
 |---|---|
 | `trip_id` | every trip-scoped table carries it; never assume a single trip |
 | `name` | unique per trip (see additions below) |
-| `color` | the token slot, stored as a small int 1–8 mapping to `--family-1…8` |
+| `color` | the token slot, stored as a small int 1–24 mapping to `--family-1…24`; **nullable** since 2026-08-11 (see "Family colour palette" below) |
 | `home_address` | free text as entered |
 | `home_lat`, `home_lng` | nullable until geocoded |
 | `home_geocoded_at` | nullable; null means never successfully geocoded |
@@ -125,6 +125,65 @@ that manage it belong to `admin-console` (FM-17).
 > `(trip_id, color)` unique index would not constrain nulls in any case. The table is empty
 > when this ships — foundation seeds no family — so there is nothing to backfill.
 
+### Family colour palette (ruling, added 2026-08-11)
+
+The palette grows from 8 to **24** curated colours. Slots 1-8 keep their exact hex values in
+both themes — existing families and demo data never shift.
+
+**Picking a colour.** The family-setup screen (FM-13) gains a 24-swatch grid; the founder
+picks their family's colour there, rather than the server silently assigning the lowest free
+slot. Swatches already claimed by another family on the trip are shown disabled with a
+"taken" treatment and an accessible name (e.g. "Coral (taken)"); the grid defaults to the
+first free slot pre-selected, so submitting the form having touched nothing still succeeds —
+this is what keeps `web/e2e/tests/04-ws-liveness.spec.ts` (which only fills in a name) green.
+A head or spouse can change their family's colour later from `FamilyPanel`, reusing the same
+picker component, same exclusivity rule, gated to the family-manager permission
+(`require_family_head_or_spouse`), with an optimistic update rolled back on failure and a
+`family.updated` broadcast so every connected session recolors without a reload.
+
+**Overflow: the colour wheel.** Once all 24 slots are claimed on a trip, the 25th and every
+later family gets a free colour wheel — a native `<input type="color">`, styled minimally, no
+new dependency — instead of a slot. The server enforces the gate: a custom hex is accepted
+**only** when `next_free_color` returns `None` for that trip; a custom colour submitted while
+a slot is still free is refused (`422 custom_color_not_allowed`), and a slot submitted once
+the palette is exhausted is refused exactly as it always was if it is taken
+(`409 color_taken`) — exhaustion does not relax slot exclusivity, it only opens the second
+path.
+
+**Data model.** `families.color` (smallint) becomes nullable; a new nullable
+`families.color_custom` (text, `#RRGGBB`) holds the wheel-picked value. A `CHECK` constraint,
+`ck_families_color_xor`, enforces that **exactly one** of the two is set — this over the
+alternative of a separate `is_custom_color` boolean flag, because a boolean-plus-two-nullable-
+columns design can still represent "flag says custom but `color_custom` is null" as a valid
+row, while the XOR constraint makes that state unrepresentable rather than merely
+discouraged. `next_free_color` (and therefore the palette-exhaustion check) only ever looks at
+`color`, so custom colours never occupy or free a slot.
+
+**Rendering.** One helper, `familyColor(family): string` (`web/src/design/familyColor.ts`),
+returns `var(--family-N)` for a slot or the raw hex for a custom colour. Every call site — the
+identity badge ring, map pins, family cards, presence stack — goes through it; nothing branches
+on slot-vs-custom itself. `IdentityBadge`'s `familyColor` prop is therefore the resolved CSS
+colour string, not a bare slot number, so the component itself never has to know which case it
+is drawing.
+
+**Distinguishability is best-effort, not a guarantee.** The 24 in-palette colours were chosen
+by walking the hue circle formed by the original 8 and subdividing its gaps proportionally to
+their size, landing close to an even ~15° spacing while keeping the original anchors
+byte-identical. Wheel-picked overflow colours escape both that spacing discipline and the
+light/dark tuning applied to the palette (see `tokens.semantic.css`'s comments on the 9-24
+block) — a founder can pick a hex indistinguishable from an existing family's. This is
+accepted rather than mitigated (e.g. by rejecting near-duplicate hexes) because it only
+arises from the 25th family on a single trip, and because the identity badge ring is already
+documented as never the sole carrier of identity: a name label or hover always accompanies
+it (`plan/design-system.md`).
+
+**Taken-set visibility.** `GET /families/palette` (new, see REST endpoints below) exposes
+`{taken_colors, exhausted}` for the active trip. It is reachable by any authenticated user on
+the trip regardless of family membership — including a founder mid-setup, who has no
+`family_members` row yet and therefore cannot call `GET /families` (`require_member`) — because
+the payload is not sensitive: which of 24 numbered slots are in use, and whether the palette is
+full, leaks nothing an address or a name would.
+
 `family_id` (nullable — null means the invite creates a new family), `token`, `expires_at`,
 `created_by`, `used_by` (nullable).
 
@@ -192,9 +251,10 @@ All under `/api/v1`. Every mutating route also carries
 | Method | Path | Request | Response | Permission |
 |---|---|---|---|---|
 | GET | `/families` | — | `[FamilyOut]` | `require_member` |
-| POST | `/families/mine` | `{name, home_address?}` | `FamilyDetailOut` | `require_pending_family` |
+| GET | `/families/palette` | — | `{taken_colors: [int], exhausted: bool}` | any authenticated trip member **or** a pending founder (no `require_member`; added 2026-08-11, see "Family colour palette") |
+| POST | `/families/mine` | `{name, home_address?, color?, color_custom?}` | `FamilyDetailOut` | `require_pending_family` |
 | GET | `/families/{id}` | — | `FamilyDetailOut` | `require_member` |
-| PATCH | `/families/{id}` | `{name?, color?}` | `FamilyOut` | `require_family_head_or_spouse(id)` |
+| PATCH | `/families/{id}` | `{name?, color?, color_custom?}` | `FamilyOut` | `require_family_head_or_spouse(id)` |
 | PATCH | `/families/{id}/location-policy` | `{sharing_allowed?, member_default?}` | `FamilyDetailOut` | `require_family_head_or_spouse(id)` |
 | PUT | `/families/{id}/home` | `{home_address}` | `FamilyDetailOut` | `require_family_head_or_spouse(id)` |
 | DELETE | `/families/{id}/home` | — | `204` | `require_family_head_or_spouse(id)` |
@@ -211,8 +271,15 @@ All under `/api/v1`. Every mutating route also carries
 > gets `405`, which is a clearer answer than a silently repurposed `201`.
 >
 > Two things that were only ever exercised through it go with it: the request field `color` (no
-> other route sets a colour at creation — the lowest free slot is assigned and `PATCH
-> /families/{id}` changes it afterwards, with the taken slots visible), and `FamilyCreateIn`.
+> other route accepted a caller-chosen colour at creation — the lowest free slot was assigned
+> and `PATCH /families/{id}` changed it afterwards, with the taken slots visible), and
+> `FamilyCreateIn`.
+>
+> REVISED 2026-08-11 (24-colour palette ruling): `POST /families/mine` now **does** accept a
+> caller-chosen `color` or `color_custom`, because that route is the only creation path left
+> and its caller — the founder, on the family-setup screen — is shown the taken-slot grid right
+> there. This does not reopen the withdrawn capability: nobody creates a family *for* another
+> user here, and the head-in-the-same-transaction invariant is unchanged.
 
 `POST /families/mine` is now the **only** route in the product that creates a family, and the
 one route in this feature that a user with no family may call. That is the enforcement point
@@ -254,12 +321,16 @@ consented, rather than silently re-enabling people who had turned themselves off
 `FamilyOut`:
 
 ```
-{id, name, color, member_count,
+{id, name, color: int|null, color_custom: str|null, member_count,
  home_locality: str|null,
  home_placed: bool,
  geocode_status: "pending"|"ok"|"not_found"|"error",
  location_sharing_allowed: bool}
 ```
+
+`color` and `color_custom` are mutually exclusive per the `ck_families_color_xor` constraint
+(see "Family colour palette" above); exactly one is non-null. Clients resolve either through
+`familyColor(family)` and never branch on which is set themselves.
 
 `FamilyDetailOut` adds `members: [MemberOut]` and `member_location_default: bool`, and adds
 `home_address`, `home_lat`, `home_lng`, `home_geocoded_at` **only when the caller is a member
@@ -834,8 +905,10 @@ request fails.
 
 | Case | Behaviour |
 |---|---|
-| Ninth family created | `409` code `no_color_slots`, message: the palette supports eight families |
+| 25th family created (all 24 slots taken) | Refused to take a slot; the picker offers the colour wheel instead. Submitting `color` while exhausted still gets `409 no_color_slots` if no wheel value is given |
 | Colour slot taken | `409` code `color_taken`, message names the holding family |
+| Custom colour submitted while a slot is still free | `422` code `custom_color_not_allowed` — the wheel only opens on the 25th family |
+| Both `color` and `color_custom` submitted together | `422` code `invalid_color_choice` — exactly one is accepted, mirroring the DB's XOR constraint |
 | Duplicate family name on the trip | `409` code `name_taken` |
 | Delete a family with members | `409` code `family_not_empty`; the message says to remove members first |
 | Remove or demote the head of family | `409` code `head_required`; the message says to transfer the role first. A family always has exactly one head |
@@ -864,7 +937,7 @@ request fails.
 | The owner, with no family, on a fresh install | `next_step` is `setup_trip` until the trip is named, then `setup_family`. They finish on the same screen an invited founder uses and become the head of their own family (2026-08-11) |
 | The owner calls `POST /families/mine` a second time | `403 forbidden` — they now have a family, and the owner's admission to the route is conditional on not having one. Ownership is not a standing licence to found families |
 | Anything calls `POST /families` | `405 method_not_allowed` — the route is gone (2026-08-11). `GET /families` still answers there, so the path is not free for a new meaning |
-| `POST /families/mine` when all eight colour slots are taken | `409 no_color_slots`. The user is stuck through no fault of their own, so the message tells them to contact the trip organiser, and the organiser console shows the same condition |
+| `POST /families/mine` when all 24 colour slots are taken and no `color_custom` was given | `409 no_color_slots`. The client should not reach this — the picker switches to the colour wheel once `GET /families/palette` reports `exhausted: true` — so this is the API's own backstop, not the primary UX |
 | A head or spouse turns the family switch off while a member is actively sharing | `family.updated` removes every marker for that family immediately. The member's own toggle stays on and their persistent "Sharing your location" indicator changes to say the family's setting is currently hiding them — the indicator must never claim they are visible when they are not |
 | A head or spouse turns the per-member switch off for someone actively sharing | Same, for that one marker |
 | A head or spouse sets `member_location_default` on | No existing member changes. Only `family_members` rows created afterwards are seeded from it |

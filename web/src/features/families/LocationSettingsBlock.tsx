@@ -15,6 +15,7 @@ import { ApiError } from '../../app/apiClient'
 import { Banner } from '../../app/ui/primitives'
 import { useToast } from '../../app/ui/toastContext'
 import { IdentityBadge } from '../../design/IdentityBadge'
+import { familyColor } from '../../design/familyColor'
 import type { FamilyDetail, Member } from '../../app/types'
 import { familiesApi } from './api'
 import { effectiveLocationState } from './labels'
@@ -152,7 +153,7 @@ export function LocationSettingsBlock({
             <li key={member.user_id} className="member-switches__row">
               <IdentityBadge
                 initials={member.initials}
-                familyColor={family.color}
+                familyColor={familyColor(family)}
                 avatarThumbUrl={member.avatar_thumb_url}
                 size={32}
                 name={member.display_name}
