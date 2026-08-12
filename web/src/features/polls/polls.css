@@ -346,9 +346,12 @@
 
 /* ---------- results and matrix ---------- */
 
+/* Capped: the SVG widgets scale their type with the container, so full-column width
+   renders them at poster size (see --chart-block-max-w). */
 .results {
   display: grid;
   gap: var(--space-4);
+  max-width: var(--chart-block-max-w);
 }
 
 .matrix-block {

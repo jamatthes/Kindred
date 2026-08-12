@@ -284,7 +284,9 @@ export function PollsScreen({ selectedId }: { selectedId?: string }) {
               />
             ) : null}
 
-            <p className="insight">{results.insight}</p>
+            {/* The insight itself is the AvgBar's title (charts carry their insight as
+                their title, honesty rule 6) — repeating it here as a bare heading printed
+                the same sentence twice back to back. Only the methodology note stays. */}
             <p className="insight-sub">
               Averages count only cast scores — nobody is treated as a zero.
             </p>

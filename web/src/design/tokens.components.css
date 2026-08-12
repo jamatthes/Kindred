@@ -106,4 +106,8 @@
      1-10 scale. */
   --poll-list-width: 280px;
   --poll-label-width: 160px;
+  /* The SVG chart widgets scale text with their viewBox, so an uncapped block in the wide
+     poll-detail column renders them at poster size. This is the readable width the
+     styleguide's gallery cards established; the matrix (a real table) is exempt. */
+  --chart-block-max-w: 620px;
 }
