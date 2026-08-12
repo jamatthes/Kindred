@@ -126,6 +126,20 @@ export class GoogleMapProvider implements MapProvider {
   private shapes = new Map<string, GoogleCircle | GooglePolygon>()
   private listeners = new Map<MapEventName, Set<(payload: unknown) => void>>()
   private mapListeners: { remove(): void }[] = []
+  // `mount` looks synchronous to `MapCanvas` (it never awaits it — see the comment there)
+  // but the Maps JS script load behind it is not: `MapCanvas`'s own effects can call
+  // `addMarker`/`addPolygon`/`setCenter` etc. before `this.map` exists, most obviously for
+  // every suggestion already in the list when a screen first mounts. Every mutating method
+  // below routes through `whenReady` so those calls queue and replay in order once the
+  // script loads, instead of silently no-op'ing and permanently dropping that marker (the
+  // bug this queue replaces: `addMarker` returning early when `this.map` was still null).
+  private ready = false
+  private queue: (() => void)[] = []
+
+  private whenReady(fn: () => void): void {
+    if (this.ready) fn()
+    else this.queue.push(fn)
+  }
 
   mount(container: HTMLElement, initial: MapViewState): void {
     const apiKey = (import.meta as unknown as { env?: Record<string, string> }).env
@@ -133,16 +147,33 @@ export class GoogleMapProvider implements MapProvider {
     if (!apiKey) throw notWiredYet(NAME, 'mount (no VITE_GOOGLE_MAPS_BROWSER_KEY configured)')
 
     // Synchronous-looking mount, asynchronous underneath: `MapCanvas` calls `mount` once
-    // and never awaits it, so every subsequent call queues behind the load promise.
-    void loadGoogleMaps(apiKey).then((maps) => {
-      this.maps = maps
-      this.map = new maps.Map(container, { center: initial.center, zoom: initial.zoom, disableDefaultUI: false })
-      this.mapListeners.push(
-        this.map.addListener('click', (e) => {
-          if (e.latLng) this.emit('mapClick', { position: { lat: e.latLng.lat(), lng: e.latLng.lng() } })
-        }),
-      )
-    })
+    // and never awaits it, so every subsequent call queues behind the load promise (via
+    // `whenReady` above).
+    loadGoogleMaps(apiKey)
+      .then((maps) => {
+        this.maps = maps
+        this.map = new maps.Map(container, { center: initial.center, zoom: initial.zoom, disableDefaultUI: false })
+        this.mapListeners.push(
+          this.map.addListener('click', (e) => {
+            if (e.latLng) this.emit('mapClick', { position: { lat: e.latLng.lat(), lng: e.latLng.lng() } })
+          }),
+        )
+        this.ready = true
+        const pending = this.queue
+        this.queue = []
+        for (const fn of pending) fn()
+      })
+      .catch((cause) => {
+        // No UI fallback wired for a load failure *after* mount (a missing key is caught
+        // synchronously above and `MapSuggestionsScreen` never constructs this class in
+        // that case; this branch is a script/network failure with a key present, e.g. an
+        // outage or an ad-blocker). Logged rather than left as an unhandled rejection, per
+        // `design.md`'s edge case ("Map area shows an explanatory empty state") — the
+        // container simply stays blank; wiring an error state through `MapProvider` for
+        // this is a real follow-up, not something to grow inline here.
+        // eslint-disable-next-line no-console
+        console.error(`[${NAME}] failed to load Google Maps:`, cause)
+      })
   }
 
   unmount(): void {
@@ -155,23 +186,27 @@ export class GoogleMapProvider implements MapProvider {
     this.listeners.clear()
     this.map = null
     this.maps = null
+    this.ready = false
+    this.queue = []
   }
 
   setCenter(center: LatLng): void {
-    this.map?.setCenter(center)
+    this.whenReady(() => this.map?.setCenter(center))
   }
   panTo(center: LatLng): void {
-    this.map?.panTo(center)
+    this.whenReady(() => this.map?.panTo(center))
   }
   setZoom(zoom: number): void {
-    this.map?.setZoom(zoom)
+    this.whenReady(() => this.map?.setZoom(zoom))
   }
   fitBounds(bounds: Bounds, paddingPx = 0): void {
-    if (!this.map || !this.maps) return
-    const b = new this.maps.LatLngBounds()
-    b.extend({ lat: bounds.north, lng: bounds.east })
-    b.extend({ lat: bounds.south, lng: bounds.west })
-    this.map.fitBounds(b, paddingPx)
+    this.whenReady(() => {
+      if (!this.map || !this.maps) return
+      const b = new this.maps.LatLngBounds()
+      b.extend({ lat: bounds.north, lng: bounds.east })
+      b.extend({ lat: bounds.south, lng: bounds.west })
+      this.map.fitBounds(b, paddingPx)
+    })
   }
   getViewState(): MapViewState {
     if (!this.map) return { center: { lat: 0, lng: 0 }, zoom: 0 }
@@ -180,52 +215,64 @@ export class GoogleMapProvider implements MapProvider {
   }
 
   addMarker(spec: MarkerSpec): void {
-    if (!this.map || !this.maps) return
     if (this.markers.has(spec.id)) throw new Error(`${NAME}.addMarker: marker "${spec.id}" already exists`)
-    const marker = new this.maps.Marker({
-      position: spec.position,
-      map: this.map,
-      title: spec.kind === 'live' ? spec.name : undefined,
-      icon: spec.kind === 'suggestion' ? suggestionIcon(spec).url : undefined,
+    this.whenReady(() => {
+      if (!this.map || !this.maps) return
+      const marker = new this.maps.Marker({
+        position: spec.position,
+        map: this.map,
+        title: spec.kind === 'live' ? spec.name : undefined,
+        icon: spec.kind === 'suggestion' ? suggestionIcon(spec).url : undefined,
+      })
+      marker.addListener('click', () => this.emit('markerClick', { id: spec.id }))
+      marker.addListener('mouseover', () => this.emit('markerHover', { id: spec.id }))
+      marker.addListener('mouseout', () => this.emit('markerHover', { id: null }))
+      this.markers.set(spec.id, marker)
     })
-    marker.addListener('click', () => this.emit('markerClick', { id: spec.id }))
-    marker.addListener('mouseover', () => this.emit('markerHover', { id: spec.id }))
-    marker.addListener('mouseout', () => this.emit('markerHover', { id: null }))
-    this.markers.set(spec.id, marker)
   }
   updateMarker(spec: MarkerSpec): void {
-    const marker = this.markers.get(spec.id)
-    if (!marker) throw new Error(`${NAME}.updateMarker: marker "${spec.id}" does not exist`)
-    if (spec.kind === 'suggestion') marker.setIcon(suggestionIcon(spec).url)
-    if (spec.kind === 'live') marker.setTitle(spec.name)
+    this.whenReady(() => {
+      const marker = this.markers.get(spec.id)
+      if (!marker) throw new Error(`${NAME}.updateMarker: marker "${spec.id}" does not exist`)
+      if (spec.kind === 'suggestion') marker.setIcon(suggestionIcon(spec).url)
+      if (spec.kind === 'live') marker.setTitle(spec.name)
+    })
   }
   removeMarker(id: string): void {
-    const marker = this.markers.get(id)
-    if (!marker) return
-    marker.setMap(null)
-    this.markers.delete(id)
+    this.whenReady(() => {
+      const marker = this.markers.get(id)
+      if (!marker) return
+      marker.setMap(null)
+      this.markers.delete(id)
+    })
   }
 
   addPolygon(spec: PolygonSpec): void {
-    if (!this.map || !this.maps) return
     if (this.shapes.has(spec.id)) throw new Error(`${NAME}.addPolygon: polygon "${spec.id}" already exists`)
-    const shape =
-      spec.shape === 'circle' && spec.center && spec.radiusM !== undefined
-        ? new this.maps.Circle({ center: spec.center, radius: spec.radiusM, map: this.map, ...regionStyle(spec) })
-        : new this.maps.Polygon({ paths: spec.path ?? [], map: this.map, ...regionStyle(spec) })
-    shape.addListener('click', () => this.emit('polygonClick', { id: spec.id }))
-    this.shapes.set(spec.id, shape)
+    this.whenReady(() => {
+      if (!this.map || !this.maps) return
+      const shape =
+        spec.shape === 'circle' && spec.center && spec.radiusM !== undefined
+          ? new this.maps.Circle({ center: spec.center, radius: spec.radiusM, map: this.map, ...regionStyle(spec) })
+          : new this.maps.Polygon({ paths: spec.path ?? [], map: this.map, ...regionStyle(spec) })
+      shape.addListener('click', () => this.emit('polygonClick', { id: spec.id }))
+      this.shapes.set(spec.id, shape)
+    })
   }
   updatePolygon(spec: PolygonSpec): void {
-    const shape = this.shapes.get(spec.id)
-    if (!shape) throw new Error(`${NAME}.updatePolygon: polygon "${spec.id}" does not exist`)
-    shape.setOptions(regionStyle(spec))
+    this.whenReady(() => {
+      const shape = this.shapes.get(spec.id)
+      if (!shape) throw new Error(`${NAME}.updatePolygon: polygon "${spec.id}" does not exist`)
+      shape.setOptions(regionStyle(spec))
+    })
   }
   removePolygon(id: string): void {
-    const shape = this.shapes.get(id)
-    if (!shape) return
-    shape.setMap(null)
-    this.shapes.delete(id)
+    this.whenReady(() => {
+      const shape = this.shapes.get(id)
+      if (!shape) return
+      shape.setMap(null)
+      this.shapes.delete(id)
+    })
   }
 
   on<K extends MapEventName>(event: K, handler: MapEventHandler<K>): () => void {
