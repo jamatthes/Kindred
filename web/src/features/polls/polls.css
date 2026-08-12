@@ -406,6 +406,31 @@
   flex: none;
 }
 
+/* PL-5's "Add an option" — post-M2 fix, see tasks.md Phase 8. Same grid shape as
+   `.option-draft` in the create form, minus the width constraint: this is one option at a
+   time, not a batch of drafts. */
+.add-option {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-2);
+  align-items: end;
+  margin-top: var(--space-3);
+}
+
+.add-option .k-banner {
+  grid-column: 1 / -1;
+}
+
+.add-option .panel-block__actions {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) { /* token-check-ignore: mirrors --breakpoint-panel; a media query cannot read a custom property */
+  .add-option {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- comments ---------- */
 
 .comments {

@@ -28,6 +28,8 @@ import { PollAdminBar } from './PollAdminBar'
 import { NonResponders } from './NonResponders'
 import { CommentThread } from './CommentThread'
 import { CreatePollForm } from './CreatePollForm'
+import { AddOptionForm } from './AddOptionForm'
+import { canAddOption } from './canAddOption'
 import './polls.css'
 
 const COMPLETION_LABEL: Record<string, string> = {
@@ -332,6 +334,9 @@ export function PollsScreen({ selectedId }: { selectedId?: string }) {
                 </button>
               </h2>
               {matrixOpen && user ? <Matrix results={results} userId={user.id} /> : null}
+              {canAddOption(poll, isOrganiser, stage.canMutate) ? (
+                <AddOptionForm poll={poll} onAdded={() => void detail.reload()} />
+              ) : null}
             </section>
 
             <CommentThread pollId={poll.id} />

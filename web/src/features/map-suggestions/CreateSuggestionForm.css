@@ -1,0 +1,111 @@
+.sugg-create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+  max-width: var(--panel-max-width);
+}
+
+.sugg-create__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sugg-create__close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  min-width: var(--hit-target);
+  min-height: var(--hit-target);
+}
+
+.sugg-create__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sugg-create__mode {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--chip-radius);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.sugg-create__mode.is-on {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.sugg-create__hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.sugg-create__predictions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+}
+
+.sugg-create__predictions button {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.sugg-create__predictions li:last-child button {
+  border-bottom: none;
+}
+
+.sugg-create__shape-toggle {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sugg-create__shape-toggle button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--chip-radius);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.sugg-create__shape-toggle button.is-on {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.sugg-create__link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sugg-create__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

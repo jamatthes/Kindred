@@ -23,6 +23,7 @@ export type AppRoute =
   | { name: 'home' }
   | { name: 'families'; familyId?: string }
   | { name: 'polls'; pollId?: string }
+  | { name: 'map'; suggestionId?: string }
   | { name: 'profile' }
   | { name: 'admin' }
   | { name: 'join'; token: string }
@@ -40,6 +41,7 @@ export function parsePath(path: string): AppRoute {
   if (parts[0] === 'admin') return { name: 'admin' }
   if (parts[0] === 'families') return { name: 'families', familyId: parts[1] }
   if (parts[0] === 'polls') return { name: 'polls', pollId: parts[1] }
+  if (parts[0] === 'map') return { name: 'map', suggestionId: parts[1] }
   if (parts[0] === 'profile') return { name: 'profile' }
   return { name: 'not-found', path }
 }
@@ -52,6 +54,8 @@ export function pathFor(route: AppRoute): string {
       return route.familyId ? `/families/${route.familyId}` : '/families'
     case 'polls':
       return route.pollId ? `/polls/${route.pollId}` : '/polls'
+    case 'map':
+      return route.suggestionId ? `/map/${route.suggestionId}` : '/map'
     case 'profile':
       return '/profile'
     case 'admin':

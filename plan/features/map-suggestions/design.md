@@ -528,3 +528,44 @@ cluster badges are the two places where a naive dark inversion looks wrong.
 | WebSocket disconnected | Client refetches the suggestion list on reconnect and reconciles by `id`; optimistic edits that were never acknowledged roll back visibly. |
 | End stage reached mid-edit | The stage guard rejects the save with `403`; the client shows the trip-is-frozen state and switches to read-only chrome. |
 | Very large polygon or a runaway circle | `radius_m` clamp and a vertex-count cap (target 200) reject the shape with a message rather than storing something unrenderable. |
+
+---
+
+## NOTE (2026-08-12) — M3 web implementation, deviations from this doc
+
+Built in `web/src/features/map-suggestions/` (data layer, creation flows, list/filters,
+detail panel) on top of the pre-built `web/src/features/map/` shell, against mock/typed
+fixtures — no backend exists in this worktree (a separate agent builds `server/` on a
+different branch/worktree in parallel). Full detail and reasoning live inline in
+`tasks.md` Phases 7–11 next to each checklist item; summarised here per the docs-first rule:
+
+- **No standalone anchored popover on desktop.** Pin click goes straight to the full
+  `SuggestionDetailPanel` rather than a floating card positioned over the pin, because
+  `MapProvider` exposes no live marker screen-position query to anchor one against. Mobile
+  *does* get the real two-level disclosure (`BottomSheet`'s peek/full snaps). See
+  `tasks.md` Phase 8.
+- **Clustering is a coarse lat/lng grid, not pixel-distance.** Same root cause: no
+  projection query on a mounted provider outside `FakeMapProvider`'s test-only accessors.
+- **Provisional-pin dragging and freehand polygon drawing are click-based, not
+  drag-based.** `MapProvider`'s event surface is `markerClick`/`markerHover`/
+  `polygonClick`/`mapClick` only — no drag events. Click-to-reposition and
+  click-to-place-vertex reach the same outcomes; the latter is explicitly one of this
+  doc's own two sanctioned draw modes already.
+- **Selection does not check "is the target off-screen" before panning.** `MapProvider` has
+  no viewport-bounds query; the screen recentres on every selection instead.
+- **`GoogleMapProvider` is now a real implementation, not the stub**, replacing it per this
+  doc's own instruction — but it is unexercised by any test or dev run here, since
+  `VITE_GOOGLE_MAPS_BROWSER_KEY` is not configured anywhere yet. Flag it for a manual smoke
+  pass once a browser key is provisioned (Phase 12's Cloud Console checklist).
+- **The Airbnb preview's `capacity` field has nowhere to land.** `suggestions` has no
+  "sleeps" column; the type carries it but the create form does not surface it as its own
+  field. Worth a schema conversation if the sleeps count turns out to matter in practice.
+- **Explicit new motion (150–250 ms pin-drop/card-in/sheet-up) was not authored.** Existing
+  `BottomSheet` transitions and reduced-motion handling are reused as-is; a dedicated polish
+  pass is still owed.
+
+All four deviation-causing gaps in `MapProvider` (marker screen-position, drag events,
+viewport-bounds query) are additive and backward-compatible — extending the interface later
+does not require revisiting any of the components built in this phase, which is why they
+were left as follow-ups rather than blocking this phase on a provider-layer change the
+brief said to avoid absent a genuine requirement.

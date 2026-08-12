@@ -1,0 +1,355 @@
+.svp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* --- compact tally (list row) ------------------------------------------------------ */
+
+.vt-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vt-compact--empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.vt-compact__value {
+  font-size: var(--text-sm);
+  min-width: 2.5em;
+}
+
+.vt-compact__bar {
+  position: relative;
+  display: inline-block;
+  width: 55px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+
+.vt-compact__bar i {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--color-accent);
+  border-radius: inherit;
+}
+
+/* --- medium/full ---------------------------------------------------------------------- */
+
+.vt-medium {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vt-attribution__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.vt-attribution__list li {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.vt-attribution__outstanding {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: var(--space-1) 0 0;
+}
+
+/* --- ScoreVoteControl ------------------------------------------------------------------ */
+
+.vc-score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vc-score__steps {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.vc-score__step {
+  --step-color: var(--color-border-strong);
+  min-width: var(--hit-target);
+  min-height: var(--hit-target);
+  border-radius: var(--radius-2);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.vc-score--compact .vc-score__step {
+  min-width: var(--vote-step-compact);
+  min-height: var(--vote-step-compact);
+  font-size: var(--text-sm);
+}
+
+.vc-score__step.is-on {
+  background: var(--step-color);
+  border-color: var(--step-color);
+  color: var(--color-text-on-status);
+}
+
+.vc-score__step:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.vc-score__value {
+  font-size: var(--text-body);
+  min-width: 1.5em;
+}
+
+/* --- ThumbsVoteControl ------------------------------------------------------------------ */
+
+.vc-thumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vc-thumbs__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--hit-target);
+  padding: 0 var(--space-3);
+  border-radius: var(--chip-radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.vc-thumbs__btn svg {
+  width: var(--thumb-icon-size);
+  height: var(--thumb-icon-size);
+}
+
+.vc-thumbs__btn--up.is-on {
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.vc-thumbs__btn--down.is-on {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.vc-thumbs__clear {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: var(--hit-target);
+  font-size: var(--text-sm);
+}
+
+/* --- comments ---------------------------------------------------------------------------- */
+
+.comments__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.comment {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.comment__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.comment__who {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.comment__when {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.comment__text {
+  margin: 0;
+  word-break: break-word;
+}
+
+.comment__mention {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-radius: var(--chip-radius);
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.comment__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.comment--tombstone,
+.comment--undo {
+  color: var(--color-text-muted);
+  font-style: italic;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comments__empty {
+  color: var(--color-text-muted);
+}
+
+.comment-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  position: relative;
+}
+
+.comment-composer__field {
+  position: relative;
+}
+
+.comment-composer__picker {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-popover);
+  max-height: var(--mention-picker-max-h);
+  overflow-y: auto;
+}
+
+.comment-composer__picker button {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.comment-composer__picker button:hover {
+  background: var(--color-surface-sunken);
+}
+
+.comment-composer__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.comment-composer__counter {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.comment-composer__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* --- AdminStatusControls: visually a different kind of authority ----------------------- */
+
+.admin-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--card-radius);
+  background: var(--color-surface-sunken);
+}
+
+.admin-status__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-status__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* --- "needs my vote" chip --------------------------------------------------------------- */
+
+.pending-votes-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--hit-target);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.pending-votes-chip.is-on {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.pending-votes-chip__count {
+  font-weight: 600;
+}
+
+/* --- reduced motion: tallies snap rather than animate ---------------------------------- */
+
+.vt-compact__bar i {
+  transition: width var(--duration-base) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-compact__bar i {
+    transition: none;
+  }
+}

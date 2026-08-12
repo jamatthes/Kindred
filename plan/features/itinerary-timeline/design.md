@@ -401,3 +401,24 @@ rather than glides and the "now" marker stops animating.
 | End stage reached mid-edit | Guard rejects with `403`; the panel switches to read-only chrome. Export still works. |
 | Export with no items | Returns a valid empty calendar rather than an error — an empty `.ics` is legitimate. |
 | Very long trip (months) | Timeline scrolls horizontally at day granularity; the day view and map are unaffected. Route recomputation is scoped per day, so length does not multiply Directions cost. |
+
+---
+
+## NOTE (2026-08-12) — handoff from `map-suggestions`'s M3 web implementation
+
+Two things this feature will touch in `web/src/features/map-suggestions/`:
+
+- **`scheduled` status.** `SuggestionPin` (pre-built) already renders a distinct glyph (▸)
+  for `scheduled`, per that component's own doc comment; `SuggestionDetailPanel`'s
+  `STATUS_ACTIONS` map has no entry for `scheduled` (it is not settable via the status
+  route — `design.md` is explicit only the itinerary feature sets it), so no admin control
+  needs removing there. `DELETE` on a scheduled suggestion is expected to 409 server-side;
+  the web layer does not yet special-case that error message with a deep link to the
+  itinerary day (`requirements.md` S7) — currently shows a generic "may already be
+  scheduled" string in `SuggestionDetailPanel.tsx`'s delete handler. Worth a small follow-up
+  once this feature's itinerary-item shape exists to link to.
+- **Route lines.** `design.md`'s map z-order (region fills → route lines → pins → selected
+  pin) has no route-line layer yet, since nothing draws them. `MapCanvas`'s `polygons`/
+  `markers` props are the only two layers `MapSuggestionsScreen.tsx` currently populates;
+  a route-line layer will need either a new `MapProvider` primitive (a polyline) or reuse of
+  `addPolygon` with an open (unclosed) path, whichever this feature's own design settles on.

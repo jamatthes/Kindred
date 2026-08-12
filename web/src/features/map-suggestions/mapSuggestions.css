@@ -1,0 +1,103 @@
+.map-suggestions {
+  display: grid;
+  grid-template-columns: 62% 38%;
+  gap: var(--space-3);
+  height: 100%;
+  min-height: 0;
+}
+
+/* The 62/38 split collapses to one column below `--breakpoint-panel` — decided in JS
+   (`useIsNarrow()`, matching `PANEL_SHEET_QUERY` in `design/breakpoints.ts`, the same
+   mechanism `FamilyPanel.tsx` uses) rather than a CSS `@media` query, so the breakpoint
+   lives in exactly one place instead of a JS copy and a CSS copy that can drift. */
+.map-suggestions--narrow {
+  grid-template-columns: 1fr;
+}
+
+.map-suggestions__map {
+  position: relative;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  min-height: var(--map-canvas-min-h);
+}
+
+.map-suggestions__map .k-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.map-suggestions__toolbar {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.map-suggestions__hint {
+  background: var(--color-surface-raised);
+  border-radius: var(--chip-radius);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  box-shadow: var(--shadow-card);
+}
+
+.map-suggestions__empty-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--color-overlay);
+  pointer-events: none;
+}
+
+.map-suggestions__empty-overlay > * {
+  pointer-events: auto;
+}
+
+.map-suggestions__panel {
+  overflow-y: auto;
+  background: var(--color-surface-raised);
+  border-radius: var(--card-radius);
+  padding: var(--space-3);
+}
+
+.map-suggestions__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.map-suggestions__create-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-overlay);
+  overflow-y: auto;
+}
+
+.map-suggestions__list-fab {
+  position: fixed;
+  right: var(--space-3);
+  bottom: calc(var(--tabbar-height) + var(--space-3));
+  z-index: 5;
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border: none;
+  border-radius: var(--radius-full);
+  padding: var(--space-2) var(--space-4);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}

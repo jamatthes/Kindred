@@ -32,6 +32,7 @@ import type {
   TripAdmin,
 } from '../../app/types'
 import { adminApi } from './api'
+import { DistancesSection } from '../distances/DistancesSection'
 import { GoogleSection } from './GoogleSection'
 import { MembersSection } from './MembersSection'
 import { OrganisersSection } from './OrganisersSection'
@@ -47,6 +48,7 @@ const SECTIONS: { id: string; label: string; ownerOnly?: boolean }[] = [
   { id: 'section-members', label: 'Families and members' },
   { id: 'section-instance', label: 'Instance' },
   { id: 'section-google', label: 'Google APIs' },
+  { id: 'section-distances', label: 'Distances' },
   { id: 'section-stats', label: 'Stats' },
   { id: 'section-organisers', label: 'Organisers', ownerOnly: true },
 ]
@@ -241,6 +243,8 @@ export function AdminConsole() {
               setData((current) => (current ? { ...current, google } : current))
             }
           />
+
+          <DistancesSection tripId={data.trip.id} ownFamilyId={user?.family?.id ?? null} />
 
           <StatsSection stats={data.stats} />
 

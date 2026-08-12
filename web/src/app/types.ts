@@ -417,3 +417,212 @@ export type NudgeResult = { nudged: number; next_nudge_at: string | null; messag
 
 /** `GET /trip/category-settings` — the public read every member may make. */
 export type CategorySettingPublic = { category: VotingCategory; voting_mode: VotingMode }
+
+// --- map-suggestions ------------------------------------------------------------------------
+// The shapes `plan/features/map-suggestions/design.md` specifies. The HARD INVARIANT there
+// governs this file too: nothing Google-sourced beyond `place_id` is ever a field here that
+// gets sent back to the server. `vote_summary`/`comment_count`/`distances` are denormalised
+// into the suggestion by the server (owned by `voting-comments`/`distances`); this feature
+// only ever renders them.
+
+export type SuggestionType = 'region' | 'accommodation' | 'activity' | 'meal'
+export type SuggestionStatus = 'proposed' | 'shortlisted' | 'approved' | 'scheduled' | 'rejected'
+
+/** The GeoJSON `Feature` encoding from `design.md` > "Region geometry encoding". Coordinates
+ * are `[lng, lat]` — GeoJSON order — the one place in the codebase that order is legal; the
+ * conversion to our `LatLng` happens once, in `features/map-suggestions/geometry.ts`. */
+export type RegionGeometry =
+  | {
+      type: 'Feature'
+      geometry: { type: 'Point'; coordinates: [number, number] }
+      properties: { shape: 'circle'; radius_m: number; boundary_source?: 'osm' | 'drawn' }
+    }
+  | {
+      type: 'Feature'
+      geometry: { type: 'Polygon'; coordinates: [number, number][][] }
+      properties: { shape: 'polygon'; boundary_source?: 'osm' | 'drawn'; osm_relation_id?: number }
+    }
+
+export type PlaceSnapshot = { name: string; address: string }
+
+export type SuggestionAuthor = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  /** Not in the `design.md` response sketch, but every other author/member shape in this
+   * codebase carries both palette-slot and overflow-custom colour (`familyColor()` needs
+   * both); optional so the UI degrades if the server does not send it yet. */
+  family_color_custom?: string | null
+}
+
+export type SuggestionVoteSummary = {
+  mode: VotingMode
+  count: number
+  average: number | null
+  up: number | null
+  down: number | null
+  my_vote: number | 'up' | 'down' | null
+}
+
+/** One family's distance to one suggestion — `distances/design.md`'s `DistanceOut` shape,
+ * reused verbatim on `Suggestion.distances` per that doc's own note: "`map-suggestions`'
+ * `GET /api/v1/suggestions` already embeds a `distances` array per item for exactly this
+ * reason" (avoiding a distance request per row). `status` is the DB's three real values
+ * (`pending`/`ok`/`no_route`/`failed`) widened with the presentation-only `no_home` — a
+ * family lacking a geocoded home, computed server-side, never stored. */
+export type DistanceStatus = 'pending' | 'ok' | 'no_route' | 'failed' | 'no_home'
+
+export type DistanceOut = {
+  family_id: string
+  family_name: string
+  family_color: number | null
+  family_color_custom?: string | null
+  status: DistanceStatus
+  duration_s: number | null
+  distance_m: number | null
+  /** True for a haversine fallback (`status: 'pending'`) — never true alongside a real
+   * `status: 'ok'` row. An estimate never carries `duration_s`: inventing a driving
+   * duration from a straight line would violate design-system.md's honesty rules. */
+  is_estimate: boolean
+  computed_at: string | null
+}
+
+export type Suggestion = {
+  id: string
+  type: SuggestionType
+  title: string
+  notes: string | null
+  status: SuggestionStatus
+  created_by: SuggestionAuthor
+  lat: number
+  lng: number
+  geometry_geojson: RegionGeometry | null
+  place_id: string | null
+  place_snapshot: PlaceSnapshot | null
+  external_url: string | null
+  vote_summary: SuggestionVoteSummary | null
+  comment_count: number
+  distances: DistanceOut[]
+  /** One level only, per `design.md` — a grouped child never has its own `children`. */
+  children: Suggestion[]
+  created_at: string
+  updated_at: string
+}
+
+export type SuggestionSortField = 'votes' | 'distance' | 'category' | 'created'
+export type SuggestionSortDir = 'asc' | 'desc'
+
+export type SuggestionCreateInput = {
+  trip_id: string
+  type: SuggestionType
+  title: string
+  notes?: string
+  lat: number
+  lng: number
+  geometry_geojson?: RegionGeometry
+  place_id?: string
+  place_snapshot?: PlaceSnapshot
+  external_url?: string
+}
+
+export type SuggestionUpdateInput = Partial<
+  Pick<
+    SuggestionCreateInput,
+    'title' | 'notes' | 'type' | 'external_url' | 'lat' | 'lng' | 'geometry_geojson' | 'place_id' | 'place_snapshot'
+  >
+>
+
+// --- voting-comments ------------------------------------------------------------------------
+// The shapes `plan/features/voting-comments/design.md` specifies. Every computed number —
+// average, distribution, up/down/none, can_edit/can_delete — is produced server-side and
+// simply rendered here, same rule as polls' results types above.
+
+export type VoterEntry = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  family_color_custom?: string | null
+  score?: number | null
+  thumb?: Thumb | null
+}
+
+export type NotVotedEntry = { user_id: string; display_name: string; family_id: string | null }
+
+/** `PUT`/`DELETE .../vote` and `GET .../votes` response shape. `my_vote` is per-recipient —
+ * never present in the `suggestion.vote.updated` broadcast, which is why every consumer of
+ * that event merges the broadcast fields into its own locally-known `my_vote` rather than
+ * overwriting it (`design.md` > WebSocket events). */
+export type VoteTally = {
+  mode: VotingMode
+  count: number
+  eligible_count: number
+  average: number | null
+  distribution: number[] | null
+  up: number | null
+  down: number | null
+  none: number | null
+  my_vote: { score?: number; thumb?: Thumb } | null
+  voters: VoterEntry[]
+  not_voted: NotVotedEntry[]
+}
+
+export type PendingVotes = { count: number; suggestion_ids: string[] }
+
+export type CommentSubjectType = 'suggestion' | 'poll' | 'itinerary_item'
+
+export type CommentAuthor = {
+  user_id: string
+  display_name: string
+  family_id: string | null
+  family_color: number | null
+  family_color_custom?: string | null
+}
+
+export type Comment = {
+  id: string
+  /** Not in `design.md`'s `GET /comments` response sketch, but assumed present on the
+   * `comment.created`/`.updated` WS payload (the same doc's `comment.deleted` payload does
+   * carry them) — a client cannot otherwise route a live comment to the right open thread.
+   * Optional so the type still matches the documented REST shape exactly. */
+  subject_type?: CommentSubjectType
+  subject_id?: string
+  author: CommentAuthor
+  body: string
+  mentions: string[]
+  edited_at: string | null
+  created_at: string
+  can_edit: boolean
+  can_delete: boolean
+}
+
+export type LinkPreview = {
+  title?: string
+  description?: string
+  image_url?: string
+  site_name?: string
+  /** Airbnb-aware extraction extras (`design.md` "Airbnb-aware extraction"). */
+  facts?: string
+  locality?: string
+  lat?: number
+  lng?: number
+  capacity?: number
+}
+
+// --- distances ------------------------------------------------------------------------------
+// The shapes `plan/features/distances/design.md` specifies. `DistanceOut` itself lives with
+// `Suggestion` above (reused verbatim on `Suggestion.distances`); these are the standalone
+// endpoints' envelopes — used when the client needs distances without a full suggestion
+// fetch, e.g. after switching the sort perspective to another family.
+
+export type SuggestionDistancesOut = { suggestion_id: string; distances: DistanceOut[] }
+
+/** `GET /api/v1/distances` bulk response: one trip's suggestions, keyed by id. */
+export type BulkDistancesOut = Record<string, DistanceOut[]>
+
+export type RecomputeRequest = { trip_id: string; suggestion_id?: string }
+
+/** Returned *before* the background work runs, so the UI can state the cost
+ * (`design.md` D7) rather than discover it after the fact. */
+export type RecomputeResult = { queued_pairs: number; estimated_api_calls: number }

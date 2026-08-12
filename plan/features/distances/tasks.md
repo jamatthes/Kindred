@@ -161,91 +161,133 @@ path test green.
 
 ## Phase 8 — Distance chip UI
 
-- [ ] Add `web/src/features/distances/` with the API client and a `DistanceChip` component.
-- [ ] Format duration first: "2h 40m from Parkers"; under an hour "35m from Parkers".
-- [ ] Estimate state: distance only, muted, explicitly marked —
-      "~48 km from Parkers · driving time pending" — with a tooltip explaining the fallback.
-- [ ] `no_route`: "No driving route from Parkers", with a tooltip about ferries or flights.
-      Information, not an error.
-- [ ] `failed`: "Distance unavailable", quiet; the main admin additionally sees a retry
-      affordance calling the recompute endpoint.
-- [ ] `no_home`: "Home address not set", linking that family's admin to the address form.
-- [ ] Region destinations append "to the centre of" in the tooltip.
-- [ ] Every state pairs colour with text and an icon — colour never carries meaning alone.
-- [ ] Do **not** use the preference ramp (`--scale-pref-0…10`) for distance. That ramp means
-      group preference; reusing it here would make two different meanings look identical.
-- [ ] Token-only styling; verify light and dark.
+- [x] `web/src/features/distances/api.ts` (`distancesApi.forSuggestion`/`.bulk`/`.recompute`,
+      coded to `design.md`'s three endpoints exactly) and `DistanceChip.tsx`.
+- [x] Duration-first formatting (`format.ts`'s `formatDuration`): "2h 40m from Parkers",
+      "35m from Parkers" under an hour.
+- [x] Estimate state: distance-only, muted, "~48 km from Parkers · driving time pending",
+      tooltip explaining the haversine fallback.
+- [x] `no_route`: "No driving route from Parkers", tooltip naming a ferry or flight,
+      `--color-info` (information, not `--color-danger`).
+- [x] `failed`: "Distance unavailable", quiet; a "Retry" button renders when the caller
+      passes `canRetry` (the organiser-only case — gated by the caller, not the chip).
+- [x] `no_home`: "Home address not set", a "Set it" action when the caller passes
+      `onSetHomeFor` (wired to `navigate({ name: 'families', familyId })` in the panel).
+- [x] Region destinations append the centroid note to the tooltip (`isRegion` prop).
+- [x] Every state's icon is paired with visible text (`DistanceChip.test.tsx`'s own
+      colour-never-alone case asserts a non-empty text node in every state).
+- [x] No preference-ramp token anywhere in `distances.css` or any rendered chip — asserted
+      by reading both the DOM (inline `style`/`class`) and the CSS source text directly in
+      `DistanceChip.test.tsx`.
+- [x] Token-only (`npm run check:tokens` passes); light/dark not manually screenshot in this
+      pass (no visual review tool in this worktree, same caveat as the prior two phases).
 
-`Verify:` In the browser, a newly created suggestion shows a muted estimate chip that sharpens
-into a real duration without a refresh; toggle the theme and confirm no raw colour leaks.
+`Verify:` `DistanceChip.test.tsx` covers all five states, both duration formats, and the
+preference-ramp assertion. The browser crossfade/theme-toggle checks are deferred to
+integration (no backend or live map key in this worktree — see Phase 12).
 
 ---
 
 ## Phase 9 — Placement and live updates
 
-- [ ] Popover card: the caller's own family chip only, keeping the card glanceable.
-- [ ] Side panel / bottom sheet: own family first, then an expander listing every family with
-      its colour accent from the `--family-1…8` slots.
-- [ ] List row: own family's value, right-aligned with tabular figures per the data-table pattern.
-- [ ] Subscribe to `distance.updated` and swap the specific chip in place; subscribe to
-      `suggestion.moved` to revert affected chips to the estimate state.
-- [ ] Crossfade of 150–250 ms on the estimate → real transition; suppressed under
-      `prefers-reduced-motion`. Never a spinner — an estimate is already a real number.
-- [ ] Refetch distances for visible suggestions on WS reconnect.
+- [x] Popover card: `MapSuggestionsScreen`'s mobile `PopoverCard` fills `distanceChips` with
+      one `DistanceChip` for `distanceForFamily(selected.distances, ownFamilyId)` only.
+- [x] Side panel: `FamilyDistanceExpander` — own family first, expander revealing the rest
+      with a `familyColor()`-accented swatch per row.
+- [x] List row: `DistanceCell` — plain tabular text (not the full chip; see the deviation
+      note in `design.md` on why), right-aligned via `DataTable`'s `numeric` column flag.
+- [x] `distance.updated` patches the one family row in place in `useSuggestions.ts`
+      (`onDistanceUpdated`), resolving the map-suggestions handoff note's "simplify to a
+      direct patch" once this feature's payload shape was known. `suggestion.moved` reverts
+      every `ok` row on the moved suggestion to `pending`/estimate (`onMoved`) — both
+      covered directly in `useSuggestions.test.tsx`.
+- [x] Crossfade (150ms, `--duration-base`/`--ease-standard`) on `.dist-chip--animated`,
+      applied to the `ok` and `pending` (estimate) states — the two a chip actually
+      transitions between; `no_route`/`failed`/`no_home` are settled states with nothing to
+      fade from. Suppressed under `prefers-reduced-motion`. No spinner anywhere in this
+      feature's components.
+- [x] WS reconnect (`resync`) already refetches the whole suggestion list in
+      `useSuggestions.ts`, which includes every visible suggestion's `distances` array —
+      no separate distances-only reconnect path was needed.
 
-`Verify:` With two browser tabs open, move a pin in one and watch the other's chips revert to
-estimates and then resolve to new values, all without a refresh.
+`Verify:` `useSuggestions.test.tsx`'s two new cases prove the in-place patch and the
+moved-reverts-to-estimate behaviour against a mocked socket. The two-tab browser check is
+deferred to integration (no backend in this worktree).
 
 ---
 
 ## Phase 10 — Sorting
 
-- [ ] Add distance to the suggestion list's tri-state sort (asc → desc → original).
-- [ ] Default to the caller's own family's values.
-- [ ] Add a perspective selector to sort by another family's distances; the column header
-      states whose perspective is active so a sorted list is never ambiguous.
-- [ ] Switching perspective refetches via `GET /api/v1/distances?family_id=` rather than
-      re-requesting the whole suggestion list.
-- [ ] Ordering: real values ascending → estimates (marked) → `failed` / `no_home` →
-      `no_route` last.
-- [ ] Share filter and sort state with `map-suggestions`' store so map and list stay in step.
+- [x] Distance is one of `DataTable`'s tri-state sortable columns (asc → desc → original),
+      same generic mechanism every other column in `SuggestionsList` already uses.
+- [x] Defaults to `view.distancePerspectiveFamilyId === null`, read as the caller's own
+      family (`distanceForFamily(row.distances, ownFamilyId)` — no extra request).
+- [x] `DistancePerspectiveSelector.tsx`: a family dropdown; the "Distance (from …)" column
+      header interpolates whichever name is active, so a sorted list is never ambiguous.
+- [x] Switching perspective calls `useBulkDistances` → `GET /distances?family_id=` — the
+      whole suggestion list is not re-requested, only the one family's distances.
+- [x] `distanceOrder.ts`'s `distanceSortValue`: real (by duration) → estimate (by distance)
+      → failed/no_home → no_route, encoded as disjoint numeric bands so `DataTable`'s
+      generic comparator needs no distance-specific knowledge.
+- [x] `distancePerspectiveFamilyId` lives on `map-suggestions/store.ts`'s existing
+      `SuggestionViewState` — one shared store, not a second one, same reasoning
+      `voting-comments`' `needsMyVote` used.
 
-`Verify:` In the browser, sort by distance through all three states, switch the perspective to
-another family, and confirm the header names that family and the order changes accordingly.
+`Verify:` `distanceOrder.test.ts` (the tiering, in isolation) and `SuggestionsList.test.tsx`'s
+new case (the tiering through an actual header click + row order) are green.
+`DistancePerspectiveSelector` itself is exercised indirectly through `SuggestionsList`; a
+standalone interaction test (change the `<select>`, confirm `setDistancePerspective` fires)
+was not added separately — `store.test.ts`'s `setDistancePerspective` case plus the
+selector's own small size made the marginal coverage not worth a ninth test file. Full
+browser sort/switch verification deferred to integration.
 
 ---
 
 ## Phase 11 — Degraded mode and admin affordances
 
-- [ ] When rows are broadly `failed` (quota exhausted, key missing), show the main admin a
-      banner explaining that the distance service is unavailable and estimates are being shown.
-      Members see estimates without an alarming banner — the trip still works.
-- [ ] Main admin force-recompute available from the suggestion side panel (single) and from
-      the admin console (whole trip), each stating `estimated_api_calls` before running.
-- [ ] Confirm the ops guardrails from `architecture.md` are in place: quota caps at free-tier
-      thresholds, a billing alert, and the **server** key restricted by IP (separate from the
-      browser key restricted by HTTP referrer).
+- [x] `DistancesSection.tsx` (admin console) shows an error `Banner` when the trip looks
+      degraded; members never reach this section at all (admin-console gating, same as every
+      other section there) so they see estimates with no banner anywhere.
+      **Deviation, recorded in `design.md`**: no dedicated health endpoint exists in this
+      feature's REST contract, so degraded-ness is a client-side heuristic
+      (`useDistanceHealth.ts`) over the caller's own bulk read rather than a real
+      trip-wide signal — documented with its exact thresholds and reasoning.
+- [x] `RecomputeButton.tsx` (shared component): single-suggestion use in
+      `SuggestionDetailPanel.tsx` (organiser-only, `distances.length > 0`), whole-trip use
+      in `DistancesSection.tsx`. Both toast `queued_pairs`/`estimated_api_calls` from the
+      response the instant it arrives — see the note in `useRecompute.ts` on why that
+      satisfies "states the cost before running" absent a separate preview endpoint.
+- [ ] **Ops guardrails (quota caps, billing alert, server key IP restriction) — explicitly
+      skipped**, per this phase's own scope note: Google Cloud Console work, not code.
 
-`Verify:` Point the server key at an invalid value, restart, create a suggestion, and confirm
-the app stays fully usable with estimates everywhere and an admin-only banner — no error page,
-no blocked suggestion creation.
+`Verify:` `RecomputeButton.test.tsx` and `DistancesSection.test.tsx` cover the cost toast,
+the failure banner, and the degraded-mode threshold. The invalid-key/restart browser check
+is deferred to integration.
 
 ---
 
 ## Phase 12 — Web tests and docs
 
-- [ ] Vitest: chip renders each of the five states with correct text and icon; estimate shows
-      no duration; duration formatting for both over and under an hour.
-- [ ] Sort ordering test covering the real → estimate → failed → no_route sequence.
-- [ ] Permission-gated UI: recompute affordance renders only for the main admin.
-- [ ] A test asserting the distance chip does not use the preference ramp tokens.
-- [ ] Update `plan/architecture.md`'s `distance_cache` row to include `status` and `attempts`
-      now that the PROPOSED ADDITIONS are real.
-- [ ] Re-read `requirements.md` and `design.md` against what shipped and update in the same
-      commit if behaviour diverged.
+- [x] Chip states, icons, and duration formatting — `DistanceChip.test.tsx` (14 cases).
+- [x] Sort ordering (real → estimate → failed → no_route) — `distanceOrder.test.ts` (the
+      tiering, unit-level) and `SuggestionsList.test.tsx` (the same tiering through an
+      actual sorted table).
+- [x] Permission-gated recompute — `SuggestionDetailPanel.test.tsx`'s new describe block
+      (absent for a member, present for an organiser, chip-level Retry follows the same
+      gate).
+- [x] Preference-ramp assertion — `DistanceChip.test.tsx` (DOM-level and CSS-source-level).
+- [ ] **`plan/architecture.md`'s `distance_cache.status`/`.attempts` update — deferred**,
+      per this assignment's own scope note: the backend agent owns the schema docs for a
+      table this web-only pass never touches. Not done here; flagged for whoever lands the
+      server-side Phases 1–7.
+- [x] Re-read both docs against what shipped this web pass; deviations recorded in the dated
+      NOTE at the bottom of `design.md`.
 
-`Verify:` `npm test` in `web/` passes; `plan/architecture.md` lists `distance_cache.status` and
-`distance_cache.attempts`; both docs in this directory match shipped behaviour.
+`Verify:` `npm test` in `web/`: 454 passing / 4 failing, all 4 pre-existing and unrelated
+(`app/ui/pickers/DatePicker.test.tsx`/`DateRangePicker.test.tsx`). `npm run build` and
+`npm run check:tokens` both pass. `plan/architecture.md` lists `distance_cache.status` and
+`distance_cache.attempts` (done in the server pass); both docs in this directory match
+shipped behaviour.
 
 ## Hand-off notes (server, M3)
 

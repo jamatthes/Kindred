@@ -311,6 +311,17 @@ because an empty map would be noise (PL-15).
 > contents the name was the entire card read aloud before the listener learned which poll
 > it was.
 >
+> NOTE (2026-08-12, post-M2 fix): **PL-5's "Add an option" affordance** lives inside the
+> "Everyone's scores" panel, next to the collapse toggle — a plain "Add an option" button
+> that reveals a label field (plus optional coordinates once the poll already has a located
+> option) in place, no modal. This doc never specified a location for it (Phase 8's checklist
+> simply omitted the affordance entirely, `tasks.md` records the same date), so this is a
+> placement decision rather than a correction: options are literally that panel's columns,
+> `poll_option.created` already says it "inserts the column live," and putting the control
+> where the thing it changes is visible needed no new panel. Gated by `canAddOption.ts`,
+> mirroring the voting controls' own rule — absent, not disabled, for a closed poll or the
+> End stage.
+>
 > **The map overlay (PL-15, Phase 9) is not built.** There is no configured
 > `GOOGLE_MAPS_BROWSER_KEY` in this environment and no map component in the app yet; the
 > browser SDK arrives with `map-suggestions` (M3). The **data** side is complete: options

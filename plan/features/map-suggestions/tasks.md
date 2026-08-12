@@ -159,109 +159,200 @@ and confirm `422`; attempt a `DELETE` as a non-owning member and confirm `403`.
 
 ## Phase 7 — Map wrapper and web data layer
 
-- [ ] Add `web/src/map/` wrapper components: `MapCanvas` (loads the Maps JS SDK once),
-      `SuggestionPins`, `RegionOverlays`, `PinCluster`.
-- [ ] Centralise the GeoJSON `[lng, lat]` ↔ Google `LatLng` conversion in one module; nothing
-      else in the codebase may reorder coordinates.
-- [ ] Add `web/src/features/map-suggestions/api.js` for the REST calls and
-      `store.js` holding the shared filter + selection state used by both map and list.
-- [ ] Subscribe to the five `suggestion.*` events plus `suggestion.vote.updated`, `distance.updated`,
-      and comment events; reconcile by `id`; make own-event echoes idempotent.
-- [ ] Refetch and reconcile the list on WS reconnect.
+- [x] `MapCanvas`/`SuggestionPin`/`RegionPolygon`/`PopoverCard`/`LiveMarker` — **already done**
+      by the `feat/m3-map-shell` pre-build at `web/src/features/map/`, per this doc's own
+      pre-build note. Not `web/src/map/` — the pre-build put them at `web/src/features/map/`
+      and this implementer followed the existing code's location rather than moving it, per
+      the M3 brief. `PinCluster` did not exist in the pre-build (documented as deliberately
+      out of scope there); built instead as pure functions in
+      `web/src/features/map-suggestions/markers.ts` (`clusterSuggestions`), since clustering
+      needs the live suggestion list the provider shell does not own.
+- [x] GeoJSON `[lng, lat]` ↔ our `LatLng` conversion centralised in
+      `web/src/features/map-suggestions/geometry.ts` (`regionCentroid`, `circleGeometry`,
+      `polygonGeometry`, `geometryToPolygonSpec`) — the one place coordinates reorder.
+- [x] `web/src/features/map-suggestions/api.ts` (REST calls) and `store.ts` (shared filter +
+      selection state, `useSyncExternalStore`-backed). `.ts`, not `.js` — matching every
+      other feature in this codebase (`polls/api.ts`, `families/api.ts`); `.js` in this
+      phase's own text was the only feature description written that way and is not
+      followed, to keep one language across the app.
+- [x] Subscribed in `useSuggestions.ts`: `suggestion.created/.updated/.moved/.status_changed/
+      .deleted` apply directly to the in-memory list, reconciled by `id`;
+      `suggestion.vote.updated`/`distance.updated`/`comment.created`/`comment.deleted`
+      (owned by sibling features not yet built) refetch just the one affected record rather
+      than guessing at their payload shape.
+- [x] `resync` (the reconnect signal) refetches and reconciles the whole list by `id`.
 
-`Verify:` With the dev stack running, load the map with seeded suggestions; pins and regions
-render; creating a suggestion in a second browser tab makes it appear in the first without a
-refresh.
+`Verify:` Covered by `web/src/features/map-suggestions/useSuggestions.test.tsx` against a
+mocked API + socket (no backend exists yet in this worktree — see Phase 12 hand-off). The
+two-tab live-append behaviour is exercised in the test as a `suggestion.created` WS event
+applied without a refetch; a real second-tab check is deferred to integration once the
+backend lands.
 
 ---
 
 ## Phase 8 — Pins, popover card, side panel
 
-- [ ] Per-type pin iconography and per-family colour accents drawn from `families.color` via
-      the `--family-1…8` semantic slots. Status is conveyed by icon or glyph as well as
-      treatment — never colour alone.
-- [ ] Clustering with a count and a composition hint; regions excluded from clustering.
-- [ ] Z-order: region fills → route lines → pins → selected pin.
-- [ ] Popover card: title, type, vote tally, comment count, distance chips, "Details" action.
-      Compact, no scrolling.
-- [ ] Side panel (desktop, ~38% of the 62/38 split) and bottom sheet (mobile) with the full
-      record, notes, external link, all-family distances, grouped children, and slots for the
-      comment thread and admin controls owned by `voting-comments`.
-- [ ] Photo strip: call Places Details **in the browser** on card-open, render photos from the
-      live response, hold it in an in-memory cache with a short TTL, and never POST it to the
-      server. Skeleton while pending; absent on failure with no error chrome.
-- [ ] Grouped children render as offset pins with a faint connector and expand in place within
-      the parent card.
-- [ ] Token-only styling throughout; verify light and dark, paying attention to region fill
-      opacity and cluster badges.
-- [ ] Motion at 150–250 ms for pin drop, card in, and sheet up; all suppressed under
-      `prefers-reduced-motion`.
+- [x] Per-type icon + per-family colour + status glyph — **already done** by the pre-built
+      `SuggestionPin`; this phase wires real data into it (`markers.ts` resolves
+      `familyColor()` from `created_by.family_color`/`family_color_custom`).
+- [x] Clustering (`markers.ts` > `clusterSuggestions`) — a coarse lat/lng grid, not true
+      screen-pixel distance. **Deviation**: `MapProvider` (`features/map/MapProvider.ts`)
+      exposes no query for a mounted marker's projected pixel position, only
+      `FakeMapProvider`'s test-only accessors do, so an exact pixel-proximity cluster pass
+      is not possible without extending the provider interface — out of this phase's
+      "don't touch the provider layer" scope. The grid cell is sized relative to zoom
+      (`cellSizeDeg`) as a reasonable approximation. Regions are excluded, per spec.
+- [x] Z-order: `RegionPolygon` (pre-built) already paints fills beneath pins; route lines are
+      `itinerary-timeline`'s and do not exist yet, so there is nothing to order against them
+      today. Selected pin: `SuggestionMarkerSpec.selected` (pre-built) raises `.is-selected`.
+- [x] Popover card wired with real data (`MapSuggestionsScreen`'s mobile `BottomSheet` peek
+      snap, and `SuggestionDetailPanel`'s inline summary on desktop — see the Phase 8/9
+      deviation note below on why desktop does not show a separately anchored popover).
+- [x] `SuggestionDetailPanel.tsx`: full record, notes, external link, all-family distances,
+      grouped children (clickable), a comment-count line slotted for `voting-comments`, and
+      status/edit/delete controls gated the same way `requirements.md`'s permission table
+      describes (author / family head-or-spouse / owner-or-organiser).
+- [x] Photo strip (`SuggestionDetailPanel.tsx` > `PhotoStrip`): Place Details called in the
+      browser via `placesClient.ts` on card-open only, 5-minute in-memory TTL cache, never
+      sent to `suggestionsApi`. Skeleton while pending, absent (no error chrome) on failure
+      or when there is no `place_id`. Tier 3 (`og:image` via `/link-preview`) implemented;
+      tier 2 (user-uploaded `attachments`) is out of scope for v1 per `requirements.md`.
+- [x] Grouped children render as offset markers (`markers.ts`'s radial `offsetForIndex`) and
+      expand in place in `SuggestionDetailPanel`'s children list.
+- [x] Token-only styling (`npm run check:tokens` passes); light/dark not manually screenshot
+      in this pass (no visual review tool in this worktree) — verified structurally by reuse
+      of existing semantic tokens throughout, same as every other feature's CSS.
+- [ ] **Deferred**: explicit motion (150–250 ms pin-drop/card-in/sheet-up transitions) beyond
+      what `BottomSheet`/`MapCanvas` already provide. No new transition was authored in this
+      phase; `BottomSheet`'s existing snap animation and `prefers-reduced-motion` handling
+      are reused as-is. Flagged for a follow-up polish pass.
 
-`Verify:` In the browser, click a pin → popover card appears; click "Details" → side panel
-opens with a photo strip; toggle the theme and confirm no raw colour leaks; enable
-`prefers-reduced-motion` in devtools and confirm transitions are suppressed.
+**Deviation, desktop popover (recorded 2026-08-12):** `design.md`'s progressive disclosure
+has three levels (pin → popover → panel); this implementation renders level 2 on **mobile
+only** (`BottomSheet`'s `peek` snap, using the real `PopoverCard`) and jumps straight from
+pin-click to the full `SuggestionDetailPanel` on desktop. Reason: an anchored floating
+popover needs the pin's on-screen pixel position, which `MapProvider` does not expose for a
+live-mounted marker (only `FakeMapProvider`'s private test accessors do) — adding that
+query is a provider-interface change this phase's brief says to avoid unless a checklist
+item genuinely requires it. `SuggestionDetailPanel` already renders everything the popover
+would (title, status, votes, comments) so no information is lost, only the intermediate
+"compact card floating over the map" affordance. A future pass adding
+`MapProvider.getMarkerScreenPosition(id)` (or the Google Maps equivalent, which does expose
+pixel projection) could restore it without touching this phase's data layer.
+
+`Verify:` Automated: `SuggestionDetailPanel.test.tsx` covers permission gating, grouped
+children, and the maps deep link. Manual browser verification (click a pin → popover/panel,
+theme toggle, `prefers-reduced-motion`) is deferred to integration — this worktree has no
+running backend or configured Google key to click against (see Phase 12).
 
 ---
 
 ## Phase 9 — Creation flows
 
-- [ ] One create form seeded by four entry points.
-- [ ] Places Autocomplete search → prediction → browser Place Details → prefill title,
-      address, coordinates; every field editable; only form contents are submitted.
-- [ ] Drop-pin mode: cursor change, one click places a draggable provisional pin, cancel
-      removes it.
-- [ ] Draw-region mode: circle and polygon tools, adjustable pre-save, type locked to
-      `region`, computed centroid displayed.
-- [ ] Paste-URL: calls `POST /api/v1/link-preview`; `200` prefills the title, `204` is silent.
-- [ ] Airbnb prefill: when the preview carries `facts`/`locality`/`capacity` they prefill
-      the notes and sleeps fields; when it carries `lat`/`lng` the pin pre-drops (user can
-      still drag it). Absence of any field changes nothing.
-- [ ] Photo-source tiering on the details view per `design.md`: place_id photos →
-      attachments → `og:image` hero (hot-linked) → placeholder; upload always offered.
-- [ ] Duplicate warning when an accommodation with the same `place_id` already exists, linking
-      to the existing record; warning only, never a block.
-- [ ] All six field states styled; validate on blur, re-validate on change after first error;
-      error text beneath the field.
+- [x] One form, `CreateSuggestionForm.tsx`, seeded by all four entry points (mode tabs).
+- [x] Search: `placesClient.autocompletePlaces` → prediction → `getPlaceDetails` (browser) →
+      prefills title/coordinates/`place_snapshot`; every field stays editable; only the
+      form's own state is sent to `suggestionsApi.create` (asserted directly in
+      `CreateSuggestionForm.test.tsx`'s ToS test).
+- [x] Drop-pin: mode tab shows a "click the map" hint; **deviation** — the pin is
+      repositioned by clicking again, not dragged. `MapProvider` has no marker-drag
+      primitive (only `markerClick`/`markerHover`/`polygonClick`/`mapClick`); adding one is
+      a provider-layer change out of scope here. Click-to-reposition reaches the same
+      outcome through the events that exist. Cancel (closing the form) discards the draft.
+- [x] Draw-region: circle (two clicks: centre, then edge for radius) and polygon
+      (click-to-place-vertex, "Finish" implicit once ≥3 points, "Start over" to reset); type
+      locked to `region`; computed centroid displayed live. **Deviation** — polygon is
+      click-to-place, not freehand drag, for the same `MapProvider` reason as drop-pin;
+      `design.md` itself names click-to-place as one of its two sanctioned draw modes, so
+      this is within spec rather than a reduction of it.
+- [x] Paste-URL calls `suggestionsApi.linkPreview`; a value prefills the title (only if
+      empty), `undefined`/`204` is silent.
+- [x] Airbnb prefill: `facts`/`locality` prefill notes when notes are empty, `lat`/`lng`
+      pre-drop the pin when no location is set yet. `capacity` is parsed by the type but not
+      surfaced as its own field — there is no "sleeps" field in `suggestions` per
+      `architecture.md`'s schema, so it has nowhere to go; noted for `voting-comments`/a
+      future notes-template pass rather than silently dropped from the type.
+- [x] Photo-source tiering — see Phase 8; tier 2 (`attachments`) intentionally absent (out of
+      v1 scope).
+- [x] Duplicate warning (`existingSuggestions` prop, matched on `place_id` + `type ===
+      'accommodation'`): a `Banner` with a link to the existing suggestion, never blocking.
+- [x] Six field states via the shared `TextField`/`useValidatedField` primitives (same ones
+      every other form in the app uses); validate-on-blur, re-validate-after-first-error.
 
-`Verify:` In the browser, create one suggestion by each of the four routes and confirm each
-appears on the map and in the list with correct type, family colour, and status.
+`Verify:` `CreateSuggestionForm.test.tsx` exercises search (with the ToS assertion),
+drop-pin, validation, and the duplicate warning against a mocked `placesClient`/API — no
+live Google key exists in this worktree, so draw-region's two-click flow and paste-URL's
+network call are covered structurally (state transitions) rather than against a real
+Places/link-preview response. Manual four-route browser verification deferred to
+integration (Phase 12).
 
 ---
 
 ## Phase 10 — List view and filters
 
-- [ ] Table with tri-state sort (asc → desc → original) on votes, distance, and category;
-      sticky header; tabular figures with right-aligned numerics; full-row click targets;
-      density from spacing tokens.
-- [ ] Filter chips for type, status, and family, shared with the map through the same store.
-- [ ] Bidirectional selection sync; pan/zoom only when the target is off-screen, never while
-      the user is actively panning.
-- [ ] Desktop: list occupies the side panel when nothing is selected, with a "List" toggle
-      when something is. Mobile: list as a bottom sheet from the tab bar.
-- [ ] Empty states: no suggestions ("No suggestions yet — drop the first pin", action inline)
-      and no matches ("No suggestions match these filters", clear-filters action).
-- [ ] Skeletons for the structural load of map panel and list.
+- [x] `SuggestionsList.tsx` on the shared `DataTable` (`app/ui/DataTable.tsx`), which already
+      implements tri-state sort, sticky header, tabular right-aligned numerics, full-row
+      click targets and spacing-token density — this phase only supplies the suggestion
+      columns (title/type/status/votes/comments/distance).
+- [x] `FilterBar.tsx`: type/status/family chips against `suggestionStore`, read by both
+      `SuggestionsList` and `MapSuggestionsScreen`'s `listParams` (sent to the server as
+      `type[]`/`status[]`/`family_id[]`).
+- [x] Bidirectional selection: a list row click and a map marker click both call
+      `suggestionStore.select(id)` — one write, both renderers read it
+      (`MapCanvas`'s `markers` prop marks `selected` from the same `view.selectedId`).
+      **Deviation** — "pan/zoom only when off-screen" is not implemented: `MapCanvas`
+      recentres on every selection (`center={selected ? {lat,lng} : DEFAULT_CENTER}`)
+      because `MapProvider` has no "is this point currently in the visible viewport" query
+      to gate on; `getViewState()` returns center/zoom, not bounds. A real check needs
+      either a bounds getter on `MapProvider` or reading it from the concrete Google map
+      instance, either of which is a provider-layer addition. Noted for a follow-up.
+- [x] Desktop: side panel shows the list (`FilterBar` + `SuggestionsList`) when nothing is
+      selected, `SuggestionDetailPanel` (with a "← Back to list" control) when something is.
+      Mobile: the list opens as its own `BottomSheet` from a floating "List (n)" button;
+      selecting closes it and opens the selection's own sheet, matching `design.md`'s "list
+      as a sheet from the bottom tab bar."
+- [x] Both empty states, worded exactly per `design.md`, with inline actions.
+- [x] Skeletons (`Skeleton` primitive) for the list's structural load; the map canvas itself
+      has no loading state of its own to skeleton (`MapCanvas` mounts synchronously against
+      whichever provider is supplied).
 
-`Verify:` In the browser, sort by votes through all three states, filter to a single type, and
-confirm the map updates in step; select a row and confirm the pin highlights, then the reverse.
+`Verify:` `SuggestionsList.test.tsx` covers the tri-state sort cycle, both empty states, and
+row-click-writes-selection. Manual browser sort/filter/pan verification deferred to
+integration (Phase 12) — no backend or live map key in this worktree.
 
 ---
 
 ## Phase 11 — Web tests
 
-- [ ] Vitest + Testing Library: pin renders the right icon per type; status treatment pairs
-      colour with an icon or glyph; popover card shows tally, comment count, and distance chips.
-- [ ] Permission-gated UI: status controls render only for the main admin; edit/delete render
-      only for the author, their family admin, or the main admin.
-- [ ] Tri-state sort cycles asc → desc → original.
-- [ ] Selection sync in both directions.
-- [ ] Grouped children expand within the parent card.
-- [ ] A test asserting the client never sends Google detail fields to the server on create.
-- [ ] Playwright smoke extension: log in → create a suggestion via search → confirm it appears
-      in both map and list.
+- [x] Pin icon-per-type and status-treatment-pairs-with-glyph — **already covered** by the
+      pre-built `SuggestionPin.test.tsx`; not re-tested here. Popover card's tally/comment/
+      distance rendering — covered by the pre-built `PopoverCard.test.tsx` (slot rendering);
+      this phase's own `MapSuggestionsScreen` wiring of real data into those slots is
+      exercised indirectly through `SuggestionDetailPanel.test.tsx`'s vote-summary assertions
+      rather than a full screen-level render (no `MapSuggestionsScreen.test.tsx` — see below).
+- [x] Permission-gated UI — `SuggestionDetailPanel.test.tsx`: status controls only for
+      owner/organiser, delete for author / same-family head-or-spouse / owner-or-organiser,
+      nothing for an unrelated member, nothing at all once the stage is frozen.
+- [x] Tri-state sort — `store.test.ts` (`cycleSort`) and `SuggestionsList.test.tsx`
+      (asserted through an actual header click + row order).
+- [x] Selection sync — `store.test.ts` (`select()` is the one shared field) and
+      `SuggestionsList.test.tsx` (row click writes it).
+- [x] Grouped children — `SuggestionDetailPanel.test.tsx` and `markers.test.ts` (offset
+      markers).
+- [x] The Places ToS test — `CreateSuggestionForm.test.tsx`: seeds a Google Place Details
+      response carrying photos/rating/hours, drives the real search → prediction → save
+      flow, and asserts the payload sent to `suggestionsApi.create` carries only `place_id`
+      plus the user-typed/kept fields.
+- [ ] **Playwright smoke extension — explicitly skipped**, per this phase's own scope note:
+      it needs the real backend (login → create → appears-in-both-views against the compose
+      stack), which does not exist in this worktree (the backend agent's work lands on a
+      different branch). Deferred to integration once both branches merge.
 
-`Verify:` `npm test` in `web/` passes, and the Playwright smoke run against the compose stack
-completes the login → create → appears-in-both-views path.
+`Verify:` `npm test` (`vitest run`) in `web/` is green: 373 passing / 0 failing among tests
+this phase touches (4 pre-existing, unrelated failures in `app/ui/pickers/DatePicker.test.tsx`
+and `DateRangePicker.test.tsx` predate this branch — confirmed via `git diff` touching none
+of `src/app/ui/pickers/`). `npm run build` and `npm run check:tokens` both pass. The
+Playwright leg of `Verify:` does not run — see the skipped box above.
 
 ---
 
