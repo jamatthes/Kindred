@@ -4,6 +4,10 @@ deploy/.env
 # ...and any variant (.env.verify, .env.staging). The example is the one exception.
 deploy/.env.*
 !deploy/.env.example
+# Vite's own convention for a developer's local overrides (e.g. VITE_GOOGLE_MAPS_BROWSER_KEY
+# for `npm run dev` — see deploy/README.md's "Local development" section). Never committed.
+web/.env.local
+web/.env.*.local
 
 # Python
 __pycache__/

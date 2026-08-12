@@ -22,6 +22,17 @@ RUN npm ci
 
 COPY . .
 
+# The browser Maps key, baked into the static bundle at build time -- Vite only inlines
+# `import.meta.env.VITE_*` values that exist when it runs, not read at container start.
+# Passed through from deploy/docker-compose.yml's `build.args` (itself from deploy/.env),
+# and empty by default so an unconfigured key still produces a working build:
+# GoogleMapProvider and MapSuggestionsScreen already degrade to FakeMapProvider when this is
+# unset (see their own comments). Whenever GOOGLE_MAPS_BROWSER_KEY changes in deploy/.env,
+# this image must be rebuilt -- `docker compose up -d` alone will not pick it up, only
+# `--build` does, because the value is compiled into the JS, not read at runtime.
+ARG VITE_GOOGLE_MAPS_BROWSER_KEY=""
+ENV VITE_GOOGLE_MAPS_BROWSER_KEY=${VITE_GOOGLE_MAPS_BROWSER_KEY}
+
 # `npm run build` is `tsc -b && vite build`: a type error fails the image build rather than
 # shipping a bundle that does not typecheck.
 RUN npm run build

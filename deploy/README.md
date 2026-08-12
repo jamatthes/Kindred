@@ -252,6 +252,39 @@ server-side and cached in Postgres (geocodes forever, distances until a pin move
 until the itinerary changes). Places details are the one exception, re-fetched live on
 card-open because Google's terms forbid persisting them.
 
+### The browser key needs an image rebuild, the server key does not
+
+`GOOGLE_MAPS_SERVER_KEY` is read by the `api` container at process start, like every other
+server-side setting — `docker compose up -d` (no `--build`) after editing `.env` is enough.
+
+`GOOGLE_MAPS_BROWSER_KEY` is different: it is compiled into the static JS bundle at *build*
+time (`web/Dockerfile` passes it through as `VITE_GOOGLE_MAPS_BROWSER_KEY`, and Vite inlines
+`import.meta.env.VITE_*` values when it runs, not when the container later starts). Adding,
+changing or removing this key needs:
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+`up -d` alone restarts Caddy serving the *previously baked* bundle — with the old key, or
+none. Leaving the key blank still produces a working image: the map falls back to a
+FakeMapProvider-backed empty state (`plan/features/map-suggestions/design.md`'s edge case
+for a missing key) rather than failing the build or the app.
+
+### Local development (`npm run dev`)
+
+`npm run dev` (Vite's dev server, not the Docker image above) reads the same
+`VITE_GOOGLE_MAPS_BROWSER_KEY` convention from a git-ignored `web/.env.local` — Vite's own
+convention for a developer's local overrides, loaded automatically, never committed:
+
+```bash
+# web/.env.local
+VITE_GOOGLE_MAPS_BROWSER_KEY=your-browser-restricted-key
+```
+
+Omit the file (or leave the line out) to keep developing against `FakeMapProvider`, which
+needs no key at all — most map-suggestions work never needs a real one.
+
 ## Operating
 
 ```bash

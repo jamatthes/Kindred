@@ -38,4 +38,7 @@ anything else. Full instructions — HTTPS, backups, upgrades — in
 - Server: `cd server && python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"`,
   tests with `pytest` (needs a local Postgres and `TEST_DATABASE_URL`).
 - Web: `cd web && npm install`, `npm run verify` (lint, token check, build, tests),
-  `npm run e2e` (Playwright against a throwaway Docker stack).
+  `npm run e2e` (Playwright against a throwaway Docker stack). `npm run dev` runs against
+  `FakeMapProvider` by default; drop a `web/.env.local` with `VITE_GOOGLE_MAPS_BROWSER_KEY=`
+  set to enable the real map locally (gitignored — see `deploy/README.md`'s "Local
+  development" section).
