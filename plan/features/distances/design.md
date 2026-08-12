@@ -343,3 +343,46 @@ server denormalises into the suggestion response, per this feature's cost/cachin
 event payload contract was not fixed at the time `map-suggestions`'s web layer was built —
 confirm the shape once this feature lands and simplify to a direct patch if it turns out to
 carry the recomputed value inline.
+
+---
+
+## NOTE (2026-08-12) — distances M3 web implementation, deviations from this doc
+
+Built in `web/src/features/distances/` against typed fixtures — still no backend in this
+worktree. Resolved the map-suggestions handoff note above (`distance.updated` now patches
+the specific family row in place in `useSuggestions.ts`, and `suggestion.moved` now reverts
+that suggestion's real rows to `pending`/estimate locally, both directly tested). Full
+reasoning for every item below is inline in `tasks.md` next to its checklist box.
+
+- **`SuggestionDistance` (the pre-existing, narrower type `map-suggestions` defined on
+  `Suggestion.distances`) is now this feature's own `DistanceOut`.** The two docs describe
+  the same per-family row; keeping two parallel shapes would have meant every consumer
+  guessing which was authoritative. `Suggestion.distances: DistanceOut[]` now carries
+  `status`/`family_color` too, matching what this doc's `GET /suggestions/{id}/distances`
+  already specified.
+- **The list row is plain tabular text (`DistanceCell`), not the full `DistanceChip`.**
+  `design.md`'s "Placement" section says "own family's value ... right-aligned with tabular
+  figures per the data-table pattern" — the same wording every other numeric column
+  (votes, comments) uses, and those render as plain text too. The full chip's icon and
+  tooltip have no room in a table cell and would be the only decorated cell in the row.
+- **No dedicated distance-service health endpoint.** The degraded-mode banner
+  (`DistancesSection.tsx`) is a client-side heuristic (`useDistanceHealth.ts`) over
+  `GET /distances?family_id=<admin's own>` — more than `MIN_SAMPLE` (3) pairs attempted and
+  more than 30% settled `failed`. This doc's REST section has no aggregate health route; a
+  real one (e.g. counting `failed` rows trip-wide, not just one family's) would be more
+  accurate and is a reasonable follow-up once the backend exists to design it against.
+- **"States the cost before running" has no separate preview call.** `POST
+  /distances/recompute`'s own response carries `queued_pairs`/`estimated_api_calls`
+  *before the background Google calls run* — this pass shows that response as a toast the
+  instant it arrives rather than adding a two-step "preview, then confirm" flow the
+  contract doesn't define. `useRecompute.ts` states this reasoning inline.
+- **A failed chip's per-row "Retry" and the panel's "Force recompute this suggestion"
+  button call the identical endpoint.** The recompute endpoint has no per-family
+  granularity (`{trip_id, suggestion_id?}` only), so a retry on one family's chip
+  necessarily recomputes every family's pair for that suggestion. Both affordances are
+  kept because the chip-level one is more discoverable at the point of failure and the
+  panel-level one is what Phase 11 explicitly asks for; they are not two different actions.
+- **`plan/architecture.md`'s `distance_cache.status`/`.attempts` update is deferred** — this
+  pass is web-only against a documented contract; the backend agent owns that table's real
+  schema and its docs.
+
