@@ -48,7 +48,21 @@ describe('suggestionStore', () => {
     suggestionStore.toggleFamily('fam-1')
     expect(hasActiveFilters(suggestionStore.getState().filters)).toBe(true)
     suggestionStore.clearFilters()
-    expect(suggestionStore.getState().filters).toEqual({ types: [], statuses: [], familyIds: [] })
+    expect(suggestionStore.getState().filters).toEqual({
+      types: [],
+      statuses: [],
+      familyIds: [],
+      needsMyVote: false,
+    })
+  })
+
+  it('toggleNeedsMyVote flips the "needs my vote" chip (voting-comments Phase 10)', () => {
+    expect(suggestionStore.getState().filters.needsMyVote).toBe(false)
+    suggestionStore.toggleNeedsMyVote()
+    expect(suggestionStore.getState().filters.needsMyVote).toBe(true)
+    expect(hasActiveFilters(suggestionStore.getState().filters)).toBe(true)
+    suggestionStore.toggleNeedsMyVote()
+    expect(suggestionStore.getState().filters.needsMyVote).toBe(false)
   })
 
   it('notifies subscribers on every state change', () => {

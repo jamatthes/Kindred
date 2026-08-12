@@ -9,9 +9,12 @@
  * (user-uploaded `attachments`) is explicitly out of scope for v1 per `requirements.md` —
  * "Photo upload onto suggestions ... handled by the archive work in a later milestone" — so
  * this panel skips straight from tier 1 to tier 3 (the link preview's `og:image`) and then
- * tier 4 (placeholder). Vote widgets and admin confirm/reject controls are only lightly
- * rendered here (a tally and a status control), per `PopoverCard`'s docblock: their full
- * design belongs to `voting-comments`, which is not part of this phase.
+ * tier 4 (placeholder).
+ *
+ * The vote control, tally, comment thread, and admin status controls are `voting-comments`'
+ * components (`SuggestionVotePanel`, `CommentThread`, `AdminStatusControls`) — this panel
+ * used plain placeholders for all three ahead of that feature; this is the swap the NOTE at
+ * the bottom of `plan/features/map-suggestions/design.md` described.
  */
 
 import { useEffect, useState } from 'react'
@@ -25,6 +28,9 @@ import { familyColor } from '../../design/familyColor'
 import { getPlaceDetails, placesAvailable } from './placesClient'
 import { suggestionsApi } from './api'
 import { suggestionStore } from './store'
+import { SuggestionVotePanel } from '../voting-comments/SuggestionVotePanel'
+import { CommentThread } from '../voting-comments/CommentThread'
+import { AdminStatusControls } from '../voting-comments/AdminStatusControls'
 import type { Suggestion, SuggestionStatus } from '../../app/types'
 import './suggestionsList.css'
 import './SuggestionDetailPanel.css'
@@ -42,25 +48,6 @@ const STATUS_LABEL: Record<SuggestionStatus, string> = {
   approved: 'Approved',
   scheduled: 'Scheduled',
   rejected: 'Rejected',
-}
-
-/** `design.md` > "Status flow": every non-terminal move plus the rejection undo. */
-const STATUS_ACTIONS: Partial<Record<SuggestionStatus, { to: SuggestionStatus; label: string }[]>> = {
-  proposed: [
-    { to: 'shortlisted', label: 'Shortlist' },
-    { to: 'approved', label: 'Approve' },
-    { to: 'rejected', label: 'Reject' },
-  ],
-  shortlisted: [
-    { to: 'approved', label: 'Approve' },
-    { to: 'rejected', label: 'Reject' },
-    { to: 'proposed', label: 'Back to proposed' },
-  ],
-  approved: [
-    { to: 'shortlisted', label: 'Back to shortlisted' },
-    { to: 'rejected', label: 'Reject' },
-  ],
-  rejected: [{ to: 'proposed', label: 'Undo rejection' }],
 }
 
 function openInMapsUrl(s: Suggestion): string {
@@ -157,20 +144,8 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
   const isFamilyLead =
     user?.family?.id === suggestion.created_by.family_id && (user.family.role === 'head' || user.family.role === 'spouse')
   const canEdit = Boolean(isAuthor || isFamilyLead || user?.is_owner || user?.is_organiser)
-  const canChangeStatus = Boolean(user?.is_owner || user?.is_organiser)
+  const canAdminister = Boolean(user?.is_owner || user?.is_organiser)
   const canMutate = stage.canMutate
-
-  async function changeStatus(to: SuggestionStatus) {
-    setBusy(true)
-    setError(null)
-    try {
-      onChanged(await suggestionsApi.setStatus(suggestion.id, to))
-    } catch {
-      setError('That status change could not be saved.')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function doDelete() {
     setBusy(true)
@@ -235,20 +210,13 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
         ) : null}
       </div>
 
-      {suggestion.vote_summary ? (
-        <div className="sugg-detail__votes" aria-label="Votes">
-          {suggestion.vote_summary.mode === 'score' ? (
-            <span>
-              {suggestion.vote_summary.average?.toFixed(1) ?? 'No scores yet'} · {suggestion.vote_summary.count} vote
-              {suggestion.vote_summary.count === 1 ? '' : 's'}
-            </span>
-          ) : (
-            <span>
-              {suggestion.vote_summary.up ?? 0} for · {suggestion.vote_summary.down ?? 0} against
-            </span>
-          )}
-        </div>
-      ) : null}
+      <SuggestionVotePanel
+        suggestionId={suggestion.id}
+        suggestionType={suggestion.type}
+        title={suggestion.title}
+        density="full"
+        canVote={Boolean(user) && canMutate}
+      />
 
       {suggestion.distances.length > 0 ? (
         <div className="sugg-detail__distances">
@@ -282,22 +250,11 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
         </div>
       ) : null}
 
-      <div className="sugg-detail__comments-slot">
-        {suggestion.comment_count} comment{suggestion.comment_count === 1 ? '' : 's'} — the full thread arrives
-        with `voting-comments`.
-      </div>
+      <CommentThread subjectType="suggestion" subjectId={suggestion.id} />
 
       {error ? <Banner tone="error">{error}</Banner> : null}
 
-      {canMutate && canChangeStatus && STATUS_ACTIONS[suggestion.status] ? (
-        <div className="sugg-detail__status-actions" aria-label="Change status">
-          {STATUS_ACTIONS[suggestion.status]!.map((action) => (
-            <Button key={action.to} variant="secondary" busy={busy} onClick={() => void changeStatus(action.to)}>
-              {action.label}
-            </Button>
-          ))}
-        </div>
-      ) : null}
+      <AdminStatusControls suggestion={suggestion} canAdminister={canMutate && canAdminister} onChanged={onChanged} />
 
       {canMutate && canEdit ? (
         <div className="sugg-detail__owner-actions">

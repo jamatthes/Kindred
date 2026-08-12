@@ -17,6 +17,7 @@ import { useNavigate } from './router'
 import { useSocketStatus } from './socket'
 import { IdentityBadge } from '../design/IdentityBadge'
 import { familyColor } from '../design/familyColor'
+import { PendingVotesChip } from '../features/voting-comments/PendingVotesChip'
 import type { AppRoute } from './router'
 import type { PresenceSnapshot, ThemePref, TripStage } from './types'
 import './shell.css'
@@ -290,6 +291,7 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
           />
           <div className="topbar__grow" />
           <ThemeControl />
+          {user?.trip ? <PendingVotesChip tripId={user.trip.id} /> : null}
           <button
             type="button"
             className="icon-btn"

@@ -16,6 +16,11 @@ export type SuggestionFilters = {
   types: SuggestionType[]
   statuses: SuggestionStatus[]
   familyIds: string[]
+  /** "What needs my vote" (`voting-comments/design.md` V5/Phase 10) — a filter chip like
+   * any other, so the map and list narrow to exactly the same set the count in the trip
+   * chrome promises. Unlike the others it is client-side only (no server list param for
+   * it; the consumer intersects `GET /me/pending-votes`' id list with the fetched page). */
+  needsMyVote: boolean
 }
 
 export type SuggestionSort = { field: SuggestionSortField; dir: SuggestionSortDir } | null
@@ -32,7 +37,7 @@ export type SuggestionViewState = {
   panelView: 'list' | 'details'
 }
 
-const EMPTY_FILTERS: SuggestionFilters = { types: [], statuses: [], familyIds: [] }
+const EMPTY_FILTERS: SuggestionFilters = { types: [], statuses: [], familyIds: [], needsMyVote: false }
 
 let state: SuggestionViewState = {
   filters: EMPTY_FILTERS,
@@ -84,6 +89,10 @@ export const suggestionStore = {
     setState({ filters: { ...state.filters, familyIds: toggleInList(state.filters.familyIds, familyId) } })
   },
 
+  toggleNeedsMyVote() {
+    setState({ filters: { ...state.filters, needsMyVote: !state.filters.needsMyVote } })
+  },
+
   clearFilters() {
     setState({ filters: EMPTY_FILTERS })
   },
@@ -113,5 +122,10 @@ export function useSuggestionView(): SuggestionViewState {
 }
 
 export function hasActiveFilters(filters: SuggestionFilters): boolean {
-  return filters.types.length > 0 || filters.statuses.length > 0 || filters.familyIds.length > 0
+  return (
+    filters.types.length > 0 ||
+    filters.statuses.length > 0 ||
+    filters.familyIds.length > 0 ||
+    filters.needsMyVote
+  )
 }

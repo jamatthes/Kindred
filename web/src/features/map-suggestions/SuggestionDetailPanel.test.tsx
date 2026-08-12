@@ -93,10 +93,10 @@ describe('SuggestionDetailPanel — permission-gated controls', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
   })
 
-  it('offers "Undo rejection" only from the rejected status, not a forward transition', () => {
+  it('offers "Reopen" only from the rejected status, not a forward transition (AdminStatusControls, voting-comments)', () => {
     mockUser = { id: 'org-1', is_owner: false, is_organiser: true, family: null }
     renderPanel({ status: 'rejected' })
-    expect(screen.getByRole('button', { name: 'Undo rejection' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
   })
 

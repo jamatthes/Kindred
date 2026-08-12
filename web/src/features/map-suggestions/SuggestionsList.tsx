@@ -12,6 +12,7 @@ import { Button } from '../../app/ui/primitives'
 import type { Suggestion } from '../../app/types'
 import { hasActiveFilters, suggestionStore, useSuggestionView } from './store'
 import { familyColor } from '../../design/familyColor'
+import { CompactVoteTally } from '../voting-comments/VoteTally'
 import './suggestionsList.css'
 
 const TYPE_LABEL: Record<Suggestion['type'], string> = {
@@ -85,12 +86,7 @@ export function SuggestionsList({ suggestions, onCreate, emptyAction = true }: S
         key: 'votes',
         header: 'Votes',
         numeric: true,
-        render: (row) =>
-          row.vote_summary
-            ? row.vote_summary.mode === 'score'
-              ? (row.vote_summary.average?.toFixed(1) ?? '—')
-              : `${row.vote_summary.up ?? 0}↑ ${row.vote_summary.down ?? 0}↓`
-            : '—',
+        render: (row) => <CompactVoteTally summary={row.vote_summary} />,
         sortBy: (row) => row.vote_summary?.average ?? (row.vote_summary?.up ?? null),
       },
       {

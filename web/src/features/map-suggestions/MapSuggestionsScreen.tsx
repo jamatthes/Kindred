@@ -39,6 +39,8 @@ import { SuggestionsList } from './SuggestionsList'
 import { SuggestionDetailPanel } from './SuggestionDetailPanel'
 import { CreateSuggestionForm } from './CreateSuggestionForm'
 import type { CreateMode } from './CreateSuggestionForm'
+import { SuggestionVotePanel } from '../voting-comments/SuggestionVotePanel'
+import { usePendingVotes } from '../voting-comments/usePendingVotes'
 import type { Suggestion } from '../../app/types'
 import './mapSuggestions.css'
 
@@ -97,7 +99,16 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
   // Sorting/filtering are applied server-side (`sort` query param); grouped children stay
   // nested under their parent and travel with it (`design.md`: "the list endpoint returns
   // children nested ... and omits them from the top level").
-  const { suggestions: sorted, loading, error, upsert, remove } = useSuggestionList(listParams)
+  const { suggestions: fetched, loading, error, upsert, remove } = useSuggestionList(listParams)
+
+  // "Needs my vote" (voting-comments V5/Phase 10) has no server list param — the shared
+  // filter store's `needsMyVote` flag intersects the already-fetched page with
+  // `GET /me/pending-votes`'s id set client-side, same reasoning as the store's own doc
+  // comment on why this one filter differs from the rest.
+  const pendingVotes = usePendingVotes(tripId)
+  const sorted = view.filters.needsMyVote
+    ? fetched.filter((s) => pendingVotes.suggestion_ids.includes(s.id))
+    : fetched
 
   // Deep link support (`/map/:suggestionId`): a one-way sync into the shared store on
   // mount/navigation. Selecting from the map or list does not push a URL change back — a
@@ -238,13 +249,16 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
                 status={selected.status}
                 commentCount={selected.comment_count}
                 voteSummary={
-                  selected.vote_summary ? (
-                    <span>
-                      {selected.vote_summary.mode === 'score'
-                        ? (selected.vote_summary.average?.toFixed(1) ?? 'No scores yet')
-                        : `${selected.vote_summary.up ?? 0} for · ${selected.vote_summary.down ?? 0} against`}
-                    </span>
-                  ) : undefined
+                  // Voting is available from the popover card, not only the panel
+                  // (`design.md`: "a quick pass over many pins is a real workflow").
+                  <SuggestionVotePanel
+                    suggestionId={selected.id}
+                    suggestionType={selected.type}
+                    title={selected.title}
+                    density="medium"
+                    canVote={Boolean(user) && stage.canMutate}
+                    controlSize="compact"
+                  />
                 }
                 onDetails={() => setMobileSnap('full')}
               />
