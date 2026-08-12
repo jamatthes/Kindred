@@ -295,6 +295,22 @@ because an empty map would be noise (PL-15).
 > mattered — a poll with no located options must not render an empty map — which is now true
 > trivially.
 >
+> NOTE (2026-08-12, design review): the detail column reads top to bottom as the order a
+> member works in — **your answer → who still hasn't voted → results → everyone's scores →
+> comments**. Answering used to sit below the nudge line, which put a status ahead of the
+> only thing on the screen the reader can act on. Each stage is one `.poll-block` panel
+> (the raised-surface idiom already used by `.nonresponders` and `.admin-bar`, with
+> `.poll-list__head`'s small-caps label as its head), so the boundaries are visible without
+> a heading hierarchy shouting them; the separate `border-top` rules inside `.vote` and
+> `.comments` went with it, since a rule inside a bordered panel just draws the same
+> boundary twice. The nudge line stays a bare strip — it is a status, not a stage. Padding
+> stays at `--space-3`: this is a data column, not a landing page.
+>
+> The list items now take their accessible name from the poll title alone
+> (`aria-labelledby`), with the status tags and progress as the description. Left to its
+> contents the name was the entire card read aloud before the listener learned which poll
+> it was.
+>
 > **The map overlay (PL-15, Phase 9) is not built.** There is no configured
 > `GOOGLE_MAPS_BROWSER_KEY` in this environment and no map component in the app yet; the
 > browser SDK arrives with `map-suggestions` (M3). The **data** side is complete: options

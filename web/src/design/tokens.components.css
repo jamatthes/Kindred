@@ -106,8 +106,14 @@
      1-10 scale. */
   --poll-list-width: 280px;
   --poll-label-width: 160px;
-  /* The SVG chart widgets scale text with their viewBox, so an uncapped block in the wide
-     poll-detail column renders them at poster size. This is the readable width the
-     styleguide's gallery cards established; the matrix (a real table) is exempt. */
+  /* Chart row grid (charts.css): the label column caps at the same width as the voting
+     control's label column so the two line up down the detail column; the value column
+     fits "10.0" in tabular figures. */
+  --chart-label-w: var(--poll-label-width);
+  --chart-value-w: 34px;
+  /* Cap on a chart block's width. Since 2026-08-12 chart text is HTML at true token size
+     and no longer scales with the container, so this cap is purely about track
+     readability: past ~620px a 0-10 axis is mostly empty space and the eye can no longer
+     compare bar ends across rows. The matrix (a real table) is exempt. */
   --chart-block-max-w: 620px;
 }

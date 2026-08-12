@@ -126,6 +126,36 @@ type from semantic tokens; theme switch is free). Initial set:
 6. Titles state the insight ("Cornwall leads, Lake District splits the group"), not the
    metric name. Widgets accept `insight` as the title prop to nudge this.
 
+**NOTE (2026-08-12) — chart text is HTML, not SVG.** The widgets originally drew labels,
+values and axis ticks as SVG `<text>` inside a viewBox authored at 340px wide. Because the
+SVG stretched to its container, every glyph rendered at whatever scale factor the column
+happened to impose (~3.8x at full poll-column width), so chart type never matched the
+page's `--text-*` tokens — and SpreadDots' fixed 104-unit label column silently clipped
+"Cornwall · spread 0.7" to "wall · spread 0.7".
+
+The fix is structural. A chart row is now a CSS grid — `[HTML label] [SVG track]
+[HTML value]` — and the SVG carries **geometry only**: bars, dots, mean ticks, axis lines.
+Those SVGs have no `viewBox`; positions are percentages of the track and heights/radii are
+real pixels, so a track stretches freely while nothing about it rescales type. Every piece
+of text is ordinary HTML at true token size (`--text-sm`, `--font-mono` with tabular
+figures for numerics). Labels ellipsize with a `title` attribute and are repeated in full
+in the visually-hidden table, so a label can never be cut mid-render again. Axis ticks are
+HTML positioned under the track.
+
+Consequences for anyone adding a widget:
+- **No `<text>` in a chart SVG.** Any that survives must carry a code comment justifying
+  it. Today none does: `AvgBar` and `SpreadDots` are grids, `HeatMatrix` is a real HTML
+  table, `DistributionStrip`'s legend was already HTML, and `MiniBar`/`Sparkline` draw no
+  text at all.
+- `MiniBar`/`Sparkline` render at intrinsic pixel size (`k-chart__viz--fixed`,
+  `max-width: 100%`) rather than stretching. A sparkline's aspect ratio is computed to
+  target a ~45° slope (honesty rule 3); letting a container rescale it would make the
+  widget lie about the trend it is drawing.
+- `--chart-block-max-w` (620px) stays as the default cap on a chart block, but it no
+  longer has anything to do with type size. It is now purely about track readability: past
+  roughly that width a 0–10 axis is mostly empty space and the eye can no longer compare
+  bar ends down the rows. The matrix, being a table, remains exempt.
+
 ## Pattern decisions (principles adopted; not the source site's styling)
 
 - **Data tables** (poll matrix, suggestion list, families): tri-state sort

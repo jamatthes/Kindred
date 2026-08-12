@@ -9,14 +9,50 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { Poll, PollResults } from '../../app/types'
+import type { Poll, PollResults, PollSummary } from '../../app/types'
 import { VotingControl } from './VotingControl'
 import { optionsByRank } from './ranking'
 
 vi.mock('./api', () => ({
-  pollsApi: { putScores: vi.fn() },
+  pollsApi: { putScores: vi.fn(), listComments: vi.fn(), nudge: vi.fn() },
   categoryApi: { read: vi.fn() },
 }))
+
+// The screen-level tests below drive PollsScreen directly; these stand in for the app
+// context it reads (session, router, trip stage) and for the two data hooks, so the
+// layout assertions are about layout and not about the network.
+vi.mock('../../app/session', () => ({
+  useSession: () => ({
+    user: { id: 'me', display_name: 'Me', is_organiser: true, trip: { stage: 'planning' } },
+  }),
+}))
+vi.mock('../../app/router', () => ({ useNavigate: () => vi.fn() }))
+vi.mock('../../app/ui/toastContext', () => ({ useToast: () => vi.fn() }))
+vi.mock('./usePolls', () => ({
+  usePollList: () => ({ polls: [pollSummary()], loading: false, error: null, reload: vi.fn() }),
+  usePollDetail: () => ({
+    poll: poll(),
+    results: results(),
+    loading: false,
+    error: null,
+    setPoll: vi.fn(),
+    setResults: vi.fn(),
+  }),
+}))
+vi.mock('./CommentThread', async () => {
+  // The real thread fetches on mount; the layout tests only care that it is the fourth
+  // panel and carries its own heading.
+  return {
+    CommentThread: () => (
+      <section className="comments poll-block">
+        <h2 className="poll-block__head">
+          <span>Comments</span>
+          <span className="tabular">0</span>
+        </h2>
+      </section>
+    ),
+  }
+})
 
 const { pollsApi } = await import('./api')
 
@@ -95,6 +131,22 @@ function results(overrides: Partial<PollResults> = {}): PollResults {
     insight: 'Cornwall leads',
     ...overrides,
   }
+}
+
+function pollSummary(): PollSummary {
+  const base = poll()
+  return {
+    id: base.id,
+    title: base.title,
+    kind: base.kind,
+    status: base.status,
+    option_count: base.option_count,
+    comment_count: base.comment_count,
+    my_completion: 'partial',
+    group_completion: base.group_completion,
+    decision: null,
+    created_at: base.created_at,
+  } as PollSummary
 }
 
 describe('the voting control', () => {
@@ -190,5 +242,45 @@ describe('ranking', () => {
 
   it('tolerates no results at all', () => {
     expect(optionsByRank(null)).toEqual([])
+  })
+})
+
+/**
+ * The detail column's shape. These are the two things a review caught: the list items
+ * announced themselves with a paragraph instead of a name, and the detail column ran the
+ * five stages together as one undifferentiated stack.
+ */
+describe('the polls screen layout', () => {
+  it('names each poll list item with the poll title, and keeps the status as description', async () => {
+    const { PollsScreen } = await import('./PollsScreen')
+    render(<PollsScreen selectedId="p1" />)
+
+    const item = await screen.findByRole('button', { name: 'Where shall we go?' })
+    expect(item).toBeInTheDocument()
+    // The tags/progress are still in the accessible tree, just not in the name.
+    expect(item).toHaveAccessibleDescription(/Open/)
+  })
+
+  it('groups the detail column into labelled stages in working order', async () => {
+    const { PollsScreen } = await import('./PollsScreen')
+    render(<PollsScreen selectedId="p1" />)
+
+    await screen.findByRole('heading', { level: 1, name: 'Where shall we go?' })
+    const stages = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => (heading.firstElementChild ?? heading).textContent)
+    // Answer it, see who is missing, read the result, open the detail, then talk.
+    expect(stages).toEqual(['Your answer', 'Results', "Everyone's scores", 'Comments'])
+
+    // The nudge line sits between answering and the result, and stays a bare status strip
+    // rather than becoming a fifth panel.
+    expect(screen.getByText(/haven't voted|Everyone has voted/)).toBeInTheDocument()
+  })
+
+  it('puts every stage in its own panel', async () => {
+    const { PollsScreen } = await import('./PollsScreen')
+    const { container } = render(<PollsScreen selectedId="p1" />)
+    await screen.findByRole('heading', { level: 1, name: 'Where shall we go?' })
+    expect(container.querySelectorAll('.poll-block').length).toBe(4)
   })
 })

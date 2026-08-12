@@ -37,25 +37,85 @@
   font-family: var(--font-sans);
 }
 
+/* MiniBar / Sparkline render at their intrinsic size: their geometry (bar widths, and the
+   aspect ratio a sparkline computes to target a ~45° slope) is meaningful in pixels, so
+   stretching them to the container would distort the claim they make. */
+.k-chart__viz--fixed {
+  width: auto;
+  max-width: 100%;
+}
+
+/* ---- rows: [label] [track] [value] ----------------------------------------
+   All text is HTML, at true token size. Only geometry lives inside the SVG, which
+   therefore has no viewBox and no scale factor: bar/dot positions are percentages of the
+   track, heights and radii are real pixels. This is the fix for chart type rendering at
+   an arbitrary multiple of --text-sm (it used to be ~3.8x at full column width). */
+.k-chart__rows {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.k-chart__row {
+  display: grid;
+  /* The label column caps at --chart-label-w and never takes more than 40% of the block,
+     so a narrow block shrinks label and track together rather than starving one of them.
+     No media query: the constraint is the block's width, not the viewport's. Labels
+     ellipsize (title + the table keep the full string); the track never can, which is why
+     it gets the larger share. */
+  grid-template-columns:
+    minmax(0, min(var(--chart-label-w), 40%))
+    minmax(0, 1fr)
+    minmax(var(--chart-value-w), auto);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.k-chart__row--ticks {
+  align-items: start;
+}
+
+.k-chart__track {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
 /* ---- text ---- */
 .k-chart__label {
-  fill: var(--color-text);
+  color: var(--color-text);
   font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+  /* Can never clip mid-glyph again: it ellipsizes, and the full string is in the title
+     attribute and in the visually-hidden table. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .k-chart__col-label {
+  /* SVG-only: HeatMatrix column headers are a real <th> — this class is used by the
+     legacy fill styling below and kept for the map/heat views that share it. */
   fill: var(--color-text-muted);
+  color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
 .k-chart__value {
-  fill: var(--color-text);
+  color: var(--color-text);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.k-chart__ticks {
+  display: flex;
+  justify-content: space-between;
 }
 .k-chart__tick {
-  fill: var(--color-text-faint);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
 }
 
 /* ---- axis / bars (AvgBar, SpreadDots, MiniBar) ---- */

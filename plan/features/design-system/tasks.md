@@ -157,6 +157,15 @@ without the page scrolling horizontally.
 - [x] `DistributionStrip` — stacked segments each carrying an icon and a count label.
 - [x] Per-widget empty states ("No votes yet"), not empty axis frames.
 - [x] Confirm `package.json` gained **no** charting dependency.
+- [x] **Typography architecture (added 2026-08-12, after the polls-page review).** All chart
+      text moved out of the SVG: a row is a CSS grid `[HTML label] [SVG track] [HTML value]`,
+      the track SVG carries geometry only and has no `viewBox`, so chart type renders at true
+      `--text-*` size instead of the container's arbitrary scale factor (measured at ~3.8x at
+      full poll-column width). Labels ellipsize with a `title` rather than clipping — the
+      reported "Cornwall · spread 0.7" → "wall · spread 0.7" bug. `MiniBar`/`Sparkline` now
+      render at intrinsic size so the ~45° slope target survives its container. No `<text>`
+      remains in any chart SVG; the rule and its consequences are the NOTE in
+      `plan/design-system.md`'s chart section.
 
 **Verify:** `npm test` — assert `baseline` is not in any bar widget's prop types; assert null data
 renders "—" and not a zero bar; assert `AvgBar` axis starts at zero for a dataset ranging 7–9; snapshot
