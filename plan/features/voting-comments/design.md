@@ -322,3 +322,22 @@ honest option and prompts them to re-vote.
 | End stage reached while composing a comment | Guard rejects with `403`; the composer is replaced by the frozen-trip state and the draft is preserved in the client so nothing typed is silently lost. |
 | Member removed from the trip after voting | Their vote rows remain (the group's history is real); their name still renders in attribution, marked as a former member. |
 | Extremely long comment body | Length cap enforced in the Pydantic schema (target 4000 chars) with a counter in the composer near the limit. |
+
+---
+
+## NOTE (2026-08-12) — handoff from `map-suggestions`'s M3 web implementation
+
+`SuggestionDetailPanel.tsx` (`web/src/features/map-suggestions/`) already renders
+`vote_summary`/`comment_count` read-only and has explicit slots waiting for this feature:
+
+- A `.sugg-detail__votes` block currently prints a plain average/tally string — replace with
+  the real voting widget (score slider or thumbs, per `voting_mode`).
+- A `.sugg-detail__comments-slot` div currently reads "N comments — the full thread arrives
+  with `voting-comments`" — replace with the real comment thread component
+  (`polls/CommentThread.tsx` is the pattern to follow; subject type is `suggestion`).
+- Status confirm/reject buttons already exist in the panel (`STATUS_ACTIONS`, gated on
+  `user.is_owner || user.is_organiser`) and call `PATCH /suggestions/{id}/status` directly —
+  reusable as-is, or replace if this feature's own admin-bar pattern differs.
+- `PopoverCard`'s `voteSummary`/`commentCount` props (pre-built, `features/map/PopoverCard.tsx`)
+  are filled with a plain string today in the mobile `BottomSheet` peek snap
+  (`MapSuggestionsScreen.tsx`) — same swap applies there.

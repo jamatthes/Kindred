@@ -327,3 +327,19 @@ under `prefers-reduced-motion`.
 | End stage reached with pairs still pending | Those pairs stay pending forever and render as estimates. No call is made in End, including force-recompute, which returns the stage guard's rejection. |
 | Force-recompute on a large trip | The response states `estimated_api_calls` before running so the admin sees the cost; a trip with 60 suggestions and 6 families is roughly 6 chunked calls, not 360. |
 | Clock skew / very old `computed_at` | Values are never expired by age. A driving distance between two fixed points does not change; that is the premise of caching forever. Only a move or a home change invalidates. |
+
+---
+
+## NOTE (2026-08-12) — handoff from `map-suggestions`'s M3 web implementation
+
+`SuggestionDetailPanel.tsx` and `SuggestionsList.tsx` (`web/src/features/map-suggestions/`)
+already render `Suggestion.distances` (the array `design.md`'s `GET /suggestions` response
+shape defines): the detail panel lists every family's duration with an "(estimate)" suffix
+when `is_estimate`, and the list's Distance column takes the minimum `distance_m` across
+families for sorting. Nothing here computes a distance — it is pure display of whatever the
+server denormalises into the suggestion response, per this feature's cost/caching rules.
+`suggestion.moved`'s re-queue and `distance.updated`'s WS event are already consumed
+(`useSuggestions.ts`) by refetching the single affected suggestion, since this feature's
+event payload contract was not fixed at the time `map-suggestions`'s web layer was built —
+confirm the shape once this feature lands and simplify to a direct patch if it turns out to
+carry the recomputed value inline.
