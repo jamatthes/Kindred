@@ -32,6 +32,15 @@ test('dark theme repaints the page and reduced motion suppresses the distance-ch
   const bodyBgBefore = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
 
   await page.getByRole('button', { name: 'Dark theme' }).click()
+  // `body`'s background-color transitions (base.css: "a deliberate, visible change of
+  // state, not a flash") rather than snapping instantly, so a synchronous read right after
+  // the click can catch the very first animation frame — indistinguishable from a no-op.
+  // Waiting for the CSS custom property itself (which the toggle sets synchronously,
+  // design/theme.ts's applyTheme) rather than its animated paint output is the honest check.
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
+  // --duration-base (tokens.primitives.css) is 220ms; give the transition time to actually
+  // finish painting before sampling its end state.
+  await page.waitForTimeout(350)
   const bodyBgAfter = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
   // The token swap actually happened — dark is a distinct, tuned set, never a no-op.
   expect(bodyBgAfter).not.toBe(bodyBgBefore)
@@ -59,7 +68,9 @@ test('dark theme repaints the page and reduced motion suppresses the distance-ch
   // background task + WS update + chip all work against the live Google key.
   const distanceChip = page.locator('.dist-chip').first()
   await expect(distanceChip).toBeVisible({ timeout: 20_000 })
-  await expect(page.locator('.sugg-detail')).toContainText(/from (Parkers|Jiangs)/, { timeout: 20_000 })
+  // The chip's own family label is "The Parkers"/"The Jiangs" (definite article included),
+  // not the bare family name.
+  await expect(page.locator('.sugg-detail')).toContainText(/from The (Parkers|Jiangs)/, { timeout: 20_000 })
 
   // Reduced motion: the crossfade class may or may not be present depending on which
   // status the chip landed in, but wherever `.dist-chip--animated` does appear, its

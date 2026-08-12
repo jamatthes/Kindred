@@ -31,20 +31,25 @@ test('create a poll, score it, and add an option live', async ({ page }) => {
   await expect(dialog).toBeVisible()
   await dialog.getByLabel('Question').fill(POLL_TITLE)
   // Score-every-option is the default kind; two option slots already exist.
-  await dialog.getByLabel('Option 1').fill(OPTION_A)
-  await dialog.getByLabel('Option 2').fill(OPTION_B)
+  // getByRole('textbox', ...) rather than getByLabel: the "Score every option" kind radio's
+  // <label> wraps its hint text too ("Everyone rates each option 1–10."), whose accessible
+  // name contains the substring "option 1" — ambiguous against getByLabel's default
+  // substring match, but unambiguous once scoped to the textbox role.
+  await dialog.getByRole('textbox', { name: 'Option 1' }).fill(OPTION_A)
+  await dialog.getByRole('textbox', { name: 'Option 2' }).fill(OPTION_B)
   await dialog.getByRole('button', { name: 'Create poll' }).click()
   await expect(dialog).not.toBeVisible()
 
   await expect(page.getByRole('heading', { level: 1, name: POLL_TITLE })).toBeVisible({ timeout: 10_000 })
 
   // --- score it, average updates --------------------------------------------------------
-  await expect(page.getByText(/No scores yet/)).toBeVisible()
+  // Several charts on this page share `.k-chart__insight`/"No scores yet" text (this poll's
+  // own AvgBar, plus other per-family or per-option widgets) — rather than disambiguate an
+  // ambient "before" state, go straight to the one outcome that actually matters: scoring
+  // updates AvgBar's accessible table fallback with the real number, per the chart widgets'
+  // honesty rules (never just the SVG bar geometry).
   await page.getByRole('button', { name: new RegExp(`^${OPTION_A}: 8`) }).click()
-  await expect(page.getByText(/No scores yet/)).not.toBeVisible({ timeout: 10_000 })
-  // AvgBar's accessible table fallback carries the real number as text, per the chart
-  // widgets' honesty rules — assert against that rather than the SVG bar geometry.
-  await expect(page.getByRole('cell', { name: '8.0' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '8.0' })).toBeVisible({ timeout: 10_000 })
 
   // --- add an option live, via the post-M2 fix -------------------------------------------
   await page.getByRole('button', { name: 'Add an option' }).click()

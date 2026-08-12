@@ -67,10 +67,18 @@ test('a member votes and comments, the organiser approves, both see it live in t
 
     // --- comment, live in the other tab --------------------------------------------------
     const commentBody = `Looks good to me — E2E ${Date.now()}`
+    // Scoped to the posted thread (`.comments`), not the whole panel: right after the click,
+    // the composer's own textarea can still transiently hold the same text it is in the
+    // middle of clearing (CommentComposer only calls setBody('') once its post() promise
+    // resolves), and Playwright's getByText matches a textarea's value as text content —
+    // ambiguous against the real, posted comment for the instant both are present.
+    const memberThread = memberPanel.locator('.comments')
     await memberPanel.getByLabel('Add a comment').fill(commentBody)
     await memberPanel.getByRole('button', { name: 'Post' }).click()
-    await expect(memberPanel.getByText(commentBody)).toBeVisible()
-    await expect(organiserPage.locator('.sugg-detail').getByText(commentBody)).toBeVisible({ timeout: 10_000 })
+    await expect(memberThread.getByText(commentBody)).toBeVisible()
+    await expect(organiserPage.locator('.sugg-detail').locator('.comments').getByText(commentBody)).toBeVisible({
+      timeout: 10_000,
+    })
 
     // --- organiser approves, live in the member's tab -------------------------------------
     const organiserPanel = organiserPage.locator('.sugg-detail')
