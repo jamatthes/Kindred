@@ -30,7 +30,7 @@ const STAGE_LABEL: Record<TripStage, string> = {
 /** Nav destinations. `ready` flips to true as each feature lands. */
 const NAV = [
   { key: 'home', label: 'Home', ready: true, to: { name: 'home' } as const },
-  { key: 'map', label: 'Map', ready: false, arrives: 'the map & suggestions feature' },
+  { key: 'map', label: 'Map', ready: true, to: { name: 'map' } as const },
   { key: 'polls', label: 'Polls', ready: true, to: { name: 'polls' } as const },
   { key: 'itinerary', label: 'Itinerary', ready: false, arrives: 'the itinerary feature' },
   { key: 'families', label: 'Families', ready: true, to: { name: 'families' } as const },
@@ -302,8 +302,8 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
           <button
             type="button"
             className="k-btn k-btn--primary"
-            disabled
-            title="Suggesting a place arrives with the map & suggestions feature"
+            title="Suggest a place"
+            onClick={() => navigate({ name: 'map' })}
           >
             <Icon name="plus" />
             Suggest a place
