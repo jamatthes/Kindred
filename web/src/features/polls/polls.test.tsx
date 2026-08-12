@@ -283,4 +283,13 @@ describe('the polls screen layout', () => {
     await screen.findByRole('heading', { level: 1, name: 'Where shall we go?' })
     expect(container.querySelectorAll('.poll-block').length).toBe(4)
   })
+
+  it('wires the organiser-visible "Add an option" affordance into the matrix panel', async () => {
+    // The fixture above is an organiser viewing an open poll — canAddOption.test.ts covers
+    // the full role/flag/stage matrix as a pure predicate; this proves it is actually wired
+    // into the rendered screen, not just correct in isolation.
+    const { PollsScreen } = await import('./PollsScreen')
+    render(<PollsScreen selectedId="p1" />)
+    expect(await screen.findByRole('button', { name: 'Add an option' })).toBeInTheDocument()
+  })
 })

@@ -208,6 +208,22 @@ a scratch route and confirm by eye that the split is obvious.
       from `design.md`.
 - [x] Motion at 150–250ms on sheet and panel; bar lengths animate, the matrix does not animate
       on incoming updates; `prefers-reduced-motion` honoured.
+- [x] **Add-an-option affordance (PL-5)** — `AddOptionForm.tsx`, gated by the pure predicate
+      `canAddOption.ts` (organiser always; a member when `allow_member_options`; absent, not
+      disabled, when the poll is closed or the stage cannot mutate). **Shipped 2026-08-12 as
+      a post-M2 fix (`fix/poll-add-option-ui`), not at the original M2 pass**: this box was
+      simply never on the original checklist even though `pollsApi.addOption` and the
+      server's `POST /polls/{id}/options` were both already built and tested — a checklist
+      hole, not a regression. Reported by a user who enabled "Let anyone add options" and
+      found no affordance anywhere to use it. Label plus optional coordinates, reusing
+      `CreatePollForm.tsx`'s own numeric lat/lng fields (no map picker exists in this
+      environment); the coordinate fields only appear once the poll already has a located
+      option. On success, reloads the poll+results from the server (`usePollDetail`'s
+      `reload`) rather than hand-splicing the new option into locally-held results, since
+      the average/spread/rank fields for a fresh option are server-computed and this file
+      has no business fabricating them. A 403 (`member_options_disabled`, e.g. the organiser
+      turned the flag off after the form opened) shows the server's own sentence inline and
+      leaves the typed label in place rather than losing it.
 
 **Verify:** in the browser with three signed-in users — create the destination poll, have all
 three score it, and confirm the averages, spread and matrix update live in the other two
