@@ -199,6 +199,47 @@ its own answer lands rather than waiting for the slowest sibling.
 Lives in `server/app/services/distances.py`, wrapped behind an interface so tests fake it and
 never touch Google (per `architecture.md`'s testing strategy).
 
+> **NOTE (added under the M3-services pre-build brief) — `DistanceMatrixService` is pre-built,
+> route-free and DB-free.** `server/app/services/distances.py` already exists, following the
+> same isolation pattern as `link_preview.py` and `boundaries.py`: it knows nothing about
+> `distance_cache`, `families`, or `suggestions`, only about (lat, lng) pairs. The M3 feature
+> agent's job is to write the *thin* layer around it — `queue_for_suggestion`,
+> `queue_for_family`, `recompute` — that resolves DB rows into `LatLng`s, calls the three
+> methods below, and maps `ElementResult.status` onto `distance_cache.status`/`attempts` per
+> the table under "Flow" (this service has no `attempts` column to increment; that policy
+> belongs to the DB layer, not the Google-calling layer).
+>
+> Public shape actually built (the design above described the batching *strategy* but not a
+> method-level API, so this fixes that as three methods rather than one grid call):
+> - `get_distances_many_to_one(origins, destination, mode) -> list[ElementResult]` — the
+>   suggestion create/move shape (all homes -> one suggestion), chunked at 25 origins.
+> - `get_distances_one_to_many(origin, destinations, mode) -> list[ElementResult]` — the home
+>   change shape (one home -> all suggestions), chunked at 25 destinations.
+> - `get_distances_pairwise(pairs, mode) -> list[ElementResult]` — added for
+>   `itinerary-timeline`'s future route-leg use (not this feature's DB writes): independent
+>   (origin, destination) pairs, grouped by shared origin only, **never** forced into a dense
+>   grid — an itinerary with no repeated leg origins costs exactly one element per leg, which a
+>   naive full-grid batch would multiply by the leg count.
+>
+> `ElementResult.status` is `"ok" | "not_found" | "zero_results"` — a narrower vocabulary than
+> `distance_cache.status`'s four values, deliberately: this service has no concept of `pending`
+> (that is a DB row state before any call happens) or a capped `attempts` counter (`failed` is
+> reached by *this feature's* retry-budget policy, not by the Google client). The DB layer maps
+> `ok` -> `ok`, `zero_results` -> `no_route` (cached permanently, per this file's own rule), and
+> `not_found` -> either a retry or `failed` depending on `attempts`.
+>
+> **Caching is a bounded in-memory TTL cache by default (`InMemoryTtlCache`, ~1h), not the
+> forever-cache this file specifies.** The service accepts any `CacheProtocol` (`get`/`set` with
+> a TTL); the M3 agent should inject a `distance_cache`-backed implementation whose `get()`
+> treats any row already `status = ok` or `status = no_route` as an unconditional, non-expiring
+> hit — the default TTL cache exists only to stop one logical chunked batch from re-asking
+> Google for a pair two chunks already resolved, not to serve as the permanent cache itself.
+> Quota/auth failures (`REQUEST_DENIED`, `OVER_QUERY_LIMIT`, etc.) raise typed exceptions
+> (`DistanceServiceAuthError`, `DistanceServiceQuotaError`) rather than degrading a row — the DB
+> layer should catch these around a chunk and treat the whole chunk as failed/degraded (banner
+> case in "UI behaviour" > "Degraded mode"), not retry chunk-by-chunk into further quota spend.
+> Rationale and full contract in the module docstring of `distances.py`.
+
 Flow:
 1. Resolve the work set into (family, suggestion) pairs, skipping families with no geocoded home.
 2. Upsert `pending` rows for pairs not already `ok`, so a concurrent read shows "pending" rather

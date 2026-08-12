@@ -1,0 +1,38 @@
+{
+  "_provenance": "Hand-constructed, NOT fetched from Google. Shape matches the documented Distance Matrix API response schema (https://developers.google.com/maps/documentation/distance-matrix/distance-matrix as of 2026; top-level status/origin_addresses/destination_addresses/rows[].elements[]{status,duration{value,text},distance{value,text}}). Values are plausible but invented: two origins (a London-ish and a Manchester-ish point) against two destinations (a Leeds-ish point and an unreachable island), used by server/tests/test_distances.py to exercise a 2x2 grid without any network access. Written for the M3 distance-service pre-build (plan/features/distances/).",
+  "status": "OK",
+  "origin_addresses": [
+    "London, UK",
+    "Manchester, UK"
+  ],
+  "destination_addresses": [
+    "Leeds, UK",
+    "Unreachable Island"
+  ],
+  "rows": [
+    {
+      "elements": [
+        {
+          "status": "OK",
+          "duration": { "value": 12000, "text": "3 hours 20 mins" },
+          "distance": { "value": 315000, "text": "315 km" }
+        },
+        {
+          "status": "ZERO_RESULTS"
+        }
+      ]
+    },
+    {
+      "elements": [
+        {
+          "status": "OK",
+          "duration": { "value": 3600, "text": "1 hour" },
+          "distance": { "value": 70000, "text": "70 km" }
+        },
+        {
+          "status": "NOT_FOUND"
+        }
+      ]
+    }
+  ]
+}
