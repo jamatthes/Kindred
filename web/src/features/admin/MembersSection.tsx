@@ -18,6 +18,7 @@ import { ConfirmDialog } from '../../app/ui/ConfirmDialog'
 import { DataTable } from '../../app/ui/DataTable'
 import type { Column } from '../../app/ui/DataTable'
 import { useToast } from '../../app/ui/toastContext'
+import { familyColor } from '../../design/familyColor'
 import type { AdminMember, Family } from '../../app/types'
 import { adminApi } from './api'
 
@@ -120,7 +121,7 @@ export function MembersSection({
           <span className="admin__family">
             <span
               className="admin__swatch"
-              style={{ background: `var(--family-${row.family.color})` }}
+              style={{ background: familyColor(row.family) ?? 'var(--color-text-faint)' }}
               aria-hidden="true"
             />
             {row.family.name}
@@ -211,7 +212,7 @@ export function MembersSection({
         <span className="admin__family">
           <span
             className="admin__swatch"
-            style={{ background: `var(--family-${row.color})` }}
+            style={{ background: familyColor(row) ?? 'var(--color-text-faint)' }}
             aria-hidden="true"
           />
           <strong>{row.name}</strong>

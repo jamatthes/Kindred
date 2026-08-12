@@ -41,11 +41,20 @@ export const familiesApi = {
    * creates a family. Two kinds of caller reach it — someone who accepted a new-family
    * invite, and the owner during their own onboarding — with the same body.
    */
-  createMine: (body: { name: string; home_address?: string }) =>
-    api.post<FamilyDetail>('/families/mine', body),
+  createMine: (body: {
+    name: string
+    home_address?: string
+    color?: number
+    color_custom?: string
+  }) => api.post<FamilyDetail>('/families/mine', body),
 
-  update: (id: string, body: { name?: string; color?: number }) =>
+  update: (id: string, body: { name?: string; color?: number; color_custom?: string }) =>
     api.patch<FamilyDetail>(`/families/${id}`, body),
+
+  /** `GET /families/palette` — the taken slots and whether all 24 are claimed, for the colour
+   * picker (`web/src/design/ColorPicker.tsx`). Reachable before `POST /families/mine` even
+   * exists as a route the caller may call — no `require_member` on the server side. */
+  palette: () => api.get<{ taken_colors: number[]; exhausted: boolean }>('/families/palette'),
 
   remove: (id: string) => api.del<void>(`/families/${id}`),
 

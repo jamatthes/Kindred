@@ -20,12 +20,14 @@
  * from stored state, so the next login lands right back here with nothing stale to reconcile.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError } from '../../app/apiClient'
 import { useSession } from '../../app/session'
 import { Banner, Button, TextField } from '../../app/ui/primitives'
 import { useValidatedField } from '../../app/ui/useValidatedField'
+import { ColorPicker, firstFreeColor } from '../../design/ColorPicker'
+import type { ColorPickerValue } from '../../design/ColorPicker'
 import { familiesApi } from './api'
 import '../auth/auth.css'
 
@@ -34,6 +36,32 @@ export function FamilySetupScreen() {
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // The picker's own state — taken slots and whether the palette is exhausted, from
+  // `GET /families/palette` (no `require_member`, so it is reachable before this founder has
+  // a family of their own). Defaults to the first free slot so a submit with the form
+  // otherwise untouched — `web/e2e/tests/04-ws-liveness.spec.ts` only fills in a name — still
+  // picks a valid, uncontested colour.
+  const [takenColors, setTakenColors] = useState<number[]>([])
+  const [exhausted, setExhausted] = useState(false)
+  const [color, setColor] = useState<ColorPickerValue>({ color: null, color_custom: null })
+
+  useEffect(() => {
+    let cancelled = false
+    void familiesApi.palette().then((availability) => {
+      if (cancelled) return
+      setTakenColors(availability.taken_colors)
+      setExhausted(availability.exhausted)
+      setColor((current) =>
+        current.color == null && current.color_custom == null
+          ? { color: firstFreeColor(availability.taken_colors), color_custom: null }
+          : current,
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const name = useValidatedField((value) =>
     value.trim().length === 0 ? 'Your family needs a name.' : null,
@@ -48,6 +76,8 @@ export function FamilySetupScreen() {
       await familiesApi.createMine({
         name: name.value.trim(),
         ...(address.trim() ? { home_address: address.trim() } : {}),
+        ...(color.color != null ? { color: color.color } : {}),
+        ...(color.color_custom ? { color_custom: color.color_custom } : {}),
       })
       // `next_step` becomes `app` on the server; re-reading it is what moves the shell on.
       await refresh()
@@ -60,6 +90,14 @@ export function FamilySetupScreen() {
         // re-read the gate, which is what the design's edge-case table asks for.
         await refresh()
         return
+      } else if (cause instanceof ApiError && cause.code === 'color_taken') {
+        // Lost the race for that slot. Refresh what is actually free and ask them to pick
+        // again rather than silently reassigning one for them.
+        const availability = await familiesApi.palette()
+        setTakenColors(availability.taken_colors)
+        setExhausted(availability.exhausted)
+        setColor({ color: firstFreeColor(availability.taken_colors), color_custom: null })
+        setError(cause.message)
       } else if (cause instanceof ApiError) {
         setError(cause.message)
       } else {
@@ -96,6 +134,14 @@ export function FamilySetupScreen() {
           disabled={busy}
           hint="Optional — you can add this later. We use it to show travel times."
           onChange={(event) => setAddress(event.target.value)}
+        />
+
+        <ColorPicker
+          value={color}
+          takenColors={takenColors}
+          exhausted={exhausted}
+          onChange={setColor}
+          disabled={busy}
         />
 
         <p className="auth-note">

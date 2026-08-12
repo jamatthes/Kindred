@@ -52,9 +52,13 @@ export function useFamilies(): FamiliesState {
       if (!family) return
       setFamilies((current) => {
         const without = current.filter((f) => f.id !== family.id)
-        // Sorted by colour, matching the server's list order, so a family arriving over the
-        // socket lands where it would have on a reload rather than at the end.
-        return [...without, family].sort((a, b) => a.color - b.color)
+        // Sorted by colour, matching the server's `ORDER BY families.color` (NULLS LAST in
+        // Postgres), so a family arriving over the socket lands where it would have on a
+        // reload rather than at the end. A custom-hex (overflow) family has `color: null`
+        // and sorts after every palette slot, same as the server.
+        return [...without, family].sort(
+          (a, b) => (a.color ?? Number.POSITIVE_INFINITY) - (b.color ?? Number.POSITIVE_INFINITY),
+        )
       })
     }
 

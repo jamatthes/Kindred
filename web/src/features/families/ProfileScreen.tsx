@@ -15,6 +15,7 @@ import { useSession } from '../../app/session'
 import { Banner, Button, Spinner, TextField } from '../../app/ui/primitives'
 import { useToast } from '../../app/ui/toastContext'
 import { IdentityBadge } from '../../design/IdentityBadge'
+import { familyColor } from '../../design/familyColor'
 import type { FamilyDetail } from '../../app/types'
 import { familiesApi, profileApi } from './api'
 import { ROLE_LABEL } from './labels'
@@ -90,7 +91,7 @@ function AvatarBlock() {
         ) : (
           <IdentityBadge
             initials={user.initials}
-            familyColor={user.family?.color}
+            familyColor={familyColor(user.family)}
             avatarUrl={user.avatar_url}
             avatarThumbUrl={user.avatar_thumb_url}
             size={64}

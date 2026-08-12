@@ -54,14 +54,14 @@ describe('IdentityBadge', () => {
   it('carries the family colour as a ring, never as the fill', () => {
     // Initials sit on a neutral fill so contrast does not depend on which of the eight slots
     // a family holds. The ring is the family carrier.
-    render(<IdentityBadge initials="AL" familyColor={5} name="Ada" />)
+    render(<IdentityBadge initials="AL" familyColor="var(--family-5)" name="Ada" />)
     const badge = screen.getByTestId('badge')
     expect(badge.style.borderColor).toBe('var(--family-5)')
     expect(badge.style.background).toBe('')
   })
 
   it('always carries a name, so colour is never the only identifier', () => {
-    render(<IdentityBadge initials="AL" familyColor={3} name="Ada Lovelace" />)
+    render(<IdentityBadge initials="AL" familyColor="var(--family-3)" name="Ada Lovelace" />)
     expect(screen.getByTestId('badge')).toHaveAttribute('title', 'Ada Lovelace')
   })
 

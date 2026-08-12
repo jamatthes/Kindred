@@ -16,6 +16,7 @@ import { useSession } from './session'
 import { useNavigate } from './router'
 import { useSocketStatus } from './socket'
 import { IdentityBadge } from '../design/IdentityBadge'
+import { familyColor } from '../design/familyColor'
 import type { AppRoute } from './router'
 import type { PresenceSnapshot, ThemePref, TripStage } from './types'
 import './shell.css'
@@ -171,7 +172,7 @@ function PresenceStack({ online }: { online: boolean }) {
           the viewer's own, which is correct rather than a placeholder. */}
       <IdentityBadge
         initials={initial}
-        familyColor={user.family?.color}
+        familyColor={familyColor(user.family)}
         size={32}
         offline={!online}
         name={`${user.family?.name ?? user.display_name} — ${online ? 'online' : 'offline'}`}
@@ -267,7 +268,7 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
               rendering, everywhere. */}
           <IdentityBadge
             initials={user?.initials ?? ''}
-            familyColor={user?.family?.color}
+            familyColor={familyColor(user?.family)}
             avatarThumbUrl={user?.avatar_thumb_url}
             size={32}
             name={user?.display_name}

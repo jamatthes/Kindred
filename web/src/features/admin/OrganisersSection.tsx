@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react'
 import { ApiError } from '../../app/apiClient'
 import { Banner, Button, TextField } from '../../app/ui/primitives'
 import { ConfirmDialog } from '../../app/ui/ConfirmDialog'
+import { familyColor } from '../../design/familyColor'
 import type { AdminMember, Organiser } from '../../app/types'
 import { adminApi } from './api'
 
@@ -110,9 +111,7 @@ export function OrganisersSection({
               <span
                 className="admin__swatch admin__swatch--lg"
                 style={{
-                  background: row.family
-                    ? `var(--family-${row.family.color})`
-                    : 'var(--color-text-faint)',
+                  background: familyColor(row.family) ?? 'var(--color-text-faint)',
                 }}
                 aria-hidden="true"
               >

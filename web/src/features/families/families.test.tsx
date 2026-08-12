@@ -41,6 +41,7 @@ function family(overrides: Partial<FamilyDetail> = {}): FamilyDetail {
     id: 'f1',
     name: 'The Parkers',
     color: 1,
+    color_custom: null,
     member_count: 1,
     home_locality: null,
     home_placed: false,
