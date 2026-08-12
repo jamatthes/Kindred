@@ -514,7 +514,14 @@ export type SuggestionSortField = 'votes' | 'distance' | 'category' | 'created'
 export type SuggestionSortDir = 'asc' | 'desc'
 
 export type SuggestionCreateInput = {
-  trip_id: string
+  /** Not sent to the server: `POST /suggestions`'s real schema (`SuggestionCreate`, `extra
+   * = "forbid"`) derives the trip from the session's single active trip and has no
+   * `trip_id` field at all — the M3 web build's mock contract (design.md's own written
+   * shape) included one, and the real backend's implementation dropped it. Found by the
+   * M3 integration pass's live Playwright smoke as a `422 validation_error`. Kept here,
+   * optional, only so a caller can still thread the id through for its own purposes
+   * without the type forcing a value that must not be serialised. */
+  trip_id?: string
   type: SuggestionType
   title: string
   notes?: string
@@ -621,7 +628,11 @@ export type SuggestionDistancesOut = { suggestion_id: string; distances: Distanc
 /** `GET /api/v1/distances` bulk response: one trip's suggestions, keyed by id. */
 export type BulkDistancesOut = Record<string, DistanceOut[]>
 
-export type RecomputeRequest = { trip_id: string; suggestion_id?: string }
+/** `trip_id` is likewise never sent — `POST /distances/recompute`'s real `RecomputeIn`
+ * schema (`extra = "forbid"`) has only `suggestion_id`; same session-derived-trip mismatch
+ * as `SuggestionCreateInput.trip_id`, found the same way. Optional here for the same
+ * reason: a caller may still want to thread the id through without it being serialised. */
+export type RecomputeRequest = { trip_id?: string; suggestion_id?: string }
 
 /** Returned *before* the background work runs, so the UI can state the cost
  * (`design.md` D7) rather than discover it after the fact. */

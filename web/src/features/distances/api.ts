@@ -34,5 +34,11 @@ export const distancesApi = {
 
   bulk: (params: BulkDistancesParams) => api.get<BulkDistancesOut>(`/distances?${toQuery(params)}`),
 
-  recompute: (body: RecomputeRequest) => api.post<RecomputeResult>('/distances/recompute', body),
+  // `trip_id` is a query param on every GET above (harmless if unused server-side — FastAPI
+  // ignores an extra query param it never declared) but `POST /distances/recompute`'s body
+  // schema is `extra = "forbid"` and has no `trip_id` field at all (see `RecomputeRequest`'s
+  // own comment, app/types.ts) — stripped here, centrally, so no caller has to remember to
+  // omit it themselves.
+  recompute: ({ suggestion_id }: RecomputeRequest) =>
+    api.post<RecomputeResult>('/distances/recompute', { suggestion_id }),
 }

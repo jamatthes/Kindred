@@ -232,7 +232,6 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
         <aside className="map-suggestions__panel" aria-label="Suggestions">
           {creating ? (
             <CreateSuggestionForm
-              tripId={tripId}
               initialMode={createMode}
               onClose={() => {
                 setCreating(false)
@@ -323,7 +322,6 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
       {narrow && creating ? (
         <div className="map-suggestions__create-overlay">
           <CreateSuggestionForm
-            tripId={tripId}
             initialMode={createMode}
             onClose={() => {
               setCreating(false)

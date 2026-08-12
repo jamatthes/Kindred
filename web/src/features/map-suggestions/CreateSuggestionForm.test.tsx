@@ -55,7 +55,6 @@ function suggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 
 function baseProps() {
   return {
-    tripId: 'trip-1',
     onClose: vi.fn(),
     onCreated: vi.fn(),
     pendingClick: null,
@@ -97,6 +96,9 @@ describe('CreateSuggestionForm — the Places ToS invariant', () => {
     expect(sentBody).not.toHaveProperty('rating')
     expect(sentBody).not.toHaveProperty('opening_hours')
     expect(sentBody).not.toHaveProperty('openingHoursText')
+    // The real POST /suggestions schema has no trip_id field and rejects one (422,
+    // `extra = "forbid"`) — found by the M3 integration pass's live Playwright smoke.
+    expect(sentBody).not.toHaveProperty('trip_id')
     // Only the user-authored snapshot travels, per the HARD INVARIANT — never the raw
     // Google response.
     expect(sentBody.place_snapshot).toEqual({ name: 'Harbour House Cottages', address: '1 Harbour Rd, Cornwall' })

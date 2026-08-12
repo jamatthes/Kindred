@@ -52,7 +52,6 @@ const TYPE_LABEL: Record<SuggestionType, string> = {
 }
 
 export type CreateSuggestionFormProps = {
-  tripId: string
   onClose: () => void
   onCreated: (suggestion: Suggestion) => void
   /** The most recent unclaimed map click while this form is open. `null` once consumed. */
@@ -75,7 +74,6 @@ function validateTitle(value: string): string | null {
 }
 
 export function CreateSuggestionForm({
-  tripId,
   onClose,
   onCreated,
   pendingClick,
@@ -224,8 +222,10 @@ export function CreateSuggestionForm({
       return
     }
 
+    // `trip_id` is deliberately never sent — see the field's own comment on
+    // `SuggestionCreateInput` (app/types.ts): the real `POST /suggestions` derives the trip
+    // from the session's single active trip and rejects an extra field.
     const body: SuggestionCreateInput = {
-      trip_id: tripId,
       type,
       title: title.value.trim(),
       notes: notes.trim() || undefined,
