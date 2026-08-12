@@ -62,6 +62,21 @@ class Settings(BaseSettings):
     # Server key: Geocoding, Distance Matrix, Directions, restricted by IP.
     google_maps_server_key: str = ""
 
+    # --- Map suggestions ---------------------------------------------------
+    # Named settings rather than literals in a query (`map-suggestions/tasks.md` Phase 4): both
+    # are product judgements about geography, and burying either in a `WHERE` clause is how a
+    # threshold gets tuned in one place and not the other.
+    #
+    # How near an activity or meal has to be to an accommodation to be shown *inside* its card
+    # rather than as an unrelated entry. 150 m is "the same building or its car park".
+    suggestion_group_radius_m: float = 150.0
+    # How far a pin has to move before the Distance Matrix is asked again. Below this the move
+    # is jitter, and re-querying would spend the API budget on a pin that did not really move.
+    suggestion_move_epsilon_m: float = 25.0
+    # The radius of the region seeded from a decided poll option (PL-14). A first sketch of
+    # "somewhere around here", meant to be redrawn — not a claim about where the trip will be.
+    region_seed_radius_m: float = 15_000.0
+
     # --- Web Push (pwa-push) ----------------------------------------------
     vapid_public_key: str = ""
     vapid_private_key: str = ""
