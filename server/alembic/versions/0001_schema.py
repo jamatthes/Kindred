@@ -80,6 +80,14 @@ THUMBS = ("up", "down")
 #: their own features.
 COMMENT_SUBJECTS = ("poll", "suggestion", "itinerary_item")
 
+#: `suggestions.type`. A region is a drawn area ("somewhere around here"); the other three are
+#: points. The type drives the pin icon and the grouping rule, not the permissions.
+SUGGESTION_TYPES = ("region", "accommodation", "activity", "meal")
+
+#: `suggestions.status`. `scheduled` is set only by `itinerary-timeline` when the suggestion is
+#: placed on a day; `rejected` is a terminal side exit that `proposed` can be returned to.
+SUGGESTION_STATUSES = ("proposed", "shortlisted", "approved", "scheduled", "rejected")
+
 #: `trip_stage_transitions.direction`. Stored rather than derived: reading a row should not
 #: require knowing the stage machine to tell a correction from a normal advance.
 STAGE_DIRECTIONS = ("forward", "backward")
@@ -571,6 +579,73 @@ def upgrade() -> None:
     op.create_index("ix_poll_scores_poll_id", "poll_scores", ["poll_id"], unique=False)
     op.create_index("ix_poll_scores_user_id", "poll_scores", ["user_id"], unique=False)
 
+    # --- the map -------------------------------------------------------------------------------
+    # `map-suggestions` (M3). One row per proposed thing — a region, an accommodation, an
+    # activity or a meal — rendered both as a pin/overlay on the map and as a row in the list.
+    #
+    # **The Places ToS invariant is visible in the column list itself.** The only Google-derived
+    # value here is `place_id`; `place_snapshot_json` holds the name and address *as the user
+    # accepted or edited them in the create form*, never a copy of Google's response. There is
+    # deliberately no column for a photo reference, rating, review, opening hours, phone number,
+    # website, editorial summary, price level or business status — details are re-fetched live in
+    # the browser on card-open and never reach this table
+    # (`plan/features/map-suggestions/design.md` > HARD INVARIANT).
+    op.create_table(
+        "suggestions",
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("trip_id", sa.UUID(), nullable=False),
+        sa.Column("type", sa.String(length=16), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("status", sa.String(length=16), server_default="proposed", nullable=False),
+        sa.Column("created_by", sa.UUID(), nullable=True),
+        # NOT NULL, both of them: "coordinates are required at creation" (`design.md`'s
+        # edge-case table). A region stores its centroid here — the circle's centre or the
+        # polygon's vertex average — so a region sorts, selects and takes a distance exactly
+        # like a pin, with no special-casing anywhere else in the system.
+        sa.Column("lat", sa.Float(), nullable=False),
+        sa.Column("lng", sa.Float(), nullable=False),
+        # A GeoJSON `Feature`; `properties.shape` is the discriminator ("circle" carries
+        # `radius_m` on a Point, since GeoJSON has no circle primitive). Coordinates are
+        # `[lng, lat]` — GeoJSON order — throughout the API.
+        sa.Column("geometry_geojson", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("place_id", sa.Text(), nullable=True),
+        sa.Column("place_snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("external_url", sa.Text(), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint(f"type IN {SUGGESTION_TYPES}", name="ck_suggestions_type"),
+        sa.CheckConstraint(f"status IN {SUGGESTION_STATUSES}", name="ck_suggestions_status"),
+        # Geometry iff region, as a database fact rather than a service-layer promise: a
+        # region with no shape is unrenderable, and a shape on an accommodation is a shape
+        # nothing would ever draw.
+        sa.CheckConstraint(
+            "(type = 'region') = (geometry_geojson IS NOT NULL)",
+            name="ck_suggestions_geometry_iff_region",
+        ),
+    )
+    # The two list filters, both of which are always trip-scoped first.
+    op.create_index("ix_suggestions_trip_status", "suggestions", ["trip_id", "status"])
+    op.create_index("ix_suggestions_trip_type", "suggestions", ["trip_id", "type"])
+    # Grouping looks activities and meals up by the accommodation's `place_id`. Non-unique on
+    # purpose: an accommodation and a meal at the same hotel legitimately share one.
+    op.create_index("ix_suggestions_place_id", "suggestions", ["place_id"])
+
+    # The constraint `polls` deferred at M2, added here now that `suggestions` exists
+    # (`plan/features/map-suggestions/tasks.md` Phase 11b). `ON DELETE SET NULL`: deleting a
+    # seeded region clears the poll option's link to it rather than leaving a dangling id that
+    # the decision banner would render as a broken link.
+    op.create_foreign_key(
+        "fk_poll_options_suggestion_id",
+        "poll_options",
+        "suggestions",
+        ["suggestion_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+
     # Polymorphic, so it carries no foreign key to its subject and cascade is the service
     # layer's job — deleting a poll deletes its comments in the same transaction.
     op.create_table(
@@ -665,6 +740,13 @@ def downgrade() -> None:
 
     op.drop_index("ix_comments_subject", table_name="comments")
     op.drop_table("comments")
+
+    # The poll_options -> suggestions link goes before `suggestions` itself.
+    op.drop_constraint("fk_poll_options_suggestion_id", "poll_options", type_="foreignkey")
+    op.drop_index("ix_suggestions_place_id", table_name="suggestions")
+    op.drop_index("ix_suggestions_trip_type", table_name="suggestions")
+    op.drop_index("ix_suggestions_trip_status", table_name="suggestions")
+    op.drop_table("suggestions")
 
     op.drop_index("ix_poll_scores_user_id", table_name="poll_scores")
     op.drop_index("ix_poll_scores_poll_id", table_name="poll_scores")

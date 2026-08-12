@@ -52,7 +52,26 @@ from app.models.poll import (
     PollOption,
     PollScore,
 )
+from app.models.geo import EARTH_RADIUS_M, haversine_m, haversine_m_py
 from app.models.session import LoginAttempt, Session
+from app.models.suggestion import (
+    GROUPABLE_CHILD_TYPES,
+    STATUS_APPROVED,
+    STATUS_PROPOSED,
+    STATUS_REJECTED,
+    STATUS_SCHEDULED,
+    STATUS_SHORTLISTED,
+    STATUS_TRANSITIONS,
+    SUBJECT_SUGGESTION,
+    SUGGESTION_STATUSES,
+    SUGGESTION_TYPES,
+    TYPE_ACCOMMODATION,
+    TYPE_ACTIVITY,
+    TYPE_MEAL,
+    TYPE_REGION,
+    Suggestion,
+    centroid,
+)
 from app.models.setting import (
     SETTING_INSTANCE_NAME,
     SETTING_INVITE_ONLY,
@@ -74,6 +93,25 @@ from app.models.trip_organiser import TripOrganiser
 from app.models.user import THEME_PREFS, User, UserSettings
 
 __all__ = [
+    "EARTH_RADIUS_M",
+    "GROUPABLE_CHILD_TYPES",
+    "STATUS_APPROVED",
+    "STATUS_PROPOSED",
+    "STATUS_REJECTED",
+    "STATUS_SCHEDULED",
+    "STATUS_SHORTLISTED",
+    "STATUS_TRANSITIONS",
+    "SUBJECT_SUGGESTION",
+    "SUGGESTION_STATUSES",
+    "SUGGESTION_TYPES",
+    "TYPE_ACCOMMODATION",
+    "TYPE_ACTIVITY",
+    "TYPE_MEAL",
+    "TYPE_REGION",
+    "Suggestion",
+    "centroid",
+    "haversine_m",
+    "haversine_m_py",
     "THUMBS",
     "SUBJECT_POLL",
     "STATUS_OPEN",

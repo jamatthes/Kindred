@@ -156,9 +156,21 @@ class PollOption(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     place_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
-    #: Set when this option was seeded into a map region (PL-14). **No foreign key**:
-    #: `suggestions` does not exist until `map-suggestions` (M3), which adds the constraint.
-    suggestion_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    #: Set when this option was seeded into a map region (PL-14). The foreign key was deferred
+    #: at M2 — `suggestions` did not exist yet — and added by `map-suggestions` (Phase 11b).
+    #: `use_alter` because `poll_options` is created before `suggestions`, and `ON DELETE SET
+    #: NULL` so deleting the seeded region clears the option's link to it rather than leaving a
+    #: dangling id the decision banner would render as a broken link.
+    suggestion_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "suggestions.id",
+            ondelete="SET NULL",
+            name="fk_poll_options_suggestion_id",
+            use_alter=True,
+        ),
+        nullable=True,
+    )
 
     poll: Mapped[Poll] = relationship(back_populates="options", foreign_keys=[poll_id])
     scores: Mapped[list[PollScore]] = relationship(
