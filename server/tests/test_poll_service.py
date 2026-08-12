@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -19,6 +19,7 @@ from app.models import (
     Poll,
     PollOption,
     PollScore,
+    Suggestion,
     Trip,
     TripCategorySetting,
     User,
@@ -358,29 +359,78 @@ async def test_a_nudge_with_nobody_outstanding_writes_nothing(
 # --- region seeding ------------------------------------------------------------------------------
 
 
-async def test_seeding_a_region_is_not_available_at_m2(db: AsyncSession, trip: Trip) -> None:
-    poll = await _poll(db, trip)
-    assert service.suggestions_available() is False
-    with pytest.raises(ApiError) as caught:
-        service.seed_region(poll, poll.options[0])
-    assert caught.value.status_code == 501
-    assert caught.value.detail["code"] == "not_available"
+async def test_map_suggestions_shipping_turns_seeding_on_by_itself(db: AsyncSession) -> None:
+    """The capability check M3 flips.
+
+    It probes for `app.services.suggestions` by import, so implementing that module is what
+    turns `can_seed_region` on — nothing had to be edited in `polls` for the button to appear
+    (`plan/features/polls/tasks.md` > Hand-off notes). This test was
+    `test_seeding_a_region_is_not_available_at_m2` until `map-suggestions` shipped.
+    """
+    assert service.suggestions_available() is True
+
+
+async def test_seeding_creates_a_circular_region_on_the_options_point(
+    db: AsyncSession, trip: Trip
+) -> None:
+    """A circle, not a fabricated outline: the option carries a point, and inventing a boundary
+    from one coordinate would claim knowledge nobody has. `proposed`, not `approved`: deciding
+    *where* is not deciding what the region's outline should be."""
+    people = await _household(db, trip, 1)
+    poll = await _poll(db, trip, labels=("Cornwall",))
+    poll.options[0].lat, poll.options[0].lng = 50.2660, -5.0527
+    await db.commit()
+
+    suggestion_id = await service.seed_region(db, trip, poll, poll.options[0], people[0])
+    await db.commit()
+
+    suggestion = await db.get(Suggestion, suggestion_id)
+    assert suggestion.type == "region"
+    assert suggestion.status == "proposed"
+    assert suggestion.title == "Cornwall"
+    assert suggestion.geometry_geojson["properties"]["shape"] == "circle"
+    assert suggestion.geometry_geojson["geometry"]["coordinates"] == [-5.0527, 50.2660]
+    assert poll.options[0].suggestion_id == suggestion_id
 
 
 async def test_an_already_seeded_option_returns_its_existing_region(
     db: AsyncSession, trip: Trip
 ) -> None:
     """PL-14: "Doing this twice for the same option is prevented; the second attempt links to
-    the existing suggestion instead." Checked before the availability check, because an
-    already-seeded option has an answer regardless of whether M3 has shipped."""
-    import uuid as _uuid
-
-    poll = await _poll(db, trip)
-    existing = _uuid.uuid4()
-    poll.options[0].suggestion_id = existing
+    the existing suggestion instead." Checked first, so the idempotent path costs one attribute
+    read and cannot produce a second overlapping region nobody asked for."""
+    people = await _household(db, trip, 1)
+    poll = await _poll(db, trip, labels=("Cornwall",))
+    poll.options[0].lat, poll.options[0].lng = 50.2660, -5.0527
     await db.commit()
 
-    assert service.seed_region(poll, poll.options[0]) == existing
+    first = await service.seed_region(db, trip, poll, poll.options[0], people[0])
+    await db.commit()
+    second = await service.seed_region(db, trip, poll, poll.options[0], people[0])
+    await db.commit()
+
+    assert first == second
+    assert await db.scalar(select(func.count()).select_from(Suggestion)) == 1
+
+
+async def test_deleting_the_seeded_region_clears_the_options_link(
+    db: AsyncSession, trip: Trip
+) -> None:
+    """The FK `map-suggestions` added is `ON DELETE SET NULL`, so this is a database guarantee
+    rather than a service-layer promise: the decision banner never renders a broken link."""
+    people = await _household(db, trip, 1)
+    poll = await _poll(db, trip, labels=("Cornwall",))
+    poll.options[0].lat, poll.options[0].lng = 50.2660, -5.0527
+    await db.commit()
+
+    suggestion_id = await service.seed_region(db, trip, poll, poll.options[0], people[0])
+    await db.commit()
+
+    await db.execute(delete(Suggestion).where(Suggestion.id == suggestion_id))
+    await db.commit()
+    await db.refresh(poll.options[0])
+
+    assert poll.options[0].suggestion_id is None
 
 
 # --- comments ------------------------------------------------------------------------------------

@@ -66,6 +66,7 @@ from app.schemas.poll import (
     ScoresPutIn,
 )
 from app.services import polls as service
+from app.services import suggestions as suggestion_service
 
 router = APIRouter(
     prefix="/polls",
@@ -737,11 +738,14 @@ async def clear_decision_route(
     dependencies=[Depends(require_organiser), PLANNING_OR_HOLIDAY],
     summary="Turn the winning option into a region on the map",
 )
-async def seed_region(poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip) -> dict:
-    """PL-14. `501 not_available` at M2 — `map-suggestions` has not shipped.
+async def seed_region(
+    poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip, user: CurrentUser
+) -> dict:
+    """PL-14, implemented by `map-suggestions` at M3 (its `tasks.md` Phase 11b).
 
-    `can_seed_region` is false, so the button is never rendered and this is a backstop for a
-    direct call rather than a path a user can reach.
+    Idempotent: a second call returns the same `suggestion_id` rather than creating a second
+    overlapping region. The rules live in `services/polls.py::seed_region`; this route is the
+    HTTP shell plus the broadcast, so a member with the map open watches the region appear.
     """
     current = _require_trip(trip)
     poll = await service.load_poll(db, poll_id, current)
@@ -749,10 +753,29 @@ async def seed_region(poll_id: uuid.UUID, db: DbDep, trip: ActiveTrip) -> dict:
         raise ApiError(409, "no_decision", "Record a winning option first.")
     option = _find_option(poll, poll.decision_option_id)
     if not option.is_located:
+        # A `422` rather than a `409`: the request is well-formed and the poll is in the right
+        # state — the *option* is the thing that cannot be honoured, which is what
+        # `map-suggestions/tasks.md` Phase 11b asks for ("non-geographic option -> 422").
         raise ApiError(
-            409, "option_not_located", "That option has no location to put on the map."
+            422, "option_not_located", "That option has no location to put on the map."
         )
-    return {"suggestion_id": str(service.seed_region(poll, option))}
+
+    already = option.suggestion_id
+    suggestion_id = await service.seed_region(db, current, poll, option, user)
+    await db.commit()
+
+    if already is None:
+        row = await suggestion_service.load_suggestion(db, suggestion_id, current)
+        await ws.broadcast(
+            current.id,
+            "suggestion.created",
+            {
+                "suggestion": suggestion_service.serialise(
+                    row, can_edit=True, can_change_status=True
+                ).model_dump(mode="json")
+            },
+        )
+    return {"suggestion_id": str(suggestion_id)}
 
 
 # --- comments ----------------------------------------------------------------------------------
