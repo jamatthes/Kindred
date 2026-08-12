@@ -66,9 +66,22 @@ export function MapCanvas({
   // Mount once. `center`/`zoom` at mount time only seed the initial view; subsequent
   // changes go through setCenter/setZoom below rather than remounting, so an in-progress
   // pan by the user is never clobbered by an unrelated prop update.
+  //
+  // The four `provider.on(...)` subscriptions below are wired to small wrapper functions
+  // that read `latestPropsRef.current` *at call time*, not to `onMarkerClick`/`onMapClick`/
+  // etc. directly. Subscribing the caller's handler directly would capture whatever closure
+  // it happened to be on the one render this effect ran (this effect has an intentionally
+  // empty dependency array, per the comment above) — every later render passes a *new*
+  // callback instance (e.g. a `useCallback` whose own deps changed), but the provider would
+  // go on invoking the stale first one forever, since nothing here ever re-subscribes.
+  // Found by the M3 integration pass's live Playwright smoke: `MapSuggestionsScreen`'s
+  // `onMapClick` closes over `creating`/`createMode`, and a real click on the map, made
+  // after opening the create-suggestion form, was silently evaluating `creating === false`
+  // from the moment the map first mounted — drop-pin and draw-region could never place a
+  // point, on any provider, ever. The wrapper indirection is what makes "mount once" and
+  // "always call the latest handler" both true at the same time.
   useEffect(() => {
-    const { center: initialCenter, zoom: initialZoom, onMarkerClick, onMarkerHover, onPolygonClick, onMapClick, onProviderReady } =
-      latestPropsRef.current
+    const { center: initialCenter, zoom: initialZoom, onProviderReady } = latestPropsRef.current
     const provider = createProviderRef.current()
     providerRef.current = provider
     if (containerRef.current) {
@@ -76,10 +89,10 @@ export function MapCanvas({
     }
     onProviderReady?.(provider)
 
-    const offClick = onMarkerClick ? provider.on('markerClick', onMarkerClick) : undefined
-    const offHover = onMarkerHover ? provider.on('markerHover', onMarkerHover) : undefined
-    const offPolyClick = onPolygonClick ? provider.on('polygonClick', onPolygonClick) : undefined
-    const offMapClick = onMapClick ? provider.on('mapClick', onMapClick) : undefined
+    const offClick = provider.on('markerClick', (payload) => latestPropsRef.current.onMarkerClick?.(payload))
+    const offHover = provider.on('markerHover', (payload) => latestPropsRef.current.onMarkerHover?.(payload))
+    const offPolyClick = provider.on('polygonClick', (payload) => latestPropsRef.current.onPolygonClick?.(payload))
+    const offMapClick = provider.on('mapClick', (payload) => latestPropsRef.current.onMapClick?.(payload))
 
     return () => {
       offClick?.()

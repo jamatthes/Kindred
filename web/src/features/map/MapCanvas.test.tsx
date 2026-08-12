@@ -51,7 +51,14 @@ function makeMockProvider() {
     }),
   }
 
-  return { provider, calls, markers, polygons }
+  /** Fires every handler currently registered for `event` — the mock's stand-in for "the
+   *  provider's own SDK fired a real click", used to prove *which* callback instance
+   *  actually runs, not just that `provider.on` was called once at mount. */
+  function emit<K extends MapEventName>(event: K, payload: unknown) {
+    for (const handler of handlers.get(event) ?? []) handler(payload)
+  }
+
+  return { provider, calls, markers, polygons, emit }
 }
 
 const m1: MarkerSpec = {
@@ -132,19 +139,54 @@ describe('MapCanvas — polygon diffing', () => {
 })
 
 describe('MapCanvas — events', () => {
-  it('wires onMarkerClick/onMapClick to provider.on and cleans up on unmount', () => {
-    const { provider } = makeMockProvider()
+  it('wires onMarkerClick/onMapClick to provider.on and invokes them on a real event', () => {
+    const { provider, emit } = makeMockProvider()
     const onMarkerClick = vi.fn()
+    const onMapClick = vi.fn()
     const { unmount } = render(
       <MapCanvas
         createProvider={() => provider}
         center={{ lat: 0, lng: 0 }}
         zoom={1}
         onMarkerClick={onMarkerClick}
+        onMapClick={onMapClick}
       />,
     )
-    expect(provider.on).toHaveBeenCalledWith('markerClick', onMarkerClick)
+    expect(provider.on).toHaveBeenCalledWith('markerClick', expect.any(Function))
+    expect(provider.on).toHaveBeenCalledWith('mapClick', expect.any(Function))
+
+    emit('markerClick', { id: 'm1' })
+    expect(onMarkerClick).toHaveBeenCalledWith({ id: 'm1' })
+    emit('mapClick', { position: { lat: 1, lng: 2 } })
+    expect(onMapClick).toHaveBeenCalledWith({ position: { lat: 1, lng: 2 } })
+
     unmount()
+  })
+
+  it('always invokes the latest handler instance, never a closure captured at mount', () => {
+    // The regression this guards: MapCanvas's mount effect runs exactly once (deps: []),
+    // so subscribing a caller's callback *directly* would freeze whatever closure that
+    // callback happened to be on the first render — found for real via
+    // MapSuggestionsScreen's onMapClick, which closes over `creating`/`createMode` and was
+    // silently always evaluating their mount-time values on every later click.
+    const { provider, emit } = makeMockProvider()
+    let seenBy: 'first' | 'second' | null = null
+    const firstHandler: MapEventHandler<'mapClick'> = () => {
+      seenBy = 'first'
+    }
+    const secondHandler: MapEventHandler<'mapClick'> = () => {
+      seenBy = 'second'
+    }
+
+    const { rerender } = render(
+      <MapCanvas createProvider={() => provider} center={{ lat: 0, lng: 0 }} zoom={1} onMapClick={firstHandler} />,
+    )
+    rerender(
+      <MapCanvas createProvider={() => provider} center={{ lat: 0, lng: 0 }} zoom={1} onMapClick={secondHandler} />,
+    )
+
+    emit('mapClick', { position: { lat: 5, lng: 5 } })
+    expect(seenBy).toBe('second')
   })
 
   it('exposes the live provider instance via onProviderReady', () => {
