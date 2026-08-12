@@ -31,6 +31,7 @@ from app.routers import (
     invites,
     me,
     comments,
+    distances,
     polls,
     presence,
     settings as settings_router,
@@ -148,6 +149,8 @@ def create_app() -> FastAPI:
     # touching no suggestion at all — the create form calls it before a suggestion exists.
     app.include_router(suggestions.link_preview_router, prefix=API_PREFIX)
     app.include_router(votes.router, prefix=API_PREFIX)
+    app.include_router(distances.router, prefix=API_PREFIX)
+    app.include_router(distances.suggestion_router, prefix=API_PREFIX)
     # "Needs my vote" belongs to the caller rather than to any one suggestion, so it sits
     # under `/me` alongside the rest of the personal endpoints.
     app.include_router(votes.pending_router, prefix=API_PREFIX)

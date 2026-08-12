@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.suggestion import SUGGESTION_STATUSES, SUGGESTION_TYPES
 from app.schemas.comment import CommentOut
+from app.schemas.distance import DistanceOut as _DistanceOut
 
 SuggestionType = Literal["region", "accommodation", "activity", "meal"]
 SuggestionStatus = Literal["proposed", "shortlisted", "approved", "scheduled", "rejected"]
@@ -209,20 +210,10 @@ class VoteSummaryOut(BaseModel):
     my_thumb: Literal["up", "down"] | None = None
 
 
-class DistanceOut(BaseModel):
-    """One family's home-to-here driving distance.
-
-    NOTE: `distance_cache` belongs to `distances` (M3), which creates the table and fills this
-    list. Until then it is empty for every suggestion. `is_estimate` distinguishes the SQL
-    haversine fallback from a real Distance Matrix answer — a chip must never present an
-    estimate as a measurement.
-    """
-
-    family_id: uuid.UUID
-    family_name: str
-    duration_s: int | None = None
-    distance_m: int | None = None
-    is_estimate: bool = True
+#: One family's home-to-here distance. **Imported, not redefined**: `distances` (M3) owns the
+#: shape, and two classes with the same name and slightly different fields is how a chip in the
+#: list and a chip in the panel end up disagreeing about what `is_estimate` means.
+DistanceOut = _DistanceOut
 
 
 # --- requests ---------------------------------------------------------------------------------

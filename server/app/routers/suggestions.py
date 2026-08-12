@@ -24,7 +24,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,7 @@ from app.deps import (
     can_edit_suggestion,
     enforce_password_change,
     is_organiser,
+    load_membership,
     moderated_family_id,
     require_can_edit_suggestion,
     require_member,
@@ -65,6 +66,7 @@ from app.schemas.suggestion import (
     SuggestionUpdate,
 )
 from app.services import comments as comment_service
+from app.services import distances as distance_service
 from app.services import suggestions as service
 from app.services import votes as votes_service
 from app.services.boundaries import (
@@ -91,6 +93,12 @@ def _require_trip(trip: Trip | None) -> Trip:
     return trip
 
 
+async def _own_family_id(db: AsyncSession, user: User, trip: Trip):
+    """The caller's family, for "how far is it from *us*" — the number a card leads with."""
+    membership = await load_membership(db, user.id, trip.id)
+    return membership[0].id if membership else None
+
+
 # --- serialisation ---------------------------------------------------------------------------
 
 
@@ -102,6 +110,7 @@ async def _out(
     trip: Trip,
     organiser: bool,
     modes: dict[str, str],
+    distances: dict | None = None,
 ) -> SuggestionOut:
     """One row, with its capability flags resolved for this caller.
 
@@ -109,12 +118,21 @@ async def _out(
     (`deps.can_edit_suggestion`), so a button the UI renders and a request the server accepts
     can never disagree.
 
-    `modes` is every category's voting mode, fetched once per request: a suggestion's mode is
-    its `type`'s, and looking it up per row would reintroduce the N+1 the service exists to
-    avoid — for a value that is the same for every row of a category.
+    `modes` and `distances` are both fetched once per request rather than per row: a
+    suggestion's voting mode is its `type`'s, and its distances come from one bulk read
+    (`app/services/distances.py`, which cannot call Google). Looking either up per row would
+    reintroduce the N+1 the service layer exists to avoid.
     """
     children = [
-        await _out(db, child, caller=caller, trip=trip, organiser=organiser, modes=modes)
+        await _out(
+            db,
+            child,
+            caller=caller,
+            trip=trip,
+            organiser=organiser,
+            modes=modes,
+            distances=distances,
+        )
         for child in row.children
     ]
     return service.serialise(
@@ -123,6 +141,7 @@ async def _out(
         can_change_status=organiser,
         children=children,
         mode=modes.get(row.suggestion.type, votes_service.DEFAULT_MODE),
+        distances=(distances or {}).get(row.suggestion.id, []),
     )
 
 
@@ -170,8 +189,23 @@ async def list_suggestions(
     rows = await service.list_suggestions(db, trip, params, caller_id=user.id)
     organiser = await is_organiser(db, user, trip)
     modes = await votes_service.resolve_modes(db, trip.id)
+    # The list row shows the caller's own family's distance, so only that family is fetched —
+    # a lighter payload than every family's, and the side panel asks
+    # `GET /suggestions/{id}/distances` when it wants the rest (`distances/design.md`).
+    own_family = await _own_family_id(db, user, trip)
+    distances = await distance_service.get_distances_bulk(
+        db, trip, family_id=own_family, own_family_id=own_family
+    )
     return [
-        await _out(db, row, caller=user, trip=trip, organiser=organiser, modes=modes)
+        await _out(
+            db,
+            row,
+            caller=user,
+            trip=trip,
+            organiser=organiser,
+            modes=modes,
+            distances=distances,
+        )
         for row in rows
     ]
 
@@ -190,6 +224,7 @@ async def read_suggestion(
     current = _require_trip(trip)
     row = await service.load_suggestion(db, suggestion_id, current, caller_id=user.id)
     organiser = await is_organiser(db, user, current)
+    own_family = await _own_family_id(db, user, current)
     base = await _out(
         db,
         row,
@@ -197,6 +232,13 @@ async def read_suggestion(
         trip=current,
         organiser=organiser,
         modes=await votes_service.resolve_modes(db, current.id),
+        # The detail view carries **every** family's distance: this is the panel, and comparing
+        # whose journey is longest is the point of the expander.
+        distances={
+            row.suggestion.id: await distance_service.get_distances_for_suggestion(
+                db, row.suggestion, current, own_family_id=own_family
+            )
+        },
     )
     return SuggestionDetailOut(
         **base.model_dump(),
@@ -231,6 +273,7 @@ async def create_suggestion(
     trip: ActiveTrip,
     user: CurrentUser,
     boundaries: Annotated[BoundaryServiceProtocol, Depends(get_boundary_service)],
+    background: BackgroundTasks = None,
 ) -> SuggestionOut:
     """Any member may propose anything (`requirements.md` S3-S6). Confirmation is the
     organiser's, later, through the status route.
@@ -274,9 +317,10 @@ async def create_suggestion(
     await db.commit()
 
     row = await service.load_suggestion(db, suggestion.id, current, caller_id=user.id)
-    # Queued after the commit and never inline: `CLAUDE.md`'s "never call Google in a render
-    # path" is what the whole caching design rests on.
-    await service.queue_distance_recompute(db, row.suggestion)
+    # Queued after the commit and run after the response: `CLAUDE.md`'s "never call Google in a
+    # render path" is what the whole caching design rests on, and a suggestion must not wait on
+    # a distance — the suggestion is the user's work, the distance is a convenience.
+    await service.queue_distance_recompute(db, row.suggestion, background)
     out = await _out(
         db,
         row,
@@ -325,6 +369,7 @@ async def update_suggestion(
     trip: ActiveTrip,
     user: CurrentUser,
     suggestion: Annotated[Suggestion, Depends(require_can_edit_suggestion)],
+    background: BackgroundTasks = None,
 ) -> SuggestionOut:
     """Author, their family's head or spouse, or an organiser — enforced by the dependency.
 
@@ -358,7 +403,7 @@ async def update_suggestion(
     row = await service.load_suggestion(db, suggestion.id, current, caller_id=user.id)
     moved = service.moved_beyond_epsilon(*before, row.suggestion.lat, row.suggestion.lng)
     if moved:
-        await service.queue_distance_recompute(db, row.suggestion)
+        await service.queue_distance_recompute(db, row.suggestion, background, moved=True)
 
     out = await _out(
         db,

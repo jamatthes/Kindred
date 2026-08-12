@@ -60,6 +60,7 @@ from app.models import (
     haversine_m_py,
 )
 from app.schemas.common import ApiError
+from app.schemas.distance import DistanceOut
 from app.schemas.suggestion import (
     PlaceSnapshot,
     SuggestionAuthorOut,
@@ -465,21 +466,35 @@ def moved_beyond_epsilon(
     )
 
 
-async def queue_distance_recompute(db: AsyncSession, suggestion: Suggestion) -> None:
+async def queue_distance_recompute(
+    db: AsyncSession, suggestion: Suggestion, background=None, *, moved: bool = False
+) -> None:
     """Ask `distances` to recompute this pin against every geocoded family home.
 
-    **Deliberately a no-op today.** `distances` (M3, same milestone, separate feature) owns
-    `distance_cache` and the background task; this is the single call site
-    `map-suggestions` needs, placed and tested now — `tests/test_router_suggestions.py`
-    asserts a 5 m move does not reach it and a 500 m move does — so that feature has one
-    function to fill in rather than a create path and a patch path to find.
+    The single call site `map-suggestions` owns — reached on create, and on a move past
+    `settings.suggestion_move_epsilon_m` and not otherwise. It was a placed no-op until
+    `distances` landed; `tests/test_router_suggestions.py` asserted the epsilon behaviour
+    through it before there was anything behind it, and asserts the same thing now.
 
-    It takes the session it should eventually write through, so filling it in does not change
-    either call site. **It must never call Google inline**: this is reached from a request
-    handler, and `CLAUDE.md`'s "never call Google in a render path" is the rule the whole
-    caching design rests on.
+    **This does not call Google inline.** It hands off to
+    `app/services/distance_tasks.py`, which owns every Distance Matrix call in the product and
+    is never imported by a read path — `CLAUDE.md`'s "never call Google in a render path" is
+    the rule the whole caching design rests on, and the import graph is what enforces it. The
+    import is local for the same reason: this module *is* a read path.
     """
-    return None
+    from app.services.distance_tasks import queue_for_suggestion_safely  # noqa: PLC0415
+
+    # A **move** is an invalidation, not a first computation: every cached value for this pin
+    # is now about a place it no longer is, including the settled ones. `design.md`: "existing
+    # rows for that suggestion reset to `pending`; chips revert to estimates; one call re-fills
+    # them." A create has nothing to reset.
+    if background is not None:
+        # Runs after the response is sent, so creating a suggestion never waits on Google.
+        background.add_task(
+            queue_for_suggestion_safely, suggestion.trip_id, suggestion.id, moved
+        )
+        return
+    await queue_for_suggestion_safely(suggestion.trip_id, suggestion.id, moved)
 
 
 # --- serialisation --------------------------------------------------------------------------------
@@ -492,7 +507,7 @@ def serialise(
     can_change_status: bool = False,
     children: list[SuggestionOut] | None = None,
     mode: str = "score",
-    distances: list | None = None,
+    distances: list[DistanceOut] | None = None,
 ) -> SuggestionOut:
     """One suggestion as the wire sees it.
 

@@ -28,7 +28,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -82,6 +82,25 @@ from app.schemas.family import (
     member_out,
 )
 from app.services.google import GeocoderProtocol, get_geocoder
+
+
+async def queue_distances_for_family(
+    trip_id: uuid.UUID, family_id: uuid.UUID, background=None
+) -> None:
+    """The `distances` home-change trigger, imported at call time.
+
+    Deliberately a module-level function with a lazy import rather than a top-level import: it
+    keeps the Google-calling half of `distances` out of this router's import graph, and it is
+    the seam the tests monkeypatch to assert that setting a home queues exactly one recompute.
+    It swallows everything — a distance failure must never fail somebody's address change.
+    """
+    from app.services.distance_tasks import queue_for_family_safely  # noqa: PLC0415
+
+    if background is not None:
+        # After the response, so saving an address never waits on a chunked recompute.
+        background.add_task(queue_for_family_safely, trip_id, family_id)
+        return
+    await queue_for_family_safely(trip_id, family_id)
 
 router = APIRouter(
     prefix="/families",
@@ -649,6 +668,7 @@ async def set_home(
     viewer: ViewerDep,
     trip: ActiveTrip,
     geocoder: GeocoderProtocol = Depends(get_geocoder),
+    background: BackgroundTasks = None,
 ) -> FamilyDetailOut:
     """FM-3. Geocoded inline so the result can be confirmed on screen.
 
@@ -664,6 +684,9 @@ async def set_home(
         await db.commit()
         family = await _load_family(db, family_id)
         await ws.broadcast(family.trip_id, "family.updated", {"family": _wire(family)})
+        # `distances`' home-change trigger: this family's cached values are now about a house
+        # they no longer live in. Only theirs — nothing about any other family changed.
+        await queue_distances_for_family(family.trip_id, family.id, background)
 
     return await _detail(db, family, viewer, trip)
 
@@ -680,6 +703,7 @@ async def retry_geocode(
     viewer: ViewerDep,
     trip: ActiveTrip,
     geocoder: GeocoderProtocol = Depends(get_geocoder),
+    background: BackgroundTasks = None,
 ) -> FamilyDetailOut:
     """FM-3's explicit retry — the second and last place `geocode` is called.
 
@@ -694,6 +718,9 @@ async def retry_geocode(
     await db.commit()
     family = await _load_family(db, family_id)
     await ws.broadcast(family.trip_id, "family.updated", {"family": _wire(family)})
+    # A successful retry is a home appearing where there was none, which is exactly the case
+    # that backfills every pair for this family.
+    await queue_distances_for_family(family.trip_id, family.id, background)
     return await _detail(db, family, viewer, trip)
 
 

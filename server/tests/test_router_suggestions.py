@@ -496,7 +496,7 @@ async def test_a_five_metre_move_queues_no_distance_work(
     """This is the Distance Matrix budget's only protection from a pin dragged a few pixels."""
     queued: list = []
 
-    async def spy(db_, suggestion):
+    async def spy(db_, suggestion, background=None, **kwargs):
         queued.append(suggestion.id)
 
     await login_as(client, db, household["child"])
@@ -517,7 +517,7 @@ async def test_a_five_hundred_metre_move_queues_distance_work_and_broadcasts(
     queued: list = []
     sent: list[str] = []
 
-    async def spy(db_, suggestion):
+    async def spy(db_, suggestion, background=None, **kwargs):
         queued.append(suggestion.id)
 
     async def broadcast_spy(trip_id, type_, payload=None):
@@ -543,7 +543,7 @@ async def test_creating_queues_distance_work(
 ) -> None:
     queued: list = []
 
-    async def spy(db_, suggestion):
+    async def spy(db_, suggestion, background=None, **kwargs):
         queued.append(suggestion.id)
 
     monkeypatch.setattr(service, "queue_distance_recompute", spy)
