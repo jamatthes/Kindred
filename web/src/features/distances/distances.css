@@ -1,0 +1,160 @@
+/**
+ * DistanceChip and friends. Token-only, and — the one rule worth restating in the file a
+ * reviewer will actually be looking at — no preference-ramp custom property (the one
+ * `plan/design-system.md` reserves for group-preference tinting, referenced by other
+ * features as `scale` + `pref` + a step number) appears anywhere below. Distance is a
+ * different fact about a suggestion and must never borrow that colour language.
+ * `DistanceChip.test.tsx` asserts this by reading this file's own source text.
+ */
+
+.dist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  min-height: var(--hit-target);
+}
+
+.dist-chip svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.dist-chip__text {
+  white-space: nowrap;
+}
+
+.dist-chip__approx {
+  color: var(--color-text-muted);
+}
+
+.dist-chip--estimate {
+  color: var(--color-text-muted);
+}
+
+.dist-chip--estimate svg {
+  color: var(--color-text-muted);
+}
+
+.dist-chip--no_route {
+  color: var(--color-info);
+}
+
+.dist-chip--failed {
+  color: var(--color-text-muted);
+}
+
+.dist-chip--no_home {
+  color: var(--color-warning);
+}
+
+.dist-chip__action {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: var(--hit-target);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-1);
+}
+
+/* Estimate -> real crossfade (design.md > "Loading"): never a spinner, a real number just
+   sharpens in place. */
+.dist-chip--animated {
+  animation: dist-chip-crossfade var(--duration-base) var(--ease-standard);
+}
+
+@keyframes dist-chip-crossfade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dist-chip--animated {
+    animation: none;
+  }
+}
+
+.dist-cell--estimate,
+.dist-cell--muted {
+  color: var(--color-text-muted);
+}
+
+/* --- family expander (side panel) ------------------------------------------------------- */
+
+.dist-expander {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.dist-expander__toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  min-height: var(--hit-target);
+  padding: var(--space-1) 0;
+}
+
+.dist-expander__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dist-expander__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dist-expander__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex: 0 0 auto;
+}
+
+/* --- sort perspective selector ------------------------------------------------------------ */
+
+.dist-perspective {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.dist-perspective select {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-surface);
+  color: var(--color-text);
+  min-height: var(--hit-target);
+  padding: 0 var(--space-2);
+}
+
+/* --- degraded-mode banner / recompute affordances ----------------------------------------- */
+
+.dist-recompute {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dist-recompute__cost {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
