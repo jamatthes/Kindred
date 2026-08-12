@@ -36,6 +36,7 @@ from app.deps import (
     can_edit_suggestion,
     enforce_password_change,
     is_organiser,
+    moderated_family_id,
     require_can_edit_suggestion,
     require_member,
     require_organiser,
@@ -47,14 +48,10 @@ from app.models import (
     STATUS_TRANSITIONS,
     SUBJECT_SUGGESTION,
     TYPE_REGION,
-    Comment,
-    Family,
-    FamilyMember,
     Suggestion,
     Trip,
     User,
 )
-from app.schemas.comment import CommentOut
 from app.schemas.common import ApiError
 from app.schemas.suggestion import (
     LinkPreviewIn,
@@ -67,7 +64,9 @@ from app.schemas.suggestion import (
     SuggestionType,
     SuggestionUpdate,
 )
+from app.services import comments as comment_service
 from app.services import suggestions as service
+from app.services import votes as votes_service
 from app.services.boundaries import (
     BoundaryResult,
     BoundaryServiceProtocol,
@@ -102,15 +101,20 @@ async def _out(
     caller: User,
     trip: Trip,
     organiser: bool,
+    modes: dict[str, str],
 ) -> SuggestionOut:
     """One row, with its capability flags resolved for this caller.
 
     The flags are computed from the same predicate the dependency enforces
     (`deps.can_edit_suggestion`), so a button the UI renders and a request the server accepts
     can never disagree.
+
+    `modes` is every category's voting mode, fetched once per request: a suggestion's mode is
+    its `type`'s, and looking it up per row would reintroduce the N+1 the service exists to
+    avoid — for a value that is the same for every row of a category.
     """
     children = [
-        await _out(db, child, caller=caller, trip=trip, organiser=organiser)
+        await _out(db, child, caller=caller, trip=trip, organiser=organiser, modes=modes)
         for child in row.children
     ]
     return service.serialise(
@@ -118,6 +122,7 @@ async def _out(
         can_edit=await can_edit_suggestion(db, caller, trip, row.suggestion),
         can_change_status=organiser,
         children=children,
+        mode=modes.get(row.suggestion.type, votes_service.DEFAULT_MODE),
     )
 
 
@@ -162,9 +167,13 @@ async def list_suggestions(
         group=group,
         include_rejected=include_rejected,
     )
-    rows = await service.list_suggestions(db, trip, params)
+    rows = await service.list_suggestions(db, trip, params, caller_id=user.id)
     organiser = await is_organiser(db, user, trip)
-    return [await _out(db, row, caller=user, trip=trip, organiser=organiser) for row in rows]
+    modes = await votes_service.resolve_modes(db, trip.id)
+    return [
+        await _out(db, row, caller=user, trip=trip, organiser=organiser, modes=modes)
+        for row in rows
+    ]
 
 
 @router.get(
@@ -179,71 +188,31 @@ async def read_suggestion(
     """The list shape plus the thread. **No Google details** — the browser fetches those
     itself on card-open and never sends them back (`design.md` > HARD INVARIANT)."""
     current = _require_trip(trip)
-    row = await service.load_suggestion(db, suggestion_id, current)
+    row = await service.load_suggestion(db, suggestion_id, current, caller_id=user.id)
     organiser = await is_organiser(db, user, current)
-    base = await _out(db, row, caller=user, trip=current, organiser=organiser)
+    base = await _out(
+        db,
+        row,
+        caller=user,
+        trip=current,
+        organiser=organiser,
+        modes=await votes_service.resolve_modes(db, current.id),
+    )
     return SuggestionDetailOut(
         **base.model_dump(),
-        comments=await _thread(db, current, suggestion_id, caller=user, organiser=organiser),
+        # The thread comes from the shared implementation (`voting-comments`), which is also
+        # what serves `/comments` and `/polls/{id}/comments` — so mentions, soft delete and the
+        # capability flags behave identically wherever a thread is rendered.
+        comments=await comment_service.list_thread(
+            db,
+            SUBJECT_SUGGESTION,
+            suggestion_id,
+            current,
+            caller=user,
+            organiser=organiser,
+            moderates_family_id=await moderated_family_id(db, user),
+        ),
     )
-
-
-async def _thread(
-    db: AsyncSession,
-    trip: Trip,
-    suggestion_id: uuid.UUID,
-    *,
-    caller: User,
-    organiser: bool,
-) -> list[CommentOut]:
-    """The suggestion's comments, in the shape `polls` already renders.
-
-    `voting-comments` (M3) upgrades this in place with @mention parsing and its own write
-    routes; reading is here because a detail view without its discussion is not a detail view.
-    """
-    families = {
-        row[0]: (row[1], row[2], row[3])
-        for row in (
-            await db.execute(
-                select(FamilyMember.user_id, Family.id, Family.color, Family.color_custom)
-                .join(Family, Family.id == FamilyMember.family_id)
-                .where(Family.trip_id == trip.id)
-            )
-        ).all()
-    }
-    rows = (
-        await db.scalars(
-            select(Comment)
-            .where(
-                Comment.subject_type == SUBJECT_SUGGESTION,
-                Comment.subject_id == suggestion_id,
-            )
-            .order_by(Comment.created_at)
-        )
-    ).unique().all()
-    out = []
-    for comment in rows:
-        family = families.get(comment.author_id)
-        out.append(
-            CommentOut(
-                id=comment.id,
-                subject_type=comment.subject_type,
-                subject_id=comment.subject_id,
-                author_id=comment.author_id,
-                author_name=(
-                    comment.author.display_name if comment.author else "Someone who has left"
-                ),
-                family_id=family[0] if family else None,
-                family_color=family[1] if family else None,
-                family_color_custom=family[2] if family else None,
-                body=comment.body,
-                created_at=comment.created_at,
-                edited_at=comment.edited_at,
-                can_edit=comment.author_id == caller.id,
-                can_delete=organiser or comment.author_id == caller.id,
-            )
-        )
-    return out
 
 
 # --- creating ------------------------------------------------------------------------------------
@@ -304,12 +273,17 @@ async def create_suggestion(
     db.add(suggestion)
     await db.commit()
 
-    row = await service.load_suggestion(db, suggestion.id, current)
+    row = await service.load_suggestion(db, suggestion.id, current, caller_id=user.id)
     # Queued after the commit and never inline: `CLAUDE.md`'s "never call Google in a render
     # path" is what the whole caching design rests on.
     await service.queue_distance_recompute(db, row.suggestion)
     out = await _out(
-        db, row, caller=user, trip=current, organiser=await is_organiser(db, user, current)
+        db,
+        row,
+        caller=user,
+        trip=current,
+        organiser=await is_organiser(db, user, current),
+        modes=await votes_service.resolve_modes(db, current.id),
     )
     await _broadcast(current, "suggestion.created", {"suggestion": out.model_dump(mode="json")})
     return out
@@ -381,13 +355,18 @@ async def update_suggestion(
 
     await db.commit()
 
-    row = await service.load_suggestion(db, suggestion.id, current)
+    row = await service.load_suggestion(db, suggestion.id, current, caller_id=user.id)
     moved = service.moved_beyond_epsilon(*before, row.suggestion.lat, row.suggestion.lng)
     if moved:
         await service.queue_distance_recompute(db, row.suggestion)
 
     out = await _out(
-        db, row, caller=user, trip=current, organiser=await is_organiser(db, user, current)
+        db,
+        row,
+        caller=user,
+        trip=current,
+        organiser=await is_organiser(db, user, current),
+        modes=await votes_service.resolve_modes(db, current.id),
     )
     await _broadcast(current, "suggestion.updated", {"suggestion": out.model_dump(mode="json")})
     if moved:
@@ -435,12 +414,10 @@ async def delete_suggestion(
         )
 
     # `comments` is polymorphic and carries no FK to its subject, so this cascade is ours — in
-    # the same transaction as the delete (`models/comment.py`).
-    await db.execute(
-        delete(Comment).where(
-            Comment.subject_type == SUBJECT_SUGGESTION, Comment.subject_id == suggestion.id
-        )
-    )
+    # the same transaction as the delete (`models/comment.py`). Hard, not soft: the thing being
+    # discussed is gone, so there is nothing for an undo to restore the discussion to.
+    # `suggestion_votes` needs no such help — it has a real FK and cascades in the database.
+    await comment_service.delete_for_subject(db, SUBJECT_SUGGESTION, suggestion.id)
     suggestion_id = suggestion.id
     await db.delete(suggestion)
     await db.commit()
@@ -470,8 +447,20 @@ async def update_status(
     features from disagreeing about what is happening on Tuesday.
     """
     current = _require_trip(trip)
-    row = await service.load_suggestion(db, suggestion_id, current)
+    row = await service.load_suggestion(db, suggestion_id, current, caller_id=user.id)
     suggestion = row.suggestion
+
+    if (
+        payload.expected_status is not None
+        and payload.expected_status != suggestion.status
+    ):
+        # The other organiser committed first. Their decision stands, and this one is told what
+        # it now is rather than overwriting a change it was never shown.
+        raise ApiError(
+            409,
+            "status_changed",
+            f"Somebody else already moved this to {suggestion.status}.",
+        )
 
     allowed = STATUS_TRANSITIONS.get(suggestion.status, ())
     if payload.status == suggestion.status:
@@ -486,8 +475,15 @@ async def update_status(
         suggestion.status = payload.status
         await db.commit()
 
-    row = await service.load_suggestion(db, suggestion_id, current)
-    out = await _out(db, row, caller=user, trip=current, organiser=True)
+    row = await service.load_suggestion(db, suggestion_id, current, caller_id=user.id)
+    out = await _out(
+        db,
+        row,
+        caller=user,
+        trip=current,
+        organiser=True,
+        modes=await votes_service.resolve_modes(db, current.id),
+    )
     await _broadcast(
         current,
         "suggestion.status_changed",

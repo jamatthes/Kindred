@@ -22,18 +22,17 @@ This module also exists as a **capability check**: `services/polls.py::suggestio
 probes for it by import, so its presence is what flips `can_seed_region` on. That is why it
 must never import `services.polls` — the probe would import a module that imports the prober.
 
-NOTE (M3 sequencing): two of `SuggestionOut`'s fields are shaped here and filled by sibling
-features. `vote_summary` comes from `suggestion_votes`, created by `voting-comments`;
-`distances` come from `distance_cache`, created by `distances`. Neither table exists yet, so
-this module emits the honest zero — a zero tally and an empty distance list — rather than
-omitting the fields, so the client contract does not change when those features land. Both
-places are marked `NOTE (voting-comments)` / `NOTE (distances)` below.
+NOTE (M3 sequencing): `vote_summary` is now real — `voting-comments` created `suggestion_votes`
+and its aggregate is joined into the one query below, mode-converted per
+`voting-comments/design.md`. `distances` is still the honest empty list until `distances`
+creates `distance_cache`; the call site is marked `NOTE (distances)` and takes the list as a
+parameter, so filling it in changes nothing else.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable
 
 from sqlalchemy import Select, and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +40,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models import (
     GROUPABLE_CHILD_TYPES,
+    THUMB_DOWN,
+    THUMB_UP,
+    THUMBS_DOWN_FROM_SCORE,
+    THUMBS_UP_FROM_SCORE,
     STATUS_REJECTED,
     STATUS_SCHEDULED,
     SUBJECT_SUGGESTION,
@@ -50,6 +53,7 @@ from app.models import (
     Family,
     FamilyMember,
     Suggestion,
+    SuggestionVote,
     Trip,
     User,
     centroid,
@@ -94,21 +98,99 @@ class AuthorInfo:
 class SuggestionRow:
     """One suggestion plus everything a response needs about it, assembled once."""
 
-    __slots__ = ("suggestion", "author", "comment_count", "children")
+    __slots__ = ("suggestion", "author", "comment_count", "votes", "children")
 
     def __init__(
-        self, suggestion: Suggestion, author: AuthorInfo, comment_count: int
+        self,
+        suggestion: Suggestion,
+        author: AuthorInfo,
+        comment_count: int,
+        votes: VoteAggregate | None = None,
     ) -> None:
         self.suggestion = suggestion
         self.author = author
         self.comment_count = comment_count
+        self.votes = votes or VoteAggregate()
         self.children: list[SuggestionRow] = []
+
+
+class VoteAggregate:
+    """One suggestion's votes, reduced to the six numbers a card renders.
+
+    Deliberately *not* the full `TallyOut`: the list needs the summary, and the panel — which
+    also needs attribution and the outstanding list — asks `GET /suggestions/{id}/votes` for it.
+    Fetching every voter for every row of a list that shows none of them would be the N+1 this
+    module exists to avoid, in aggregate form.
+    """
+
+    __slots__ = ("score_count", "score_sum", "score_up", "score_down", "score_mid",
+                 "thumb_up", "thumb_down", "my_score", "my_thumb")
+
+    def __init__(
+        self,
+        *,
+        score_count: int = 0,
+        score_sum: int = 0,
+        score_up: int = 0,
+        score_down: int = 0,
+        score_mid: int = 0,
+        thumb_up: int = 0,
+        thumb_down: int = 0,
+        my_score: int | None = None,
+        my_thumb: str | None = None,
+    ) -> None:
+        self.score_count = score_count
+        self.score_sum = score_sum
+        self.score_up = score_up
+        self.score_down = score_down
+        self.score_mid = score_mid
+        self.thumb_up = thumb_up
+        self.thumb_down = thumb_down
+        self.my_score = my_score
+        self.my_thumb = my_thumb
+
+    def summarise(self, mode: str) -> VoteSummaryOut:
+        """The summary as the active mode reads it.
+
+        The mode-change rules from `voting-comments/design.md` apply here exactly as they do in
+        the full tally, because a list row and a side panel disagreeing about whether somebody
+        voted would be worse than either being wrong alone:
+
+        * *score mode* — stored thumbs contribute **nothing**. No number can honestly be
+          invented from "I liked it", so those voters are simply not in `count`.
+        * *thumbs mode* — stored scores convert by threshold, with a stored 5 counted as
+          `unclear` rather than rounded into a camp, and the whole summary flagged `converted`.
+        """
+        if mode == "thumbs":
+            up = self.thumb_up + self.score_up
+            down = self.thumb_down + self.score_down
+            return VoteSummaryOut(
+                mode="thumbs",
+                count=up + down + self.score_mid,
+                up=up,
+                down=down,
+                unclear=self.score_mid,
+                converted=bool(self.score_count),
+                my_vote=self.my_score,
+                my_thumb=self.my_thumb,
+            )
+        return VoteSummaryOut(
+            mode="score",
+            count=self.score_count,
+            # Null, never 0.0, when nobody has scored — the honesty rule `poll_stats` states.
+            average=(
+                round(self.score_sum / self.score_count, 2) if self.score_count else None
+            ),
+            converted=False,
+            my_vote=self.my_score,
+            my_thumb=self.my_thumb,
+        )
 
 
 # --- loading -----------------------------------------------------------------------------------
 
 
-def _base_query() -> Select:
+def _base_query(caller_id: uuid.UUID | None = None) -> Select:
     """Every suggestion read goes through this, so the joins are decided once.
 
     The author's family is resolved by an outer join rather than a per-row lookup: an author
@@ -117,9 +199,55 @@ def _base_query() -> Select:
 
     **Columns, not entities**, for the author and the family. Selecting a `Family` entity would
     trigger its `members` relationship (`lazy="selectin"`), which is a second query fetching
-    every member of every family that authored anything — for a name and a colour swatch. The
-    five columns below are the whole of what a card renders.
+    every member of every family that authored anything — for a name and a colour swatch.
+
+    **The tally and the comment count arrive as pre-grouped joins**, not as per-row lookups.
+    Each is a one-row-per-suggestion derived table, so joining them multiplies nothing, and the
+    whole list — rows, authors, families, votes, threads, and the caller's own vote — is one
+    query however many suggestions there are.
     """
+    votes = (
+        select(
+            SuggestionVote.suggestion_id.label("sid"),
+            func.count(SuggestionVote.score).label("score_count"),
+            func.coalesce(func.sum(SuggestionVote.score), 0).label("score_sum"),
+            func.count(case((SuggestionVote.score >= THUMBS_UP_FROM_SCORE, 1))).label("score_up"),
+            func.count(case((SuggestionVote.score <= THUMBS_DOWN_FROM_SCORE, 1))).label(
+                "score_down"
+            ),
+            func.count(
+                case(
+                    (
+                        and_(
+                            SuggestionVote.score > THUMBS_DOWN_FROM_SCORE,
+                            SuggestionVote.score < THUMBS_UP_FROM_SCORE,
+                        ),
+                        1,
+                    )
+                )
+            ).label("score_mid"),
+            func.count(case((SuggestionVote.thumb == THUMB_UP, 1))).label("thumb_up"),
+            func.count(case((SuggestionVote.thumb == THUMB_DOWN, 1))).label("thumb_down"),
+        )
+        .group_by(SuggestionVote.suggestion_id)
+        .subquery()
+    )
+    threads = (
+        select(Comment.subject_id.label("sid"), func.count().label("comment_count"))
+        .where(Comment.subject_type == SUBJECT_SUGGESTION, Comment.deleted_at.is_(None))
+        .group_by(Comment.subject_id)
+        .subquery()
+    )
+    mine = (
+        select(
+            SuggestionVote.suggestion_id.label("sid"),
+            SuggestionVote.score.label("my_score"),
+            SuggestionVote.thumb.label("my_thumb"),
+        )
+        .where(SuggestionVote.user_id == caller_id)
+        .subquery()
+    )
+
     return (
         select(
             Suggestion,
@@ -128,6 +256,16 @@ def _base_query() -> Select:
             Family.id,
             Family.color,
             Family.color_custom,
+            func.coalesce(threads.c.comment_count, 0),
+            func.coalesce(votes.c.score_count, 0),
+            func.coalesce(votes.c.score_sum, 0),
+            func.coalesce(votes.c.score_up, 0),
+            func.coalesce(votes.c.score_down, 0),
+            func.coalesce(votes.c.score_mid, 0),
+            func.coalesce(votes.c.thumb_up, 0),
+            func.coalesce(votes.c.thumb_down, 0),
+            mine.c.my_score,
+            mine.c.my_thumb,
         )
         .outerjoin(User, User.id == Suggestion.created_by)
         .outerjoin(FamilyMember, FamilyMember.user_id == Suggestion.created_by)
@@ -135,64 +273,74 @@ def _base_query() -> Select:
             Family,
             and_(Family.id == FamilyMember.family_id, Family.trip_id == Suggestion.trip_id),
         )
+        .outerjoin(threads, threads.c.sid == Suggestion.id)
+        .outerjoin(votes, votes.c.sid == Suggestion.id)
+        .outerjoin(mine, mine.c.sid == Suggestion.id)
     )
 
 
-def _author_from(row) -> AuthorInfo:  # noqa: ANN001 - a Row of the five columns above
-    _, user_id, display_name, family_id, family_color, family_color_custom = row
+def _author_from(row) -> AuthorInfo:  # noqa: ANN001 - a Row of the columns above
     return AuthorInfo(
-        user_id=user_id,
+        user_id=row[1],
         # The same wording `polls` uses for a deleted author, so the two read alike.
-        display_name=display_name or "Someone who has left",
-        family_id=family_id,
-        family_color=family_color,
-        family_color_custom=family_color_custom,
+        display_name=row[2] or "Someone who has left",
+        family_id=row[3],
+        family_color=row[4],
+        family_color_custom=row[5],
     )
 
 
-async def _comment_counts(
-    db: AsyncSession, suggestion_ids: Sequence[uuid.UUID]
-) -> dict[uuid.UUID, int]:
-    """One grouped query for every thread, not one per suggestion."""
-    if not suggestion_ids:
-        return {}
-    rows = await db.execute(
-        select(Comment.subject_id, func.count())
-        .where(
-            Comment.subject_type == SUBJECT_SUGGESTION,
-            Comment.subject_id.in_(suggestion_ids),
-        )
-        .group_by(Comment.subject_id)
+def _row_from(row) -> SuggestionRow:  # noqa: ANN001 - a Row of the columns above
+    return SuggestionRow(
+        row[0],
+        _author_from(row),
+        comment_count=row[6],
+        votes=VoteAggregate(
+            score_count=row[7],
+            score_sum=row[8],
+            score_up=row[9],
+            score_down=row[10],
+            score_mid=row[11],
+            thumb_up=row[12],
+            thumb_down=row[13],
+            my_score=row[14],
+            my_thumb=row[15],
+        ),
     )
-    return {row[0]: row[1] for row in rows.all()}
 
 
 async def load_suggestion(
-    db: AsyncSession, suggestion_id: uuid.UUID, trip: Trip | None
+    db: AsyncSession,
+    suggestion_id: uuid.UUID,
+    trip: Trip | None,
+    *,
+    caller_id: uuid.UUID | None = None,
 ) -> SuggestionRow:
     """One suggestion, or `404`. Trip-scoped: a suggestion on another trip is not found."""
     result = (
-        await db.execute(_base_query().where(Suggestion.id == suggestion_id))
+        await db.execute(_base_query(caller_id).where(Suggestion.id == suggestion_id))
     ).unique().first()
     if result is None:
         raise ApiError(404, "not_found", "That suggestion does not exist.")
-    suggestion = result[0]
-    if trip is not None and suggestion.trip_id != trip.id:
+    if trip is not None and result[0].trip_id != trip.id:
         raise ApiError(404, "not_found", "That suggestion does not exist.")
-    counts = await _comment_counts(db, [suggestion.id])
-    return SuggestionRow(suggestion, _author_from(result), counts.get(suggestion.id, 0))
+    return _row_from(result)
 
 
 async def list_suggestions(
-    db: AsyncSession, trip: Trip, params: SuggestionListParams
+    db: AsyncSession,
+    trip: Trip,
+    params: SuggestionListParams,
+    *,
+    caller_id: uuid.UUID | None = None,
 ) -> list[SuggestionRow]:
     """The single source for both the map and the list view.
 
-    Two queries total, whatever the row count. Filters and sort are applied before grouping,
+    **One query**, whatever the row count. Filters and sort are applied before grouping,
     then grouping nests what survives — so filtering to "meals only" shows the meals as top
     level rather than hiding them inside accommodations that the filter removed.
     """
-    query = _base_query().where(Suggestion.trip_id == trip.id)
+    query = _base_query(caller_id).where(Suggestion.trip_id == trip.id)
 
     if params.type:
         query = query.where(Suggestion.type.in_(params.type))
@@ -207,12 +355,7 @@ async def list_suggestions(
 
     query = _apply_sort(query, params.sort)
 
-    results = (await db.execute(query)).unique().all()
-    counts = await _comment_counts(db, [row[0].id for row in results])
-    rows = [
-        SuggestionRow(row[0], _author_from(row), counts.get(row[0].id, 0))
-        for row in results
-    ]
+    rows = [_row_from(row) for row in (await db.execute(query)).unique().all()]
 
     return group_rows(rows) if params.group else rows
 
@@ -348,6 +491,8 @@ def serialise(
     can_edit: bool = False,
     can_change_status: bool = False,
     children: list[SuggestionOut] | None = None,
+    mode: str = "score",
+    distances: list | None = None,
 ) -> SuggestionOut:
     """One suggestion as the wire sees it.
 
@@ -381,11 +526,10 @@ def serialise(
         place_id=suggestion.place_id,
         place_snapshot=PlaceSnapshot(**snapshot) if isinstance(snapshot, dict) else None,
         external_url=suggestion.external_url,
-        # NOTE (voting-comments): the honest zero until `suggestion_votes` exists.
-        vote_summary=VoteSummaryOut(),
+        vote_summary=row.votes.summarise(mode),
         comment_count=row.comment_count,
         # NOTE (distances): empty until `distance_cache` exists.
-        distances=[],
+        distances=distances or [],
         children=children or [],
         can_edit=can_edit,
         can_delete=can_edit and suggestion.status != STATUS_SCHEDULED,

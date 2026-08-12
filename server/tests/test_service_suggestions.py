@@ -270,13 +270,17 @@ async def test_filtering_by_family_uses_the_authors_family(
 # --- the query budget ----------------------------------------------------------------------------
 
 
-async def test_the_list_costs_two_queries_however_many_rows_there_are(
+async def test_the_list_costs_one_query_however_many_rows_there_are(
     db: AsyncSession, trip: Trip, author: tuple[User, Family], query_counter: list[str]
 ) -> None:
-    """One query for the rows with their author and family joined, one for the comment counts.
+    """Rows, authors, families, vote tallies, comment counts and the caller's own vote: **one**
+    query, whatever the row count.
 
-    Asserted rather than assumed: "it got slower" is not something a test notices otherwise,
-    and the obvious way to add a field to this response is a per-row lookup.
+    It was two until `voting-comments` needed the tally as well; folding the comment count into
+    the same statement as a pre-grouped join, rather than adding a third query beside it, is
+    what let a second aggregate arrive for free. Asserted rather than assumed: "it got slower"
+    is not something a test notices otherwise, and the obvious way to add a field to this
+    response is a per-row lookup.
     """
     user, _ = author
     for i in range(12):
@@ -284,11 +288,11 @@ async def test_the_list_costs_two_queries_however_many_rows_there_are(
 
     trip.id  # noqa: B018 - the commits above expired it; refresh it before counting
     query_counter.clear()
-    rows = await service.list_suggestions(db, trip, SuggestionListParams())
+    rows = await service.list_suggestions(db, trip, SuggestionListParams(), caller_id=user.id)
 
     assert len(rows) == 12
     selects = [s for s in query_counter if s.lstrip().upper().startswith("SELECT")]
-    assert len(selects) == 2, "\n---\n".join(s[:200] for s in selects)
+    assert len(selects) == 1, "\n---\n".join(s[:200] for s in selects)
 
 
 async def test_serialising_the_list_adds_no_queries_of_its_own(

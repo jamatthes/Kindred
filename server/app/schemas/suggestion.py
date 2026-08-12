@@ -180,20 +180,31 @@ class SuggestionAuthorOut(BaseModel):
 
 
 class VoteSummaryOut(BaseModel):
-    """The tally as the card and the row render it.
+    """The tally as the list row and the popover card render it.
 
-    NOTE: `suggestion_votes` belongs to `voting-comments` (M3), which creates the table and
-    fills this in. Until then every suggestion carries the zero summary with the trip's
-    configured mode — an honest "nobody has voted" rather than an absent field the client would
-    have to branch on, and the shape `voting-comments` populates without changing the contract.
+    Deliberately the *aggregate* only. The side panel — which also shows attribution and the
+    outstanding list — asks `GET /suggestions/{id}/votes` for the full `TallyOut`; fetching
+    every voter for every row of a list that displays none of them would be the same N+1 in
+    aggregate form. The two are computed from the same rules (`services/votes.py`), so a row
+    and a panel can never disagree about whether somebody voted.
     """
 
+    #: The suggestion's category mode, derived from `trip_category_settings` — never stored.
     mode: Literal["score", "thumbs"] = "score"
+    #: How many votes are usable in the **active** mode. Not how many rows exist: after a switch
+    #: to score voting, a stored thumb counts for nothing here, because no honest number can be
+    #: made from it.
     count: int = 0
     #: Null when nobody has voted. **Never 0.0** — the same honesty rule as `poll_stats`.
     average: float | None = None
     up: int = 0
     down: int = 0
+    #: A stored 5 read in thumbs mode: neither camp, and rounding it into one would invent an
+    #: opinion the voter did not express.
+    unclear: int = 0
+    #: True when any part of this summary was derived from votes cast in the other mode. The UI
+    #: must label it, so a converted score is never passed off as a genuine thumbs vote.
+    converted: bool = False
     my_vote: int | None = None
     my_thumb: Literal["up", "down"] | None = None
 
@@ -284,6 +295,14 @@ class SuggestionStatusUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: SettableStatus
+    #: Optimistic concurrency, for the case `voting-comments/design.md` names: "two admins act
+    #: on status simultaneously — the server validates against the *current* status; the loser
+    #: gets `409` with the current status, and the client re-renders from
+    #: `suggestion.status_changed`". The admin controls send the status they were rendered
+    #: against; when it no longer matches, the second organiser is told what happened instead of
+    #: silently overwriting a decision they never saw. Optional, so a caller that does not care
+    #: about the race (a script, a retry) simply omits it.
+    expected_status: SuggestionStatus | None = None
 
 
 class SuggestionListParams(BaseModel):

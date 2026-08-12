@@ -905,3 +905,53 @@ async def test_no_server_route_returns_google_place_details() -> None:
     for name, schema in spec["components"]["schemas"].items():
         if "Suggestion" in name or "Place" in name:
             assert not (set(schema.get("properties", {})) & forbidden), name
+
+
+# --- two organisers racing on status ------------------------------------------------------------
+
+
+async def test_the_second_organiser_to_act_is_told_rather_than_overwriting(
+    client: httpx.AsyncClient, db: AsyncSession, household: dict
+) -> None:
+    """`voting-comments/design.md`: "Two admins act on status simultaneously — the server
+    validates against the current status; the loser gets 409 with the current status."
+
+    The admin controls send the status they were rendered against, so a second organiser whose
+    panel still says "proposed" cannot silently reverse a decision they never saw.
+    """
+    await login_as(client, db, household["child"])
+    created = await _create(client)
+
+    await login_as(client, db, household["owner"])
+    first = await client.patch(
+        f"{SUGGESTIONS}/{created['id']}/status",
+        json={"status": "approved", "expected_status": "proposed"},
+    )
+    second = await client.patch(
+        f"{SUGGESTIONS}/{created['id']}/status",
+        json={"status": "rejected", "expected_status": "proposed"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert code(second) == "status_changed"
+    assert "approved" in second.json()["detail"]["message"]
+    # The winner's decision stands.
+    assert (await client.get(f"{SUGGESTIONS}/{created['id']}")).json()["status"] == "approved"
+
+
+async def test_omitting_the_expected_status_opts_out_of_the_race_check(
+    client: httpx.AsyncClient, db: AsyncSession, household: dict
+) -> None:
+    """A script or a retry that does not care about the race simply leaves the field out."""
+    await login_as(client, db, household["child"])
+    created = await _create(client)
+
+    await login_as(client, db, household["owner"])
+    await client.patch(f"{SUGGESTIONS}/{created['id']}/status", json={"status": "approved"})
+    response = await client.patch(
+        f"{SUGGESTIONS}/{created['id']}/status", json={"status": "rejected"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"
