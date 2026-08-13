@@ -14,6 +14,7 @@ import type { ReactNode } from 'react'
 import { api } from './apiClient'
 import { useSession } from './session'
 import { useNavigate } from './router'
+import { SIDE_PANEL_SLOT_ID, useSidePanelFilled } from './sidePanelSlot'
 import { useSocketStatus } from './socket'
 import { IdentityBadge } from '../design/IdentityBadge'
 import { familyColor } from '../design/familyColor'
@@ -210,6 +211,7 @@ export type ShellProps = {
 }
 
 export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
+  const sidePanelFilled = useSidePanelFilled()
   const { user } = useSession()
   const navigate = useNavigate()
   const socketStatus = useSocketStatus(Boolean(user) && user?.must_change_password === false)
@@ -318,11 +320,17 @@ export function Shell({ children, sidePanel, activeNav = 'home' }: ShellProps) {
               layout rewrite. Like the timeline slot, it says what it is for rather than
               rendering a blank rectangle. */}
           <aside className="side-panel" aria-label="Details">
-            {sidePanel ?? (
-              <p className="side-panel__empty">
-                Select something on the map or in a list and its details appear here.
-              </p>
-            )}
+            {/* Screens fill this either by passing `sidePanel`, or — when the content depends
+                on state only the screen has — by portaling into the slot below and flagging
+                it through `sidePanelSlot`. The placeholder must yield to both, or a screen
+                that portals gets its content *and* an invitation to select something. */}
+            {sidePanel ??
+              (sidePanelFilled ? null : (
+                <p className="side-panel__empty">
+                  Select something on the map or in a list and its details appear here.
+                </p>
+              ))}
+            <div id={SIDE_PANEL_SLOT_ID} className="side-panel__slot" />
           </aside>
         </div>
 

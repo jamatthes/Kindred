@@ -27,10 +27,19 @@ export type MapCanvasProps = {
   onMarkerHover?: MapEventHandler<'markerHover'>
   onPolygonClick?: MapEventHandler<'polygonClick'>
   onMapClick?: MapEventHandler<'mapClick'>
+  /** Right-click / long-press on the map surface. */
+  onMapContextMenu?: MapEventHandler<'mapContextMenu'>
+  /** Pan/zoom. Anything the caller draws over the map must re-project on this. */
+  onViewChange?: MapEventHandler<'viewChange'>
   /** For tests/styleguide to reach the live provider instance without a ref-forwarding
    *  dance — the provider itself is the imperative surface, so exposing it directly is
    *  more honest than inventing a second one. */
   onProviderReady?: (provider: MapProvider) => void
+  /** Base-map colour scheme, normally the app's resolved theme. Read at mount only: the SDK
+   *  fixes it at construction (see `MapMountOptions`), so a caller that wants a live theme
+   *  switch must remount this component — `key={resolvedTheme}` is the intended idiom, and
+   *  it replays every marker and polygon through the effects below for free. */
+  colorScheme?: 'light' | 'dark'
   className?: string
 }
 
@@ -44,7 +53,10 @@ export function MapCanvas({
   onMarkerHover,
   onPolygonClick,
   onMapClick,
+  onMapContextMenu,
+  onViewChange,
   onProviderReady,
+  colorScheme,
   className,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -58,8 +70,8 @@ export function MapCanvas({
   // effect body itself can stay deps-free (`[]`) and genuinely run once per mount — a
   // caller passing an inline `() => new FakeMapProvider()` (a new function identity every
   // render, which is the natural way to write it) must not cause a remount.
-  const latestPropsRef = useRef({ center, zoom, onMarkerClick, onMarkerHover, onPolygonClick, onMapClick, onProviderReady })
-  latestPropsRef.current = { center, zoom, onMarkerClick, onMarkerHover, onPolygonClick, onMapClick, onProviderReady }
+  const latestPropsRef = useRef({ center, zoom, colorScheme, onMarkerClick, onMarkerHover, onPolygonClick, onMapClick, onMapContextMenu, onViewChange, onProviderReady })
+  latestPropsRef.current = { center, zoom, colorScheme, onMarkerClick, onMarkerHover, onPolygonClick, onMapClick, onMapContextMenu, onViewChange, onProviderReady }
   const createProviderRef = useRef(createProvider)
   createProviderRef.current = createProvider
 
@@ -81,11 +93,20 @@ export function MapCanvas({
   // point, on any provider, ever. The wrapper indirection is what makes "mount once" and
   // "always call the latest handler" both true at the same time.
   useEffect(() => {
-    const { center: initialCenter, zoom: initialZoom, onProviderReady } = latestPropsRef.current
+    const {
+      center: initialCenter,
+      zoom: initialZoom,
+      colorScheme: initialColorScheme,
+      onProviderReady,
+    } = latestPropsRef.current
     const provider = createProviderRef.current()
     providerRef.current = provider
     if (containerRef.current) {
-      provider.mount(containerRef.current, { center: initialCenter, zoom: initialZoom })
+      provider.mount(containerRef.current, {
+        center: initialCenter,
+        zoom: initialZoom,
+        colorScheme: initialColorScheme,
+      })
     }
     onProviderReady?.(provider)
 
@@ -93,12 +114,18 @@ export function MapCanvas({
     const offHover = provider.on('markerHover', (payload) => latestPropsRef.current.onMarkerHover?.(payload))
     const offPolyClick = provider.on('polygonClick', (payload) => latestPropsRef.current.onPolygonClick?.(payload))
     const offMapClick = provider.on('mapClick', (payload) => latestPropsRef.current.onMapClick?.(payload))
+    const offContextMenu = provider.on('mapContextMenu', (payload) =>
+      latestPropsRef.current.onMapContextMenu?.(payload),
+    )
+    const offViewChange = provider.on('viewChange', (payload) => latestPropsRef.current.onViewChange?.(payload))
 
     return () => {
       offClick?.()
       offHover?.()
       offPolyClick?.()
       offMapClick?.()
+      offContextMenu?.()
+      offViewChange?.()
       provider.unmount()
       providerRef.current = null
       markerIdsRef.current = new Set()

@@ -20,6 +20,7 @@ import type {
   LatLng,
   MapEventHandler,
   MapEventName,
+  MapMountOptions,
   MapViewState,
   MarkerSpec,
   PolygonSpec,
@@ -27,7 +28,7 @@ import type {
 
 export interface MapProvider {
   /** Attaches the provider to a live container element and renders the initial view. */
-  mount(container: HTMLElement, initial: MapViewState): void
+  mount(container: HTMLElement, initial: MapMountOptions): void
   /** Tears down everything `mount` created. Safe to call at most once per `mount`. */
   unmount(): void
 
@@ -38,6 +39,17 @@ export interface MapProvider {
   /** Frames `bounds` in the viewport, with `paddingPx` of margin on every side. */
   fitBounds(bounds: Bounds, paddingPx?: number): void
   getViewState(): MapViewState
+
+  /**
+   * Where `position` currently sits, in pixels relative to the map container's top-left.
+   * `null` when the provider cannot answer yet (not mounted, or the SDK's projection is not
+   * ready) — callers must treat that as "don't draw the anchored thing yet", never as 0,0.
+   *
+   * This is what lets a React-rendered card sit *over* the place it describes instead of
+   * parked in a corner. Pair it with the `viewChange` event: the answer is only true for the
+   * current view.
+   */
+  projectToContainerPoint(position: LatLng): { x: number; y: number } | null
 
   /** Adds a marker. Throws if `spec.id` is already present — callers diff, they don't
    *  guess, so a duplicate add is a bug in the caller. */

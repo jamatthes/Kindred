@@ -16,6 +16,7 @@ const CATEGORY_LABEL: Record<SuggestionCategory, string> = {
   accommodation: 'Accommodation',
   activity: 'Activity',
   meal: 'Meal',
+  other: 'Other',
   region: 'Region',
 }
 

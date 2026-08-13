@@ -1,0 +1,68 @@
+/* Map toolbar search. Sized to be usable without being a search *page* over the map. */
+
+.map-search {
+  position: relative;
+  width: min(20rem, 60vw);
+}
+
+.map-search__input {
+  width: 100%;
+  min-height: var(--hit-target);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--chip-radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+}
+
+.map-search__input:disabled {
+  color: var(--color-text-muted);
+}
+
+.map-search__note {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--chip-radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+}
+
+.map-search__results {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.map-search__results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--chip-radius);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.map-search__results button:hover,
+.map-search__results button:focus-visible {
+  background: var(--color-surface);
+}

@@ -24,6 +24,7 @@ import type {
   MapEventHandler,
   MapEventMap,
   MapEventName,
+  MapMountOptions,
   MapViewState,
   MarkerSpec,
   PolygonSpec,
@@ -46,7 +47,11 @@ export class FakeMapProvider implements MapProvider {
   private polygons = new Map<string, PolygonEntry>()
   private listeners = new Map<MapEventName, Set<(payload: unknown) => void>>()
 
-  mount(container: HTMLElement, initial: MapViewState): void {
+  /** `colorScheme` is accepted and ignored: the fake draws no base map, so it has no tiles
+   *  to recolour — its surface is styled by the same tokens as the rest of the app and
+   *  therefore already follows the theme. Accepting the option keeps the two providers
+   *  interface-identical. */
+  mount(container: HTMLElement, initial: MapMountOptions): void {
     this.container = container
     container.innerHTML = ''
     container.classList.add('k-fake-map-surface')
@@ -68,10 +73,12 @@ export class FakeMapProvider implements MapProvider {
     container.appendChild(this.markersLayer)
 
     container.addEventListener('click', this.handleSurfaceClick)
+    container.addEventListener('contextmenu', this.handleSurfaceContextMenu)
   }
 
   unmount(): void {
     this.container?.removeEventListener('click', this.handleSurfaceClick)
+    this.container?.removeEventListener('contextmenu', this.handleSurfaceContextMenu)
     if (this.container) this.container.innerHTML = ''
     this.container = null
     this.svg = null
@@ -89,6 +96,25 @@ export class FakeMapProvider implements MapProvider {
       const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
       this.emit('mapClick', { position: this.toLatLng(point) })
     }
+  }
+
+  /** Right-click anywhere on the surface — including over a marker, unlike `mapClick`: the
+   *  context menu is about the *point*, and a user aiming at open map next to a pin should
+   *  not have their intent swallowed because they clipped the pin's box. */
+  private handleSurfaceContextMenu = (event: MouseEvent) => {
+    if (!this.container) return
+    event.preventDefault()
+    const rect = this.container.getBoundingClientRect()
+    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    this.emit('mapContextMenu', { position: this.toLatLng(point) })
+  }
+
+  /** Test/styleguide hook: the fake has no base map, so it has no Google POIs to click. This
+   *  is the honest stand-in for the `IconMouseEvent` path `GoogleMapProvider` gets for free —
+   *  it lets a test drive "user clicked a place Google already knows about" without pretending
+   *  the fake renders one. */
+  simulatePoiClick(placeId: string, position: LatLng): void {
+    this.emit('mapClick', { position, placeId })
   }
 
   private toLatLng(point: { x: number; y: number }): LatLng {
@@ -125,6 +151,13 @@ export class FakeMapProvider implements MapProvider {
 
   getViewState(): MapViewState {
     return { center: this.viewport.center, zoom: this.viewport.zoom }
+  }
+
+  /** The same linear projection every marker in this fake is positioned with, so an anchored
+   *  card in a test lands exactly where the pin it points at does. */
+  projectToContainerPoint(position: LatLng): { x: number; y: number } | null {
+    if (!this.container) return null
+    return project(position, this.viewport)
   }
 
   addMarker(spec: MarkerSpec): void {
@@ -203,6 +236,9 @@ export class FakeMapProvider implements MapProvider {
   }
 
   private reprojectAll(): void {
+    // Every view change in the fake goes through here, so this is the one place that has to
+    // announce it — anything anchored over the map re-projects off this event.
+    this.emit('viewChange', { center: this.viewport.center, zoom: this.viewport.zoom })
     for (const { spec, el } of this.markers.values()) {
       const point = project(spec.position, this.viewport)
       el.style.left = `${point.x}px`

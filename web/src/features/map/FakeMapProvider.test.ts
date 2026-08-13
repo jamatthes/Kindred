@@ -201,6 +201,46 @@ describe('FakeMapProvider — events', () => {
     expect(onPolygonClick).toHaveBeenCalledWith({ id: 'r1' })
   })
 
+  it('emits mapContextMenu on right-click, including over a marker', () => {
+    // Deliberately not gated the way `mapClick` is: the context menu is about the point, and
+    // clipping a pin's box while aiming at the map beside it should not swallow the gesture.
+    const provider = new FakeMapProvider()
+    const container = makeContainer()
+    provider.mount(container, { center: { lat: 50.4, lng: -4.7 }, zoom: 3 })
+    provider.addMarker(suggestion)
+    const onContextMenu = vi.fn()
+    provider.on('mapContextMenu', onContextMenu)
+
+    container.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 400, clientY: 300 }))
+    expect(onContextMenu).toHaveBeenCalledTimes(1)
+    expect(onContextMenu.mock.calls[0][0].position).toEqual({ lat: 50.4, lng: -4.7 })
+
+    provider.getMarkerElement('s1')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    expect(onContextMenu).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops emitting mapContextMenu after unmount', () => {
+    const provider = new FakeMapProvider()
+    const container = makeContainer()
+    provider.mount(container, { center: { lat: 50.4, lng: -4.7 }, zoom: 3 })
+    const onContextMenu = vi.fn()
+    provider.on('mapContextMenu', onContextMenu)
+    provider.unmount()
+    container.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    expect(onContextMenu).not.toHaveBeenCalled()
+  })
+
+  it('simulatePoiClick carries a placeId on mapClick', () => {
+    // The fake draws no base map, so this hook stands in for Google's `IconMouseEvent` —
+    // what matters for parity is that consumers can tell a POI click from a bare one.
+    const provider = new FakeMapProvider()
+    provider.mount(makeContainer(), { center: { lat: 50.4, lng: -4.7 }, zoom: 3 })
+    const onMapClick = vi.fn()
+    provider.on('mapClick', onMapClick)
+    provider.simulatePoiClick('place-123', { lat: 50.5, lng: -4.6 })
+    expect(onMapClick).toHaveBeenCalledWith({ position: { lat: 50.5, lng: -4.6 }, placeId: 'place-123' })
+  })
+
   it('an unsubscribe function stops further delivery', () => {
     const provider = new FakeMapProvider()
     const container = makeContainer()

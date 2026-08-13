@@ -12,7 +12,10 @@
  * back to "drop a pin instead" per `design.md`'s edge-case table rather than throwing.
  */
 
-export type PlacePrediction = { placeId: string; description: string }
+/** `types` rides along on the prediction Google already returns — no second request, no extra
+ *  billing — which is what makes the create form's type guess free (`design.md` > "Type
+ *  inference from Places"). Empty when Google sends none. */
+export type PlacePrediction = { placeId: string; description: string; types: string[] }
 
 export type PlaceDetails = {
   placeId: string
@@ -24,6 +27,13 @@ export type PlaceDetails = {
   photoUrls: string[]
   rating: number | null
   openingHoursText: string[] | null
+  /** Google's place categories, used only to guess our own `type` — never persisted. */
+  types: string[]
+  /** The place's own website, when Google has one. Live-fetched on card open like everything
+   *  else here and **never persisted** — which is precisely why the create form stops asking
+   *  the user for a link once a `place_id` is set: the answer is already available, for free,
+   *  every time the card opens. */
+  website: string | null
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -37,7 +47,7 @@ type GoogleGlobal = typeof window & {
           getPlacePredictions(
             request: { input: string },
             callback: (
-              results: { place_id: string; description: string }[] | null,
+              results: { place_id: string; description: string; types?: string[] }[] | null,
               status: string,
             ) => void,
           ): void
@@ -47,6 +57,10 @@ type GoogleGlobal = typeof window & {
             request: { placeId: string; fields: string[] },
             callback: (result: GooglePlaceResult | null, status: string) => void,
           ): void
+          findPlaceFromQuery(
+            request: { query: string; fields: string[] },
+            callback: (results: GooglePlaceResult[] | null, status: string) => void,
+          ): void
         }
         PlacesServiceStatus: { OK: string }
       }
@@ -55,12 +69,15 @@ type GoogleGlobal = typeof window & {
 }
 
 type GooglePlaceResult = {
+  place_id?: string
   name?: string
   formatted_address?: string
   geometry?: { location?: { lat(): number; lng(): number } }
   photos?: { getUrl(opts: { maxWidth: number }): string }[]
   rating?: number
   opening_hours?: { weekday_text?: string[] }
+  types?: string[]
+  website?: string
 }
 
 function googleGlobal(): GoogleGlobal {
@@ -96,7 +113,9 @@ export async function autocompletePlaces(input: string): Promise<PlacePrediction
         resolve([])
         return
       }
-      resolve(results.map((r) => ({ placeId: r.place_id, description: r.description })))
+      resolve(
+        results.map((r) => ({ placeId: r.place_id, description: r.description, types: r.types ?? [] })),
+      )
     })
   })
 }
@@ -116,7 +135,21 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     service.getDetails(
       {
         placeId,
-        fields: ['name', 'formatted_address', 'geometry', 'photos', 'rating', 'opening_hours'],
+        // `types` is a Basic-tier field like `name`/`geometry`, so asking for it costs
+        // nothing beyond the Details call this flow already makes.
+        // `website` is a Contact-tier field, but `opening_hours` on the line above already
+        // puts this call in that tier — so asking for it costs nothing extra, and it is what
+        // lets the create form stop asking the user for a listing link.
+        fields: [
+          'name',
+          'formatted_address',
+          'geometry',
+          'photos',
+          'rating',
+          'opening_hours',
+          'types',
+          'website',
+        ],
       },
       (result, status) => {
         if (status !== places.PlacesServiceStatus.OK || !result) {
@@ -137,10 +170,64 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     photoUrls: (result.photos ?? []).slice(0, 8).map((p) => p.getUrl({ maxWidth: 640 })),
     rating: result.rating ?? null,
     openingHoursText: result.opening_hours?.weekday_text ?? null,
+    types: result.types ?? [],
+    website: result.website ?? null,
   }
 
   detailsCache.set(placeId, { expiresAt: Date.now() + CACHE_TTL_MS, details })
   return details
+}
+
+/**
+ * Finds the place a piece of free text refers to — the name off a pasted link, typically.
+ *
+ * This is what makes "paste a shop's website and get its location" work: a URL is not
+ * something Google can look up, but the page's own title ("The Games Shop Aldershot") is
+ * exactly what its Places index is built on. `findPlaceFromQuery` is the single-answer
+ * search — it either recognises the text or it does not, which suits a best-effort fill:
+ * `null` simply means the user still places the pin themselves.
+ *
+ * Basic-tier fields only (`place_id`, `name`, `geometry`, `formatted_address`, `types`), so
+ * this is the cheapest Places call available; it runs once per pasted link, never on render.
+ */
+export async function findPlaceFromText(query: string): Promise<PlaceLocation | null> {
+  const trimmed = query.trim()
+  if (!trimmed) return null
+  const places = googleGlobal().google?.maps?.places
+  if (!places) return null
+
+  const service = getPlacesService()
+  return new Promise((resolve) => {
+    service.findPlaceFromQuery(
+      { query: trimmed, fields: ['place_id', 'name', 'formatted_address', 'geometry', 'types'] },
+      (results, status) => {
+        const first = results?.[0]
+        if (status !== places.PlacesServiceStatus.OK || !first?.geometry?.location) {
+          resolve(null)
+          return
+        }
+        resolve({
+          placeId: first.place_id ?? '',
+          name: first.name ?? trimmed,
+          address: first.formatted_address ?? '',
+          lat: first.geometry.location.lat(),
+          lng: first.geometry.location.lng(),
+          types: first.types ?? [],
+        })
+      },
+    )
+  })
+}
+
+/** What a text lookup can answer: where the place is and roughly what it is. A subset of
+ *  `PlaceDetails` — no photos, hours or rating, because none were asked for. */
+export type PlaceLocation = {
+  placeId: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  types: string[]
 }
 
 /** Test/dev-only: empties the TTL cache so a test's mocked SDK is exercised deterministically. */

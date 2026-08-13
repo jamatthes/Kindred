@@ -431,3 +431,75 @@ quota caps, a billing alert, and two separately restricted keys.
   server route returning details, and four tests that fail if any of those changes
   (`tests/test_schemas_suggestion.py`, `tests/test_router_suggestions.py`). The browser fetches
   photos, hours and ratings itself on card-open and never POSTs them back.
+
+---
+
+## Phase 13 — Map-first redesign (2026-08-12)
+
+User ruling: the always-on side panel goes. The map fills the content area; search, filters,
+list, detail and create are summoned over it. See `design.md` > "Layout (revised 2026-08-12 —
+map-first)", "Map-first interaction model", "Type inference from Places", and requirements
+S3b / revised S4.
+
+- [x] **Provider layer.** `MapEventMap.mapClick` gains an optional `placeId` (Google's
+      `IconMouseEvent`); the provider calls `e.stop()` so Google's own POI info window never
+      opens — it is SDK chrome we cannot put an "Add as suggestion" button inside, so we
+      replace it rather than decorate it. New `mapContextMenu` event carries `{ position }`
+      from `rightclick`. `FakeMapProvider` mirrors both so tests and the styleguide keep
+      parity.
+- [x] **Type inference.** `placesClient` surfaces `types[]` (predictions already carry it —
+      no new billed request) and `inferSuggestionType()` maps it to our four types,
+      defaulting to `activity`. The create form preselects the guess; the user can override.
+- [x] **Screen.** Full-bleed map; floating toolbar (search + Filters dropdown + List toggle);
+      right-click context menu; POI card; create card anchored at its point; detail as a card
+      / bottom sheet; list as an on-demand drawer.
+- [x] **Tests.** Provider parity tests for the two new events (`FakeMapProvider.test.ts`),
+      inference table tests (`placeType.test.ts`), the dropdown (`FilterMenu.test.tsx`), the
+      three new surfaces (`MapContextMenu`, `MapSearchField`, `PlacePreviewCard` tests), the
+      screen's own wiring (`MapSuggestionsScreen.test.tsx` — drawer, POI card, context menu),
+      and the live Playwright smokes retargeted off the old panel.
+
+### Deviations
+
+- **The detail card's back button changed wording, and needed to.** It said "← Back to list"
+  when the list was always on screen behind it. Now it dismisses to the bare map unless the
+  drawer is open, so `SuggestionDetailPanel` takes a `backLabel` and the screen passes
+  "← Back to the map" for the from-a-pin case. A button naming a destination the user never
+  opened is a small lie, and three Playwright smokes were clicking it by that name.
+- **Three live smokes, not one.** `02-voting-comments` and `04-theme-and-motion` also reach a
+  suggestion through its list row, which is now behind the List toggle. They share
+  `openSuggestionsList()` in `e2e/tests-live/shared.ts` rather than repeating the dance.
+- **The mobile create overlay needed the seed too.** The toolbar's search field and the POI
+  card are on the map at every width, but only the desktop copy of `CreateSuggestionForm` was
+  given `seedPlace` — a mobile user who picked a place watched the form open empty. Fixed
+  here rather than left as a follow-up: it is the one bug the redesign introduced that the
+  old always-on panel could not have had.
+- **A card anchored to its pin is still not possible** and is still a follow-up, for the
+  reason `design.md` gives: `MapProvider` has no lat/lng → screen-point query. The context
+  menu escapes this only because a DOM event carries its own pixels.
+- **Drop-pin/draw-region on mobile keep their known limitation** (`BottomSheet`'s backdrop
+  intercepts the map clicks those two modes need). Unchanged by this phase, noted in
+  `MapSuggestionsScreen.tsx` at the overlay itself.
+
+`Verify:` `npm test` in `web/` green (512 passing), `npm run check:tokens` and `tsc --noEmit`
+clean. The live Playwright suite needs the deployed stack and was not run from this worktree.
+
+
+## Phase 14 — `other` type, and the map-first entry points settled (2026-08-12)
+
+1. **`suggestions.type` gains `other`.** `SUGGESTION_TYPES` (models + `0001_schema.py`'s CHECK
+   constraint), `SuggestionType` (server Literal + web union), `VOTING_CATEGORIES` (a category
+   needs a voting-mode row like every other), `GROUPABLE_CHILD_TYPES`, every `TYPE_LABEL` map,
+   the filter chips, the create dropdown, and a deliberately non-specific pin icon.
+   `inferSuggestionType`'s fallback moves from `activity` to `other`.
+   **Live DB note:** the pre-launch policy edits `0001` in place, so an already-migrated
+   database does NOT pick this up — `ck_suggestions_type` must be dropped and recreated on the
+   live stack (the constraint is the only thing that changes; no data migrates). Existing trips
+   self-heal their category rows: `_ensure_category_rows` re-seeds when it finds fewer rows
+   than `VOTING_CATEGORIES` has entries.
+2. **Toolbar button is "Paste a link"**, opening the form in `url` mode. Search moved to the
+   toolbar field, drop-pin/draw-region to the right-click menu — a URL is the only entry point
+   the map itself cannot offer.
+3. **A pasted link resolves a location.** Preview coordinates win; otherwise the preview's
+   title (or the domain's distinctive label) goes through Places `findPlaceFromQuery`.
+   Best-effort and silent on failure.

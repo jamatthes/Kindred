@@ -45,7 +45,11 @@
 
 .sugg-detail__head h2 {
   margin: 0;
-  font-size: var(--text-lg);
+  /* `--text-lg` (20px) is a page-heading size; this is a card inside a panel, and at that
+     size the title dwarfed the address, the chips and the vote control under it. `--text-body`
+     keeps it the largest thing in the card without making it the largest thing on screen. */
+  font-size: var(--text-body);
+  line-height: var(--leading-tight);
 }
 
 .sugg-detail__meta {
@@ -54,10 +58,12 @@
   font-size: var(--text-sm);
 }
 
+/* Body copy in a dense card steps down one level: the panel is a reference surface read at
+   a glance, not an article. */
 .sugg-detail__notes,
 .sugg-detail__address {
   color: var(--color-text);
-  font-size: var(--text-body);
+  font-size: var(--text-sm);
 }
 
 .sugg-detail__address {

@@ -95,6 +95,11 @@ services:
     restart: unless-stopped
     environment:
       KINDRED_SITE_ADDRESS: ${KINDRED_SITE_ADDRESS:-:8080}
+      # The one hostname that is allowed to serve the app; any other name Caddy answers on
+      # is redirected here (see web/Caddyfile). Blank — the default — means "one address,
+      # nothing to redirect". Read at container start, so changing it needs `up -d`, not a
+      # rebuild.
+      KINDRED_CANONICAL_HOST: ${KINDRED_CANONICAL_HOST:-}
     depends_on:
       - api
     ports:

@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     # Server key: Geocoding, Distance Matrix, Directions, restricted by IP.
     google_maps_server_key: str = ""
 
+    # Identifies this deployment to OpenStreetMap's Nominatim when a named-locality region
+    # boundary is fetched. Empty means "build one from `public_base_url`", which is what any
+    # normal deployment wants; set this only to identify differently (a shared instance, or a
+    # contact address). It must name something real — Nominatim answers a placeholder contact
+    # with 403, see `services/boundaries.py`.
+    nominatim_user_agent: str = ""
+
     # --- Map suggestions ---------------------------------------------------
     # Named settings rather than literals in a query (`map-suggestions/tasks.md` Phase 4): both
     # are product judgements about geography, and burying either in a `WHERE` clause is how a

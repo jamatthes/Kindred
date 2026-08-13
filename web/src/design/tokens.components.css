@@ -18,6 +18,12 @@
   --chip-radius: var(--radius-full);
   --field-radius: var(--radius-2);
   --field-height: 44px;
+  /* A denser field, for forms that float over the map: the create card is a stack of six
+     controls sitting on top of the thing the user is looking at, so every row it saves is
+     map they can still see. Only ever applied with a fine pointer — on touch the 44px
+     `--field-height` stays, because a smaller target there is an accessibility regression,
+     not a density win. */
+  --field-height-compact: 34px;
   --table-row-height: 40px;
   --pin-size: 32px;
   --timeline-track-h: 56px;
@@ -90,6 +96,10 @@
      the neutral case. */
   --region-fill-opacity: 0.22;
   --popover-width: 300px;
+  /* The tail on a map-anchored card — the little point that makes it read as belonging to
+     the place underneath rather than floating near it. Sized so half of it (the part that
+     shows past the card's edge) clears the card's own gap above the point. */
+  --popover-tail-size: 12px;
   --popover-radius: var(--card-radius);
   /* Smaller than --button-height: the popover is a compact card (level 2 of progressive
      disclosure) and its actions must not dominate it. */

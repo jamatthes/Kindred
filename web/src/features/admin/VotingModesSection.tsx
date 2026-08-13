@@ -20,6 +20,7 @@ const CATEGORY_LABEL: Record<VotingCategory, string> = {
   accommodation: 'Accommodation',
   activity: 'Activities',
   meal: 'Meals',
+  other: 'Other',
 }
 
 const CATEGORY_BLURB: Record<VotingCategory, string> = {
@@ -28,6 +29,7 @@ const CATEGORY_BLURB: Record<VotingCategory, string> = {
   accommodation: 'Cottages, hotels and campsites.',
   activity: 'Days out, walks and things to book.',
   meal: 'Pubs, cafés and restaurants.',
+  other: 'Anything that is none of the above.',
 }
 
 const MODE_BLURB: Record<VotingMode, string> = {

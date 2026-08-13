@@ -84,7 +84,7 @@ def is_owner_of(trip: Trip | None, user: User) -> bool:
 #: `trip_category_settings.category`. Five fixed kinds of thing a group votes on. `poll`
 #: governs every poll: the mode is per category, not per poll (see the NOTE on AC-5 in
 #: `plan/features/admin-console/requirements.md`).
-VOTING_CATEGORIES = ("poll", "region", "accommodation", "activity", "meal")
+VOTING_CATEGORIES = ("poll", "region", "accommodation", "activity", "meal", "other")
 
 #: `trip_category_settings.voting_mode`.
 VOTING_MODES = ("score", "thumbs")

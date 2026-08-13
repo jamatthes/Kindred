@@ -20,6 +20,9 @@ function makeMockProvider() {
     setZoom: vi.fn(() => calls.push('setZoom')),
     fitBounds: vi.fn(() => calls.push('fitBounds')),
     getViewState: vi.fn(() => ({ center: { lat: 0, lng: 0 }, zoom: 1 })),
+    // A fixed point: `MapCanvas` only forwards this, so the value is irrelevant here — what
+    // the mock has to do is satisfy the interface.
+    projectToContainerPoint: vi.fn(() => ({ x: 0, y: 0 })),
     addMarker: vi.fn((spec: MarkerSpec) => {
       calls.push(`addMarker:${spec.id}`)
       markers.set(spec.id, spec)

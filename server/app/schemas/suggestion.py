@@ -39,7 +39,7 @@ from app.models.suggestion import SUGGESTION_STATUSES, SUGGESTION_TYPES
 from app.schemas.comment import CommentOut
 from app.schemas.distance import DistanceOut as _DistanceOut
 
-SuggestionType = Literal["region", "accommodation", "activity", "meal"]
+SuggestionType = Literal["region", "accommodation", "activity", "meal", "other"]
 SuggestionStatus = Literal["proposed", "shortlisted", "approved", "scheduled", "rejected"]
 #: The subset `PATCH /{id}/status` accepts. `scheduled` is deliberately absent from the type —
 #: only `itinerary-timeline` sets it — and is additionally rejected with a named `422` below,

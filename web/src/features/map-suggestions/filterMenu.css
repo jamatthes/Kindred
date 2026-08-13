@@ -1,0 +1,69 @@
+/* Filters dropdown — the map toolbar's second control. Token-only; both themes come free
+   because every colour here is a semantic token that already flips. */
+
+.sugg-filter-menu {
+  position: relative;
+}
+
+.sugg-filter-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--hit-target);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--chip-radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+
+.sugg-filter-menu__trigger.is-active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* The count is the whole reason a dropdown can replace a permanent chip band: it carries
+   "something is filtered" at rest, which is the only thing the band said when idle. */
+.sugg-filter-menu__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-4);
+  height: var(--space-4);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  font-size: var(--text-sm);
+}
+
+.sugg-filter-menu__panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: min(92vw, 30rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.sugg-filter-menu__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sugg-filter-menu__group-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

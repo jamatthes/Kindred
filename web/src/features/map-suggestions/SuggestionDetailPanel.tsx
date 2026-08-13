@@ -49,6 +49,7 @@ const TYPE_LABEL: Record<Suggestion['type'], string> = {
   accommodation: 'Accommodation',
   activity: 'Activity',
   meal: 'Meal',
+  other: 'Other',
 }
 
 const STATUS_LABEL: Record<SuggestionStatus, string> = {
@@ -132,9 +133,21 @@ export type SuggestionDetailPanelProps = {
   onChanged: (suggestion: Suggestion) => void
   onDeleted: (id: string) => void
   onBack?: () => void
+  /** What the back button says. Defaults to the list, which is where it went when the list
+   *  was always on screen — since the map-first redesign (`design.md` > "Layout") a detail
+   *  opened from a pin dismisses to the bare map instead, and the caller that knows which
+   *  says so. A button promising a list the user never opened is a small lie the panel
+   *  should not be telling on the screen's behalf. */
+  backLabel?: string
 }
 
-export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack }: SuggestionDetailPanelProps) {
+export function SuggestionDetailPanel({
+  suggestion,
+  onChanged,
+  onDeleted,
+  onBack,
+  backLabel = '← Back to list',
+}: SuggestionDetailPanelProps) {
   const { user } = useSession()
   const stage = useStage()
   const navigate = useNavigate()
@@ -146,6 +159,28 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
   // own button below triggers (the endpoint has no per-family granularity) — a second
   // instance so its own toast/busy state doesn't fight the button's.
   const chipRetry = useRecompute()
+
+  // The place's own website, for the "Website" link below. A second `getPlaceDetails` call
+  // for the same id inside the TTL is a cache hit in `placesClient`, so this costs no extra
+  // request despite `PhotoStrip` asking for the same record — cheaper than threading state
+  // between two siblings that each want one field of it.
+  const [placeWebsite, setPlaceWebsite] = useState<string | null>(null)
+  useEffect(() => {
+    setPlaceWebsite(null)
+    if (!suggestion.place_id || !placesAvailable()) return
+    let cancelled = false
+    getPlaceDetails(suggestion.place_id)
+      .then((details) => {
+        if (!cancelled) setPlaceWebsite(details.website)
+      })
+      .catch(() => {
+        // Absent on failure — the link simply does not render (design.md: no error chrome
+        // for a missing Places extra).
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [suggestion.place_id])
 
   const isAuthor = user?.id === suggestion.created_by.user_id
   const isFamilyLead =
@@ -179,7 +214,7 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
     <div className="sugg-detail">
       {onBack ? (
         <button type="button" className="sugg-detail__back" onClick={onBack}>
-          ← Back to list
+          {backLabel}
         </button>
       ) : null}
 
@@ -213,6 +248,15 @@ export function SuggestionDetailPanel({ suggestion, onChanged, onDeleted, onBack
         {suggestion.external_url ? (
           <a className="sugg-detail__link" href={suggestion.external_url} target="_blank" rel="noreferrer">
             View listing
+          </a>
+        ) : null}
+        {/* The place's own site, from the same live Place Details call that fetches the photo
+            strip — never stored (ToS), fetched fresh on open. This is what makes it right for
+            the create form to stop asking the user for a link on a Places-backed suggestion:
+            the link is here without anyone typing it. */}
+        {placeWebsite ? (
+          <a className="sugg-detail__link" href={placeWebsite} target="_blank" rel="noreferrer">
+            Website
           </a>
         ) : null}
       </div>
