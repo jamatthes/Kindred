@@ -70,6 +70,30 @@ What the override changes, and why each one matters:
 `-p kindred-live` is what keeps the containers, network and volumes separate. Tear it down
 with the same `-p` and `-f` flags, plus `-v` only if you mean to destroy the live data.
 
+### Serving `www.` as well (or any second hostname)
+
+Two settings, both in `.env.prod`, and one DNS record. The record comes first: **every name
+listed must already resolve to this host**, or Caddy's ACME challenge for it fails and the
+log fills with retries (the other names keep serving throughout).
+
+```ini
+KINDRED_SITE_ADDRESS=techartronin.com, www.techartronin.com
+KINDRED_CANONICAL_HOST=techartronin.com
+```
+
+Caddy then serves and certificates both, and `www` 301s to the apex before any other
+handler runs. The redirect is not tidiness: the session cookie, `PUBLIC_BASE_URL` and every
+invite link name *one* origin, so a login on `www` would not carry to the apex, and a user
+who arrived by the wrong name would be quietly signed out on their next link. One canonical
+host is what keeps that from happening.
+
+Swap the two values to make `www` canonical instead — and change `PUBLIC_BASE_URL` to
+match, since it is what invite links are built from.
+
+Both are read at container start, so `up -d` is enough; no rebuild (the Caddyfile itself is
+unchanged). Leave `KINDRED_CANONICAL_HOST` blank whenever `KINDRED_SITE_ADDRESS` is a
+single address — with nothing else to arrive on, the matcher never fires.
+
 ### Reaching it over IPv6
 
 On an IPv6-only public address there is **no port forwarding to configure** — hosts have

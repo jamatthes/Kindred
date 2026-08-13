@@ -60,7 +60,7 @@ MAX_COLOR_SLOTS = 24
 #: `trip_category_settings.category`. Five fixed kinds of thing a group votes on; `poll`
 #: governs every poll, because the mode is per category rather than per poll
 #: (`plan/features/admin-console/requirements.md`, the NOTE on AC-5).
-VOTING_CATEGORIES = ("poll", "region", "accommodation", "activity", "meal")
+VOTING_CATEGORIES = ("poll", "region", "accommodation", "activity", "meal", "other")
 
 #: `trip_category_settings.voting_mode`.
 VOTING_MODES = ("score", "thumbs")
@@ -82,7 +82,7 @@ COMMENT_SUBJECTS = ("poll", "suggestion", "itinerary_item")
 
 #: `suggestions.type`. A region is a drawn area ("somewhere around here"); the other three are
 #: points. The type drives the pin icon and the grouping rule, not the permissions.
-SUGGESTION_TYPES = ("region", "accommodation", "activity", "meal")
+SUGGESTION_TYPES = ("region", "accommodation", "activity", "meal", "other")
 
 #: `distance_cache.status`. **`no_home` is deliberately absent**: it is a presentation state
 #: derived from a family having no coordinates, not a row that exists — a family with no home

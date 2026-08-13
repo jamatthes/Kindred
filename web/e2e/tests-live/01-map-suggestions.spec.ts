@@ -41,10 +41,10 @@ test('creating a suggestion by dropping a pin appears on the map and in the list
 
   const box = await mapCanvas.boundingBox()
   if (!box) throw new Error('map canvas has no bounding box')
-  // Off-centre, deliberately: the "No suggestions yet" empty-state overlay
-  // (`.map-suggestions__empty-overlay`) is `pointer-events: none` on its own container but
-  // `auto` on its centred button, so a dead-centre click can land on that button instead of
-  // the map underneath. A quarter-offset point is clear of it either way.
+  // Off-centre, deliberately: the map's own centred controls and any future centred chrome
+  // would swallow a dead-centre click. A quarter-offset point lands on bare map tiles.
+  // (This once dodged the "No suggestions yet" empty-state overlay, since removed — the map
+  // is never covered now, but the offset is still the safer click target.)
   await mapCanvas.click({ position: { x: box.width / 4, y: box.height / 4 } })
 
   await expect(page.getByText(/Pin placed at/)).toBeVisible()
@@ -52,7 +52,7 @@ test('creating a suggestion by dropping a pin appears on the map and in the list
   await dialog.getByRole('button', { name: 'Save suggestion' }).click()
   await expect(dialog).not.toBeVisible()
 
-  // Saved and auto-selected: the side panel shows the new suggestion's own detail view.
+  // Saved and auto-selected: the detail card opens over the map on the new suggestion.
   await expect(page.getByRole('heading', { name: SUGGESTION_TITLE })).toBeVisible({ timeout: 10_000 })
 
   // On the map: GoogleMapProvider renders a suggestion pin as a native google.maps.Marker,
@@ -61,9 +61,12 @@ test('creating a suggestion by dropping a pin appears on the map and in the list
   // GoogleMapProvider.ts) -- a real marker exists precisely when one of these appears.
   await expect(mapCanvas.locator('img[src^="data:image/svg+xml"]').first()).toBeVisible({ timeout: 10_000 })
 
-  // In the list: back out of the detail panel to the list view and find the row.
-  // DataTable's rows are plain <tr onClick> ("full-row click targets", design-system.md),
-  // not buttons — the title lives in a table cell.
-  await page.getByRole('button', { name: '← Back to list' }).click()
+  // In the list: dismiss the detail card and summon the list drawer from the toolbar. Since
+  // the map-first redesign (`design.md` > "Layout") the list is not docked beside the map —
+  // it is opened on the List toggle, so a suggestion "being in the list" is only observable
+  // by opening it. DataTable's rows are plain <tr onClick> ("full-row click targets",
+  // design-system.md), not buttons — the title lives in a table cell.
+  await page.getByRole('button', { name: '← Back to the map' }).click()
+  await page.locator('.map-suggestions__toolbar').getByRole('button', { name: /^List \(/ }).click()
   await expect(page.getByRole('cell', { name: SUGGESTION_TITLE })).toBeVisible()
 })

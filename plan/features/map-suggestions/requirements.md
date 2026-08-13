@@ -25,7 +25,10 @@ Map and list are two views of one dataset.
 - Pin icon is determined by suggestion type; pin colour accent is the author's family colour.
 - Overlapping pins cluster; expanding a cluster reveals the individual pins.
 - Empty trip shows an empty state with the create action inline ("No suggestions yet —
-  drop the first pin").
+  drop the first pin") in the list drawer; the map itself stays uncovered.
+- The map fills the content area (revised 2026-08-12): search, filters, list, detail and the
+  create form are summoned over it, never permanently docked beside it. See `design.md` >
+  "Layout (revised 2026-08-12 — map-first)".
 
 ### S2 — See the same data as a list
 **As a member, I can switch to (or open alongside) a list view of the same suggestions.**
@@ -44,10 +47,24 @@ Map and list are two views of one dataset.
   Google-returned details (photos, ratings, opening hours, editorial summary) are **not**
   stored — see the hard invariant in `design.md`.
 - The user can edit any pre-filled field before saving.
+- The suggestion's **type is guessed** from the Places `types[]` array and preselected in the
+  form's type dropdown; the user can override it (added 2026-08-12, see `design.md` > "Type
+  inference from Places").
 - The new suggestion appears immediately for every connected member.
+
+### S3b — Create a suggestion from a place already on the map (added 2026-08-12)
+**As a member, I can click a place Google already shows on the map and add it as a suggestion.**
+- Clicking a base-map POI opens **our** card, not Google's built-in info window (which cannot
+  carry our actions), showing name, address and an "Add as suggestion" button.
+- "Add as suggestion" opens the create form seeded exactly as S3 seeds it, including the
+  guessed type.
+- Dismissing the card leaves no suggestion behind; nothing is written until the form is saved.
 
 ### S4 — Create a suggestion by dropping a pin
 **As a member, I can drop a pin manually anywhere on the map and describe it.**
+- Right-clicking the map (long-press on touch) opens a context menu at that point offering
+  "Drop a pin here" and "Draw a region here" (revised 2026-08-12); the toolbar entry point
+  remains for keyboard and discoverability.
 - Entering "drop pin" mode changes the cursor; a single map click places the provisional pin.
 - The create form opens with coordinates filled and title/notes empty; `place_id` is null.
 - The provisional pin can be dragged before saving; cancelling removes it.

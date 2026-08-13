@@ -10,7 +10,12 @@
  * nothing survives between them except what is on the server).
  */
 import { expect, test, type Page } from '@playwright/test'
-import { ADMIN_PASSWORD_AFTER_ONBOARDING, DEMO_PASSWORD, SEED_ADMIN_USERNAME } from './shared'
+import {
+  ADMIN_PASSWORD_AFTER_ONBOARDING,
+  DEMO_PASSWORD,
+  SEED_ADMIN_USERNAME,
+  openSuggestionsList,
+} from './shared'
 
 const SUGGESTION_TITLE = /E2E dropped pin \d+/
 
@@ -24,8 +29,7 @@ async function login(page: Page, username: string, password: string) {
 
 async function openSuggestion(page: Page) {
   await page.locator('.rail').getByRole('button', { name: 'Map', exact: true }).click()
-  const backButton = page.getByRole('button', { name: '← Back to list' })
-  if (await backButton.isVisible({ timeout: 1_000 }).catch(() => false)) await backButton.click()
+  await openSuggestionsList(page)
   // DataTable's rows are plain <tr onClick> ("full-row click targets", design-system.md),
   // not buttons. `.first()`: the list's default sort is created_desc (newest first — see
   // `_apply_sort` in the server's suggestions service), and repeated live-suite runs leave

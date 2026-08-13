@@ -1,21 +1,15 @@
+/* Map-first layout (2026-08-12). The map owns the content area; every other surface is
+   summoned over it. See `plan/features/map-suggestions/design.md` > "Layout". */
+
 .map-suggestions {
-  display: grid;
-  grid-template-columns: 62% 38%;
-  gap: var(--space-3);
+  display: block;
   height: 100%;
   min-height: 0;
 }
 
-/* The 62/38 split collapses to one column below `--breakpoint-panel` — decided in JS
-   (`useIsNarrow()`, matching `PANEL_SHEET_QUERY` in `design/breakpoints.ts`, the same
-   mechanism `FamilyPanel.tsx` uses) rather than a CSS `@media` query, so the breakpoint
-   lives in exactly one place instead of a JS copy and a CSS copy that can drift. */
-.map-suggestions--narrow {
-  grid-template-columns: 1fr;
-}
-
 .map-suggestions__map {
   position: relative;
+  height: 100%;
   border-radius: var(--card-radius);
   overflow: hidden;
   min-height: var(--map-canvas-min-h);
@@ -32,8 +26,34 @@
   left: var(--space-3);
   z-index: 2;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  /* The bar is a row of controls, not a band: it must not become an invisible lid over the
+     map's top edge, so only the controls themselves take pointer events. */
+  pointer-events: none;
+  max-width: calc(100% - var(--space-6));
+}
+
+.map-suggestions__toolbar > * {
+  pointer-events: auto;
+}
+
+.map-suggestions__list-toggle {
+  min-height: var(--hit-target);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--chip-radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+
+.map-suggestions__list-toggle[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .map-suggestions__hint {
@@ -45,28 +65,89 @@
   box-shadow: var(--shadow-card);
 }
 
-.map-suggestions__empty-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  background: var(--color-overlay);
-  pointer-events: none;
-}
-
-.map-suggestions__empty-overlay > * {
-  pointer-events: auto;
-}
-
+/* The one panel, floating at the map's right edge and present only when it has something to
+   say: a suggestion's detail, the create form, or the list on request. */
 .map-suggestions__panel {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 3;
+  width: min(26rem, calc(100% - var(--space-6)));
   overflow-y: auto;
+  /* The list and a suggestion's detail are long, scrolling surfaces — those genuinely want
+     the height. The create form does not, and stretching it turned a six-field form into a
+     full-height column of empty space (`--form` below sizes to content instead). */
   background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
   border-radius: var(--card-radius);
   padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+
+/* The create form: as tall as it needs to be, never taller. */
+.map-suggestions__panel--form {
+  bottom: auto;
+  max-height: calc(100% - var(--space-6));
+}
+
+/* …and pinned to the point it describes, with the same tail as the POI card it grew out of,
+   so the form reads as that card expanding rather than a new surface appearing elsewhere. */
+.map-suggestions__panel--anchored {
+  right: auto;
+  width: min(24rem, calc(100% - var(--space-6)));
+  max-height: 70%;
+  overflow: visible;
+}
+
+/* The form scrolls inside the card, so the tail above stays attached to the card's own edge
+   rather than scrolling away with the content. */
+.map-suggestions__panel--anchored > * {
+  max-height: calc(70vh - var(--space-6));
+  overflow-y: auto;
+}
+
+.map-suggestions__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.map-suggestions__panel-title {
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.map-suggestions__panel-header button {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  min-height: var(--hit-target);
+  min-width: var(--hit-target);
+}
+
+/* Fallback position, used only while the map cannot project a point yet (the tick it
+   mounts). The anchored variant below is the normal case. */
+.map-suggestions__poi {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 3;
+  width: min(22rem, calc(100% - var(--space-6)));
+}
+
+/* Pinned to the place: `left`/`top` come from `useAnchoredPlacement`, which measures the card
+   and has already flipped it below the point or clamped it sideways if it would not otherwise
+   fit. No transform — the hook works in the same coordinates the SDK projects into, and a
+   transform would shift the card out from under its own measurement. */
+.map-suggestions__poi--anchored {
+  bottom: auto;
+  max-width: min(22rem, 90vw);
 }
 
 .map-suggestions__skeleton {
@@ -100,4 +181,35 @@
   box-shadow: var(--shadow-card);
   cursor: pointer;
   min-height: var(--hit-target);
+}
+
+
+/* --- The tail, shared by both anchored cards -------------------------------------------
+   Positioned from `--tail-x` (set by `useAnchoredPlacement`) rather than at 50%: when a card
+   near the map's edge is clamped sideways its centre stops being over the place, and a centred
+   tail would point at empty map. `is-below` is the flipped case — the card sits under its
+   point, so the tail moves to the top edge and the two drawn borders swap to the two now
+   facing outward. */
+.map-suggestions__poi--anchored::after,
+.map-suggestions__panel--anchored::after {
+  content: '';
+  position: absolute;
+  bottom: calc(var(--popover-tail-size) / -2);
+  left: var(--tail-x, 50%);
+  width: var(--popover-tail-size);
+  height: var(--popover-tail-size);
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--color-surface-raised);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.map-suggestions__poi--anchored.is-below::after,
+.map-suggestions__panel--anchored.is-below::after {
+  bottom: auto;
+  top: calc(var(--popover-tail-size) / -2);
+  border-right: none;
+  border-bottom: none;
+  border-left: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
 }

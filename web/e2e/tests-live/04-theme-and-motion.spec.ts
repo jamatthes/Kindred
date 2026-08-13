@@ -14,7 +14,7 @@
  * (`DistanceChip`'s estimate→real crossfade, `.dist-chip--animated` in `distances.css`).
  */
 import { expect, test } from '@playwright/test'
-import { ADMIN_PASSWORD_AFTER_ONBOARDING, SEED_ADMIN_USERNAME } from './shared'
+import { ADMIN_PASSWORD_AFTER_ONBOARDING, SEED_ADMIN_USERNAME, openSuggestionsList } from './shared'
 
 const SUGGESTION_TITLE = /E2E dropped pin \d+/
 
@@ -56,8 +56,7 @@ test('dark theme repaints the page and reduced motion suppresses the distance-ch
   expect(railBg).not.toBe('rgb(255, 255, 255)')
 
   await page.locator('.rail').getByRole('button', { name: 'Map', exact: true }).click()
-  const backButton = page.getByRole('button', { name: '← Back to list' })
-  if (await backButton.isVisible({ timeout: 1_000 }).catch(() => false)) await backButton.click()
+  await openSuggestionsList(page)
   // DataTable's rows are plain <tr onClick> ("full-row click targets", design-system.md).
   // `.first()`: default sort is created_desc (newest first), and repeated live-suite runs
   // leave older matching rows around — see the same note in 02-voting-comments.spec.ts.

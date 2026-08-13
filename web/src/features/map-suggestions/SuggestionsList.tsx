@@ -25,6 +25,7 @@ const TYPE_LABEL: Record<Suggestion['type'], string> = {
   accommodation: 'Accommodation',
   activity: 'Activity',
   meal: 'Meal',
+  other: 'Other',
 }
 
 const STATUS_LABEL: Record<Suggestion['status'], string> = {

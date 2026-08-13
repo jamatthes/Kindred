@@ -33,7 +33,7 @@ from pathlib import Path
 
 from app.services.boundaries import (
     MAX_RING_POINTS,
-    USER_AGENT,
+    user_agent,
     BoundaryResult,
     BoundaryService,
     EllipseFallback,
@@ -261,6 +261,25 @@ async def test_lookup_picks_largest_ring_from_multipolygon():
     assert [0.5, 1.2] in ring or any(abs(pt[1] - 1.2) < 1e-6 for pt in ring)
 
 
-def test_user_agent_identifies_the_app_per_nominatim_policy():
-    assert "Kindred" in USER_AGENT
-    assert "@" in USER_AGENT or "contact" in USER_AGENT.lower()
+def test_user_agent_identifies_this_deployment_per_nominatim_policy():
+    """The agent has to name something real.
+
+    The previous version of this test accepted any string containing "contact", which the
+    hardcoded `contact: admin@example.org` satisfied — and Nominatim answered every live
+    request with `403 Forbidden`, silently turning every county search into "no boundary
+    found". Identifying the deployment by its own public URL is the property that actually
+    matters, so that is what is asserted now.
+    """
+    from app.core.config import settings
+
+    agent = user_agent()
+    assert "Kindred" in agent
+    assert settings.public_base_url.rstrip("/") in agent
+    assert "example.org" not in agent
+
+
+def test_user_agent_override_wins(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "nominatim_user_agent", "Kindred/1.0 (+https://trips.example)")
+    assert user_agent() == "Kindred/1.0 (+https://trips.example)"

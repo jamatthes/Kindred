@@ -204,7 +204,7 @@ export type StageTransition = {
   created_at: string
 }
 
-export type VotingCategory = 'poll' | 'region' | 'accommodation' | 'activity' | 'meal'
+export type VotingCategory = 'poll' | 'region' | 'accommodation' | 'activity' | 'meal' | 'other'
 export type VotingMode = 'score' | 'thumbs'
 
 export type CategorySetting = {
@@ -425,7 +425,7 @@ export type CategorySettingPublic = { category: VotingCategory; voting_mode: Vot
 // into the suggestion by the server (owned by `voting-comments`/`distances`); this feature
 // only ever renders them.
 
-export type SuggestionType = 'region' | 'accommodation' | 'activity' | 'meal'
+export type SuggestionType = 'region' | 'accommodation' | 'activity' | 'meal' | 'other'
 export type SuggestionStatus = 'proposed' | 'shortlisted' | 'approved' | 'scheduled' | 'rejected'
 
 /** The GeoJSON `Feature` encoding from `design.md` > "Region geometry encoding". Coordinates
@@ -531,6 +531,13 @@ export type SuggestionCreateInput = {
   place_id?: string
   place_snapshot?: PlaceSnapshot
   external_url?: string
+  /** A named locality ("Yorkshire", "Cornwall") whose **real administrative boundary** the
+   * server should fetch from OpenStreetMap and store as this region's geometry — the dashed
+   * outline in `design.md` > "Named-locality regions". Only read when `type === 'region'` and
+   * no `geometry_geojson` was drawn; Google never returns that polygon, which is why the
+   * lookup is server-side (once, at creation, cached forever) rather than a render-path call.
+   * Omitting it on a region with no drawn shape is what produces `404 boundary_not_found`. */
+  boundary_query?: string
 }
 
 export type SuggestionUpdateInput = Partial<

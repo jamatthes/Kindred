@@ -1,0 +1,63 @@
+/* Our replacement for Google's POI info window. */
+
+.place-preview {
+  position: relative;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+/* The tail lives on the anchored *container* (`mapSuggestions.css`), not here: only the
+   container knows whether the card was flipped below its point or clamped sideways, and two
+   tails drawn from two places would eventually disagree. */
+
+.place-preview__close {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  min-height: var(--hit-target);
+  min-width: var(--hit-target);
+}
+
+.place-preview__title {
+  margin: 0 var(--space-5) var(--space-1) 0;
+  font-size: var(--text-md);
+}
+
+.place-preview__address {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.place-preview__error {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.place-preview__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3);
+}
+
+.place-preview__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.place-preview__link {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+}

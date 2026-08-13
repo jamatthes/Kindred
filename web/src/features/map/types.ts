@@ -14,9 +14,21 @@ export type Bounds = { north: number; south: number; east: number; west: number 
 
 export type MapViewState = { center: LatLng; zoom: number }
 
+/**
+ * What `mount` needs beyond the view: the base map's colour scheme, so Google's tiles match
+ * the app's theme instead of shining white through a dark UI.
+ *
+ * Mount-time only, deliberately. Google's `colorScheme` is fixed when the `Map` is
+ * constructed and has no setter, so a live theme switch cannot be pushed into an existing
+ * instance — `MapCanvas` is keyed on the resolved theme instead, and a change remounts the
+ * provider and replays every marker. Modelling it as a mount option rather than a
+ * `setColorScheme()` the SDK cannot honour keeps the interface honest about that.
+ */
+export type MapMountOptions = MapViewState & { colorScheme?: 'light' | 'dark' }
+
 /** `suggestions.type` per `plan/features/map-suggestions/design.md`. Drives pin icon and
  *  grouping; `region` is also the discriminator for polygon rendering. */
-export type SuggestionCategory = 'accommodation' | 'activity' | 'meal' | 'region'
+export type SuggestionCategory = 'accommodation' | 'activity' | 'meal' | 'region' | 'other'
 
 /** `suggestions.status`. Never carried by colour alone — see `MapPin`. */
 export type SuggestionStatus = 'proposed' | 'shortlisted' | 'approved' | 'rejected' | 'scheduled'
@@ -78,7 +90,20 @@ export type MapEventMap = {
   markerClick: { id: string }
   markerHover: { id: string | null }
   polygonClick: { id: string }
-  mapClick: { position: LatLng }
+  /** `placeId` is present when the click landed on one of the base map's own labelled places
+   *  (Google calls this an `IconMouseEvent`). The provider suppresses the SDK's built-in info
+   *  window for those clicks and hands the id up instead, because that window is Google-
+   *  rendered chrome with no injection point for our "Add as suggestion" action — see
+   *  `plan/features/map-suggestions/design.md` > "Map-first interaction model". A plain click
+   *  on bare map has no `placeId`, which is exactly how a caller tells the two apart. */
+  mapClick: { position: LatLng; placeId?: string }
+  /** Right-click (long-press on touch). Opens the map's own context menu — "Drop a pin here"
+   *  / "Draw a region here" — at the clicked point. */
+  mapContextMenu: { position: LatLng }
+  /** The view moved: pan, zoom, or a programmatic recentre. Anything drawn *over* the map in
+   *  React rather than by the SDK has to re-project itself when this fires, or it slides off
+   *  the thing it is pointing at the moment the user drags. */
+  viewChange: MapViewState
 }
 
 export type MapEventName = keyof MapEventMap

@@ -45,14 +45,21 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 #: `suggestions.type`.
-SUGGESTION_TYPES = ("region", "accommodation", "activity", "meal")
+SUGGESTION_TYPES = ("region", "accommodation", "activity", "meal", "other")
 TYPE_REGION = "region"
 TYPE_ACCOMMODATION = "accommodation"
 TYPE_ACTIVITY = "activity"
 TYPE_MEAL = "meal"
+#: Everything a trip actually contains that is none of the above — a shop, a viewpoint, a
+#: friend's house, a place to park. Without it people file those under `activity` and the
+#: type stops meaning anything; with it, "I don't know what this is" has an honest answer
+#: rather than a wrong one.
+TYPE_OTHER = "other"
 
 #: The types that can be nested inside an accommodation's card (`design.md` > Grouping).
-GROUPABLE_CHILD_TYPES = (TYPE_ACTIVITY, TYPE_MEAL)
+#: `other` groups too: a shop next to the cottage belongs on the cottage's card for the same
+#: reason a restaurant does.
+GROUPABLE_CHILD_TYPES = (TYPE_ACTIVITY, TYPE_MEAL, TYPE_OTHER)
 
 #: `suggestions.status`.
 SUGGESTION_STATUSES = ("proposed", "shortlisted", "approved", "scheduled", "rejected")

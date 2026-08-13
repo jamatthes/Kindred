@@ -418,15 +418,109 @@ Own actions apply optimistically and roll back if the socket reports an error, p
 
 ## UI behaviour
 
-### Layout
-Desktop follows the 62/38 split from `design-system.md`: slim left nav rail, map at ~62%,
-right side panel at ~38%, collapsible bottom timeline panel (owned by `itinerary-timeline`).
-Mobile: full-bleed map, bottom tab nav, cards as bottom sheets for thumb reach.
+### Layout (revised 2026-08-12 — map-first)
 
-The list view is not a separate route. On desktop it occupies the side panel when nothing is
-selected, and is reachable as a "List" toggle when something is. On mobile it is a sheet
-raised from the bottom tab bar. Map and list always reflect the same filter and selection
-state — one store, two renderers.
+**The map is the interface, not a pane inside it.** Desktop and mobile both give the map the
+full content area next to the nav rail; every other surface — search, filters, the list, a
+suggestion's detail, the create form — is summoned over it and dismissed again.
+
+This replaces the original 62/38 split, where a side panel was always on screen whether or
+not it had anything to say. On an empty or lightly-used trip that panel was a third of the
+window spent on a filter row and one line of placeholder text, while the map — the thing a
+trip planner is *for*, and the surface every create gesture starts from — was squeezed into
+the remainder. The general 62/38 guidance in `design-system.md` still holds for
+document-shaped screens (families, polls, admin); this feature is the deliberate exception,
+and says so here so the divergence reads as a decision rather than drift.
+
+What sits over the map:
+
+- **Map toolbar** (top-left, floating): a place-search field, a **Filters** dropdown, and a
+  **List** toggle. Always present, small, never covering the centre.
+- **List** — the same table as before, slid in as a drawer over the map on the List toggle
+  and dismissed with it (a sheet from the bottom on mobile). Not a separate route.
+- **Detail** — opens as a card over the map on desktop, a bottom sheet on mobile. Its back
+  button dismisses to whatever was underneath: the list, if the drawer is open behind it,
+  otherwise the bare map — and it says which, rather than promising a list nobody opened.
+- **Create form** — the same floating card, opened with the point already filled in.
+
+**Anchoring** (resolved 2026-08-12): `MapProvider` gained `projectToContainerPoint(latLng)`
+and a `viewChange` event, so a React-rendered card can sit *over* the place it describes —
+the POI card is pinned above its point and travels with the map through pans and zooms
+(Google fires `bounds_changed` continuously through a drag, so it tracks rather than catching
+up at the end). A `null` projection — the SDK cannot answer on the tick the map mounts —
+falls back to the corner rather than a guessed 0,0. The detail and create cards remain at the
+map's edge deliberately: they are tall, scrolling surfaces, and tethering one to a pin means
+covering the map around it.
+
+Map and list still reflect the same filter and selection state — one store, two renderers.
+That was never the thing that needed changing.
+
+### Map-first interaction model (2026-08-12)
+The three ways a place becomes a suggestion, all starting on the map itself:
+
+1. **Search** — the toolbar's search field runs Places Autocomplete; picking a prediction
+   flies the map there and opens the create card seeded from Place Details.
+2. **Right-click (long-press on touch)** — opens a small map context menu at the cursor:
+   "Drop a pin here" (and "Draw a region here"). Choosing one opens the create card anchored
+   at that point, coordinates already filled.
+3. **Click a Google POI** — the base map's own labelled places (restaurants, hotels, parks)
+   are clickable. Google's built-in info window is **suppressed** (`e.stop()` on the
+   `IconMouseEvent`) and replaced with our own card carrying the same information plus an
+   **"Add as suggestion"** action. We cannot add a button to Google's info window — it is
+   SDK-rendered chrome with no injection point — so the only honest way to offer that action
+   is to own the card. The POI's `place_id` comes free with the click event; Place Details is
+   fetched from the browser on card-open only, per the HARD INVARIANT above.
+
+The standing "Suggest a place" button remains in the app header as the keyboard-reachable,
+discoverable entry point — the map gestures are faster, not a replacement for a labelled
+control, and a gesture-only create flow would fail an accessibility review.
+
+### The `other` type (2026-08-12)
+`suggestions.type` gains a fifth value, `other`, alongside `region`/`accommodation`/
+`activity`/`meal`. A trip contains things none of the four describe — a shop, a viewpoint, a
+car park, a friend's house — and without a home for them people filed them under `activity`,
+which made that category mean "everything we could not classify" and quietly degraded every
+filter built on it. `other` groups under an accommodation like `activity` and `meal` do, and
+carries its own voting-mode row like every other category.
+
+It is also now the **fallback for the type guess** below: asserting `activity` for an
+unrecognised place was a guess dressed as an answer.
+
+### What a clicked place shows (2026-08-12)
+Kindred overlays Google's map; it does not replace it. So clicking a place shows **what
+Google Maps would show** — photos, rating with its sample size, category, editorial summary,
+open/closed, address, phone, website, opening hours — in the shell's right-hand panel
+(`PlaceProfilePanel`), with "Add as suggestion" as the primary action. Sending the user to
+Google for facts we already hold in the response, or making them create a suggestion before
+they can read the opening hours, would be the app hiding its own data.
+
+Field cost: the additions (`user_ratings_total`, `editorial_summary`, `formatted_phone_number`)
+join tiers the call was already paying for — `rating` had put it in Atmosphere and
+`opening_hours`/`website` in Contact — so the profile costs no more than the old two-line card.
+
+The name deliberately appears twice while a place is open: as the map's label on the anchored
+card, and as the profile's title. That is the pairing Google Maps itself uses. The **actions**
+do not: on desktop they belong to the panel alone, and the anchored card carries them only on
+mobile, where there is no side panel and the card is the place's only surface.
+
+**Still never persisted.** The whole profile is live-fetched on open and discarded on close;
+only `place_id` plus what the user typed reaches the server. `PlaceProfilePanel`'s own test
+asserts the seed handed to the create form carries no rating, hours, phone, photo or summary.
+
+### Type inference from Places (2026-08-12)
+When a suggestion originates from a Places result (search or POI click), its **type is
+guessed** and preselected in the create form's type dropdown, which the user can override —
+a preselected right answer costs one glance, a wrong-but-editable one costs one click, and
+neither costs what an unlabelled pin costs downstream.
+
+The guess reads Google's `types[]` array: `lodging`/`hotel`/`campground`/`rv_park` →
+`accommodation`; `restaurant`/`cafe`/`bar`/`bakery`/`meal_takeaway`/`meal_delivery` → `meal`;
+`tourist_attraction`/`museum`/`park`/`zoo`/`aquarium`/`amusement_park`/`stadium`/`art_gallery`
+→ `activity`; `locality`/`sublocality`/`neighborhood`/`administrative_area_*` → `region`.
+Anything unmatched falls back to `activity` (the broadest category, and the least misleading
+thing to be wrong about). **No extra billing**: Autocomplete predictions already carry
+`types`, and the Place Details call this flow already makes covers the rest — the guess adds
+no request that was not already being made.
 
 ### Progressive disclosure — the three levels
 Per `design-system.md`, detail escalates and never skips a level.
@@ -473,23 +567,54 @@ not a navigation destination).
 ### Creation flows
 All four entry points converge on one create form; they differ only in how the form is seeded.
 
-- **Search** — Autocomplete field → prediction → browser Place Details → seeds title,
-  address, coordinates. The user edits freely. Only what is in the form at save time is sent.
-- **Drop pin** — cursor changes, one map click places a draggable provisional pin, form opens
-  with coordinates only.
+- **Search** — Autocomplete field (now in the map toolbar) → prediction → browser Place
+  Details → seeds title, address, coordinates, and the guessed type. The user edits freely.
+  Only what is in the form at save time is sent.
+- **Drop pin** — from the map context menu (right-click / long-press) or the toolbar; places
+  a draggable provisional pin, form opens with coordinates only and no type guess.
+- **POI click** — our replacement card for a Google base-map place; "Add as suggestion" opens
+  the create card seeded exactly as the search flow seeds it (`place_id` + guessed type).
 - **Draw region** — circle or polygon tool; shape adjustable pre-save; type locked to
   `region`; the centroid is displayed so the user sees where the "pin" will sit.
 - **Paste URL** — URL field triggers the best-effort `POST /link-preview`; on `200` the title
-  pre-fills (still editable), on `204` nothing happens and no error shows. Location still
-  comes from search or a dropped pin.
+  pre-fills (still editable), on `204` nothing happens and no error shows.
+  **Location now resolves too** (2026-08-12): if the preview carries coordinates (an Airbnb
+  listing usually does) they are used directly; if it does not — the ordinary case for a
+  shop's own website, which has no geo metadata — the page's *title* is put through Places
+  `findPlaceFromQuery`, because a URL is not something Google can look up but "The Games Shop
+  Aldershot" is exactly what its index is built on. A site with no title falls back to the
+  distinctive part of its domain. Failure is silent and the user places the pin themselves.
+  This is the one entry point the map cannot offer, which is why the toolbar button is now
+  labelled **"Paste a link"** rather than "Suggest a place": search lives in the toolbar
+  field, drop-a-pin and draw-a-region live on right-click, and a URL is the only thing left
+  that you cannot point at.
 
 Form states: all six field states styled from day one; validate on blur, re-validate on
 change after the first error; error text sits beneath the field, never colour alone.
 
+**The form shows only what its entry point left undecided** (2026-08-12). The four
+entry-point tabs are **gone entirely**, along with the "search for a different place" escape
+hatch. Every way in now decides the mode before the form opens — a POI card's "Add as
+suggestion" and a toolbar search result both arrive as `search`, right-click arrives as
+`drop-pin` or `draw-region`, and the toolbar's "Paste a link" arrives as `url` — so the tabs
+had no reachable state left to offer; a control that can only ever show one selected option is
+chrome, not a choice. What remains is what the user has not said yet: the type (guessed,
+editable), title, and notes. Changing the place, or the method, is done the same way it was
+chosen in the first place: on the map, or in the toolbar.
+
+Fields inside this floating card are compact (`--field-height-compact`) under `pointer: fine`
+only — on touch the 44px target stands, because density must not be bought with tap accuracy.
+
 ### List/table specifics
 Tri-state sort (asc → desc → original) per `design-system.md`, sticky header, tabular figures
-with right-aligned numerics, full-row click targets, density from spacing tokens. Filter
-chips for type, status, and family sit above the table and are shared with the map.
+with right-aligned numerics, full-row click targets, density from spacing tokens.
+
+Filters live in the map toolbar's **Filters dropdown**, not in a chip row above the table.
+The chips themselves survive inside the dropdown — grouped by type, status, and family, with
+the same multi-select toggle semantics and a "Clear filters" action — but they no longer
+occupy a permanent band of the screen to say that nothing is filtered. The dropdown's trigger
+carries a count when any filter is on, so an active filter is still visible at a glance
+without the chips being. Filters remain shared with the map (one store).
 
 ### Styling
 Token-only. Pin size, cluster size, offsets, and region fill opacity are component tokens
@@ -503,6 +628,11 @@ cluster badges are the two places where a naive dark inversion looks wrong.
 
 ### Empty and loading states
 - No suggestions: "No suggestions yet — drop the first pin", with the create action inline.
+  This lives in the **list drawer only**, seen when the user opens the list. The map itself
+  is never covered by an empty-state overlay: an empty trip's map is still the thing the user
+  came to look at (and the place they drop that first pin), so scrimming it to say it is
+  empty hides the answer to state the question. The map toolbar's search field and the
+  right-click menu carry the call to action without taking the map away.
 - Filters exclude everything: "No suggestions match these filters", with a clear-filters action.
 - Structural loads (map panel, list) use skeletons; sub-second inline waits use spinners.
 

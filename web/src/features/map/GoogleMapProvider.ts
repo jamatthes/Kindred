@@ -25,6 +25,7 @@ import type {
   MapEventHandler,
   MapEventMap,
   MapEventName,
+  MapMountOptions,
   MapViewState,
   MarkerSpec,
   PolygonSpec,
@@ -42,8 +43,22 @@ type GoogleMapsApi = {
   Marker: new (opts: Record<string, unknown>) => GoogleMarker
   Circle: new (opts: Record<string, unknown>) => GoogleCircle
   Polygon: new (opts: Record<string, unknown>) => GooglePolygon
+  Polyline: new (opts: Record<string, unknown>) => GooglePolyline
+  SymbolPath: { CIRCLE: unknown }
   LatLngBounds: new () => { extend(pos: LatLng): void }
+  LatLng: new (lat: number, lng: number) => unknown
+  /** Constructed bare and given no-op lifecycle methods — an `OverlayView` attached to the
+   *  map is the documented way to reach `MapCanvasProjection`, which is the only public API
+   *  that converts a LatLng to container pixels. It draws nothing. */
+  OverlayView: new () => GoogleOverlayView
   event: { clearInstanceListeners(instance: unknown): void }
+}
+type GoogleOverlayView = {
+  onAdd?: () => void
+  draw?: () => void
+  onRemove?: () => void
+  setMap(map: GoogleMap | null): void
+  getProjection(): { fromLatLngToContainerPixel(latLng: unknown): { x: number; y: number } | null } | null
 }
 type GoogleMap = {
   setCenter(pos: LatLng): void
@@ -52,7 +67,15 @@ type GoogleMap = {
   getZoom(): number
   getCenter(): { lat(): number; lng(): number }
   fitBounds(bounds: unknown, padding?: number): void
-  addListener(event: string, handler: (e: { latLng?: { lat(): number; lng(): number } }) => void): { remove(): void }
+  addListener(event: string, handler: (e: GoogleMapMouseEvent) => void): { remove(): void }
+}
+/** Google fires `click` with a plain `MapMouseEvent` on bare map and an `IconMouseEvent` —
+ *  same shape plus `placeId` and a `stop()` that cancels the SDK's own info window — when the
+ *  click landed on one of the base map's labelled places. One handler, two arrivals. */
+type GoogleMapMouseEvent = {
+  latLng?: { lat(): number; lng(): number }
+  placeId?: string
+  stop?: () => void
 }
 type GoogleMarker = {
   setMap(map: GoogleMap | null): void
@@ -70,6 +93,7 @@ type GooglePolygon = {
   setOptions(opts: Record<string, unknown>): void
   addListener(event: string, handler: () => void): { remove(): void }
 }
+type GooglePolyline = GooglePolygon
 
 let loaderPromise: Promise<GoogleMapsApi> | null = null
 
@@ -135,9 +159,11 @@ export class GoogleMapProvider implements MapProvider {
   private maps: GoogleMapsApi | null = null
   private map: GoogleMap | null = null
   private markers = new Map<string, GoogleMarker>()
-  private shapes = new Map<string, GoogleCircle | GooglePolygon>()
+  /** A circle is one object; a polygon is a fill plus its dashed outline (see `addPolygon`). */
+  private shapes = new Map<string, GoogleCircle | DashedRegion>()
   private listeners = new Map<MapEventName, Set<(payload: unknown) => void>>()
   private mapListeners: { remove(): void }[] = []
+  private overlay: GoogleOverlayView | null = null
   // `mount` looks synchronous to `MapCanvas` (it never awaits it — see the comment there)
   // but the Maps JS script load behind it is not: `MapCanvas`'s own effects can call
   // `addMarker`/`addPolygon`/`setCenter` etc. before `this.map` exists, most obviously for
@@ -147,13 +173,51 @@ export class GoogleMapProvider implements MapProvider {
   // bug this queue replaces: `addMarker` returning early when `this.map` was still null).
   private ready = false
   private queue: (() => void)[] = []
+  private viewFrame: number | null = null
+
+  /**
+   * Emits `viewChange` once per animation frame until the map goes `idle`.
+   *
+   * Google's events are not a smooth stream. `bounds_changed` fires densely while a finger or
+   * mouse is actually dragging, but the **inertial glide after release** is animated inside
+   * the SDK and reports almost nothing until it stops — so an anchored card tracked the map
+   * perfectly while dragging and then sat frozen mid-air as the map coasted out from under
+   * it, snapping into place only on the next interaction. Exactly the bug you would expect
+   * from trusting an event to mean "the view is moving now".
+   *
+   * A frame loop asks the question the events were being used to answer — where is the view
+   * *now* — and `idle` is the one event that reliably says the movement is over. Nothing is
+   * emitted between movements, so this costs nothing at rest.
+   */
+  private startViewTracking(): void {
+    if (this.viewFrame !== null) return
+    const tick = () => {
+      if (!this.map) {
+        this.viewFrame = null
+        return
+      }
+      this.emit('viewChange', this.getViewState())
+      this.viewFrame = requestAnimationFrame(tick)
+    }
+    this.viewFrame = requestAnimationFrame(tick)
+  }
+
+  private stopViewTracking(): void {
+    if (this.viewFrame !== null) {
+      cancelAnimationFrame(this.viewFrame)
+      this.viewFrame = null
+    }
+    // One last emit so the resting position is exact rather than whatever the final frame
+    // happened to catch mid-glide.
+    if (this.map) this.emit('viewChange', this.getViewState())
+  }
 
   private whenReady(fn: () => void): void {
     if (this.ready) fn()
     else this.queue.push(fn)
   }
 
-  mount(container: HTMLElement, initial: MapViewState): void {
+  mount(container: HTMLElement, initial: MapMountOptions): void {
     const apiKey = (import.meta as unknown as { env?: Record<string, string> }).env
       ?.VITE_GOOGLE_MAPS_BROWSER_KEY
     if (!apiKey) throw notWiredYet(NAME, 'mount (no VITE_GOOGLE_MAPS_BROWSER_KEY configured)')
@@ -164,12 +228,49 @@ export class GoogleMapProvider implements MapProvider {
     loadGoogleMaps(apiKey)
       .then((maps) => {
         this.maps = maps
-        this.map = new maps.Map(container, { center: initial.center, zoom: initial.zoom, disableDefaultUI: false })
+        this.map = new maps.Map(container, {
+          center: initial.center,
+          zoom: initial.zoom,
+          disableDefaultUI: false,
+          // Google's own light/dark tiles, chosen to match the app's resolved theme. The
+          // string values are what `google.maps.ColorScheme` resolves to, passed literally so
+          // this file still needs no `@types/google.maps` and no namespace read before the
+          // SDK has finished loading. Construction-time only — see `MapMountOptions`.
+          ...(initial.colorScheme ? { colorScheme: initial.colorScheme.toUpperCase() } : {}),
+        })
         this.mapListeners.push(
           this.map.addListener('click', (e) => {
-            if (e.latLng) this.emit('mapClick', { position: { lat: e.latLng.lat(), lng: e.latLng.lng() } })
+            if (!e.latLng) return
+            // A POI click: cancel Google's own info window before it opens. We replace that
+            // window with our own card (it is the only way to offer "Add as suggestion" —
+            // the SDK's window takes no custom content), so letting both appear would be two
+            // cards for one click.
+            if (e.placeId) e.stop?.()
+            this.emit('mapClick', {
+              position: { lat: e.latLng.lat(), lng: e.latLng.lng() },
+              ...(e.placeId ? { placeId: e.placeId } : {}),
+            })
           }),
+          this.map.addListener('rightclick', (e) => {
+            if (!e.latLng) return
+            this.emit('mapContextMenu', { position: { lat: e.latLng.lat(), lng: e.latLng.lng() } })
+          }),
+          // Any movement starts a per-frame tracking loop; `idle` ends it. See
+          // `startViewTracking` for why the events alone are not enough.
+          this.map.addListener('bounds_changed', () => this.startViewTracking()),
+          this.map.addListener('dragend', () => this.startViewTracking()),
+          this.map.addListener('zoom_changed', () => this.startViewTracking()),
+          this.map.addListener('idle', () => this.stopViewTracking()),
         )
+
+        // The projection carrier. `OverlayView` is abstract in name only — the SDK calls
+        // these three hooks, so they must exist even though this overlay renders nothing.
+        const overlay = new maps.OverlayView()
+        overlay.onAdd = () => {}
+        overlay.draw = () => {}
+        overlay.onRemove = () => {}
+        overlay.setMap(this.map)
+        this.overlay = overlay
         this.ready = true
         const pending = this.queue
         this.queue = []
@@ -189,10 +290,13 @@ export class GoogleMapProvider implements MapProvider {
   }
 
   unmount(): void {
+    this.stopViewTracking()
     for (const l of this.mapListeners) l.remove()
     this.mapListeners = []
+    this.overlay?.setMap(null)
+    this.overlay = null
     for (const marker of this.markers.values()) marker.setMap(null)
-    for (const shape of this.shapes.values()) shape.setMap(null)
+    for (const shape of this.shapes.values()) forEachShape(shape, (part) => part.setMap(null))
     this.markers.clear()
     this.shapes.clear()
     this.listeners.clear()
@@ -224,6 +328,15 @@ export class GoogleMapProvider implements MapProvider {
     if (!this.map) return { center: { lat: 0, lng: 0 }, zoom: 0 }
     const c = this.map.getCenter()
     return { center: { lat: c.lat(), lng: c.lng() }, zoom: this.map.getZoom() }
+  }
+
+  projectToContainerPoint(position: LatLng): { x: number; y: number } | null {
+    // Null until the overlay has been added *and* the map has drawn once — asking earlier is
+    // normal (a card can open on the same tick the map mounts), and guessing a point would
+    // put the card somewhere confidently wrong.
+    const projection = this.overlay?.getProjection()
+    if (!projection || !this.maps) return null
+    return projection.fromLatLngToContainerPixel(new this.maps.LatLng(position.lat, position.lng))
   }
 
   addMarker(spec: MarkerSpec): void {
@@ -263,26 +376,60 @@ export class GoogleMapProvider implements MapProvider {
     if (this.shapes.has(spec.id)) throw new Error(`${NAME}.addPolygon: polygon "${spec.id}" already exists`)
     this.whenReady(() => {
       if (!this.map || !this.maps) return
-      const shape =
-        spec.shape === 'circle' && spec.center && spec.radiusM !== undefined
-          ? new this.maps.Circle({ center: spec.center, radius: spec.radiusM, map: this.map, ...regionStyle(spec) })
-          : new this.maps.Polygon({ paths: spec.path ?? [], map: this.map, ...regionStyle(spec) })
-      shape.addListener('click', () => this.emit('polygonClick', { id: spec.id }))
-      this.shapes.set(spec.id, shape)
+      if (spec.shape === 'circle' && spec.center && spec.radiusM !== undefined) {
+        const circle = new this.maps.Circle({
+          center: spec.center,
+          radius: spec.radiusM,
+          map: this.map,
+          ...regionStyle(spec),
+        })
+        circle.addListener('click', () => this.emit('polygonClick', { id: spec.id }))
+        this.shapes.set(spec.id, circle)
+        return
+      }
+
+      // Dashed outline + tinted fill (`design.md` > "Map layer specifics"). Google's
+      // `Polygon` has no dash option at all — dashes exist only as repeated `icons` on a
+      // `Polyline` — so the region is drawn as two overlapping objects: the polygon carries
+      // the fill with its stroke switched off, and a closed polyline retraces the same ring
+      // as dots. Both are registered under one id so add/update/remove stay one call each to
+      // `MapCanvas`, which knows nothing of this split.
+      const style = regionStyle(spec)
+      const polygon = new this.maps.Polygon({
+        paths: spec.path ?? [],
+        map: this.map,
+        ...style,
+        strokeOpacity: 0,
+        strokeWeight: 0,
+      })
+      const outline = new this.maps.Polyline({
+        path: closedRing(spec.path ?? []),
+        map: this.map,
+        ...dashedStroke(style, spec.selected),
+      })
+      polygon.addListener('click', () => this.emit('polygonClick', { id: spec.id }))
+      outline.addListener('click', () => this.emit('polygonClick', { id: spec.id }))
+      this.shapes.set(spec.id, { fill: polygon, outline })
     })
   }
   updatePolygon(spec: PolygonSpec): void {
     this.whenReady(() => {
       const shape = this.shapes.get(spec.id)
       if (!shape) throw new Error(`${NAME}.updatePolygon: polygon "${spec.id}" does not exist`)
-      shape.setOptions(regionStyle(spec))
+      const style = regionStyle(spec)
+      if ('fill' in shape) {
+        shape.fill.setOptions({ ...style, strokeOpacity: 0, strokeWeight: 0 })
+        shape.outline.setOptions({ ...dashedStroke(style, spec.selected), path: closedRing(spec.path ?? []) })
+        return
+      }
+      shape.setOptions(style)
     })
   }
   removePolygon(id: string): void {
     this.whenReady(() => {
       const shape = this.shapes.get(id)
       if (!shape) return
-      shape.setMap(null)
+      forEachShape(shape, (part) => part.setMap(null))
       this.shapes.delete(id)
     })
   }
@@ -296,6 +443,55 @@ export class GoogleMapProvider implements MapProvider {
 
   private emit<K extends MapEventName>(event: K, payload: MapEventMap[K]): void {
     this.listeners.get(event)?.forEach((handler) => handler(payload))
+  }
+}
+
+/** A polygon region as Google has to draw it: fill and dashed outline are two objects. */
+type DashedRegion = { fill: GooglePolygon; outline: GooglePolyline }
+
+function forEachShape(
+  shape: GoogleCircle | DashedRegion,
+  fn: (part: { setMap(map: GoogleMap | null): void }) => void,
+): void {
+  if ('fill' in shape) {
+    fn(shape.fill)
+    fn(shape.outline)
+    return
+  }
+  fn(shape)
+}
+
+/** Repeats the first vertex so the polyline closes the ring the polygon closes implicitly —
+ *  without it the outline is missing exactly one edge, which reads as a rendering bug. */
+function closedRing(path: LatLng[]): LatLng[] {
+  if (path.length < 2) return path
+  const first = path[0]
+  const last = path[path.length - 1]
+  return first.lat === last.lat && first.lng === last.lng ? path : [...path, first]
+}
+
+/** The dash itself: round dots on a transparent line, which is the only way Google exposes a
+ *  dashed stroke. `scale` and `repeat` are tuned to read as a boundary at county zoom without
+ *  turning into a solid line when zoomed out. */
+function dashedStroke(style: Record<string, unknown>, selected?: boolean): Record<string, unknown> {
+  return {
+    strokeColor: style.strokeColor,
+    strokeOpacity: 0,
+    icons: [
+      {
+        icon: {
+          path: 'M 0,-1 0,1',
+          strokeOpacity: selected ? 1 : 0.85,
+          strokeWeight: selected ? 3 : 2,
+          scale: 2,
+        },
+        offset: '0',
+        // On the 5/8/13/21… scale like any other length in this codebase, even though it is
+        // handed to Google rather than to CSS — `check:tokens` scans this file too, and a
+        // dash gap is exactly the kind of made-up number the check exists to catch.
+        repeat: '13px',
+      },
+    ],
   }
 }
 

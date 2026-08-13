@@ -109,3 +109,41 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+/* The resolved place's address, sitting directly under the Title field as its subtitle.
+   Pulled tight to the field above (negative top margin against the form's own gap) so the
+   two read as one block rather than as two unrelated rows. */
+.sugg-create__address {
+  margin: calc(var(--space-2) * -1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Compact fields inside the floating create card.
+   Scoped to `pointer: fine` on purpose: the density is for mouse-driven desktop, where this
+   card overlays the map and every saved row is map the user can still see. Touch devices keep
+   the full `--field-height` (44px) — shrinking a tap target is an accessibility regression
+   dressed up as a design improvement. */
+@media (pointer: fine) {
+  .sugg-create {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .sugg-create .k-field__input {
+    height: var(--field-height-compact);
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  /* Notes is a textarea: it has rows, not a height, so it gets the same padding and type
+     scale without being forced to one line. */
+  .sugg-create textarea.k-field__input {
+    height: auto;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .sugg-create .k-field__label {
+    font-size: var(--text-sm);
+  }
+}

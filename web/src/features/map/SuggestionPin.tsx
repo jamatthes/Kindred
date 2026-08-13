@@ -22,6 +22,9 @@ export const CATEGORY_ICON_PATHS: Record<SuggestionCategory, string> = {
     '<circle cx="12" cy="5" r="2.2"/><path d="M5 22l3-7 4-2 2 4 5 1M9 10l3-3 4 2"/>',
   meal: '<path d="M7 3v8M11 3v8M9 3v18M17 3c-2 1-3 3-3 6v3h4v9"/>',
   region: '<path d="M4 4l8 4 8-4-4 16-4-4-4 4z"/>',
+  // Deliberately the least specific shape in the set — a plain marker outline, so an
+  // `other` pin never hints at a category it does not mean.
+  other: '<circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/>',
 }
 
 /** One-character glyph badges — the non-colour carrier of status. `proposed` is the

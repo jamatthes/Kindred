@@ -24,12 +24,14 @@
  * - The circle tool sets its radius from two clicks (centre, then edge) for the same reason.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner, Button, TextField } from '../../app/ui/primitives'
 import { useValidatedField } from '../../app/ui/useValidatedField'
+import { ApiError } from '../../app/apiClient'
 import { suggestionsApi } from './api'
-import { autocompletePlaces, getPlaceDetails, placesAvailable } from './placesClient'
+import { autocompletePlaces, findPlaceFromText, getPlaceDetails, placesAvailable } from './placesClient'
 import type { PlacePrediction } from './placesClient'
+import { inferSuggestionType } from './placeType'
 import { circleGeometry, haversineM, polygonGeometry, regionCentroid } from './geometry'
 import type { LatLng } from '../map/types'
 import type { LinkPreview, Suggestion, SuggestionCreateInput, SuggestionType } from '../../app/types'
@@ -37,17 +39,11 @@ import './CreateSuggestionForm.css'
 
 export type CreateMode = 'search' | 'drop-pin' | 'draw-region' | 'url'
 
-const MODE_LABEL: Record<CreateMode, string> = {
-  search: 'Search a place',
-  'drop-pin': 'Drop a pin',
-  'draw-region': 'Draw a region',
-  url: 'Paste a link',
-}
-
 const TYPE_LABEL: Record<SuggestionType, string> = {
   accommodation: 'Accommodation',
   activity: 'Activity',
   meal: 'Meal',
+  other: 'Other',
   region: 'Region',
 }
 
@@ -76,6 +72,34 @@ export type CreateSuggestionFormProps = {
    * — the ordinary way to reach it from the toolbar's default button — still could not
    * click the map, because the parent never learned the tab had changed. */
   onModeChange?: (mode: CreateMode) => void
+  /** A place the user picked *outside* this form — today, a click on one of the base map's
+   * own Google POIs (`design.md` S3b). The parent has already paid for the Place Details
+   * call to render its card, so the form takes the result rather than fetching it a second
+   * time. Seeds exactly what picking a search prediction seeds, guessed type included. */
+  seedPlace?: PlaceSeed | null
+}
+
+/** What the parent knows about a place it has already looked up. Mirrors the fields
+ *  `pickPrediction` sets, so the two entry points cannot drift apart. */
+export type PlaceSeed = {
+  placeId: string
+  name: string
+  address: string
+  position: LatLng
+  /** Google's raw categories — only ever used to guess our type; never persisted. */
+  types: string[]
+}
+
+/** The distinctive part of a URL's host, as a search query: `https://www.example.co.uk/x`
+ *  → `example`. Strips `www.` and the public suffix, which carry no meaning for a lookup. */
+function domainAsQuery(url: string): string {
+  try {
+    const host = new URL(url.trim()).hostname.replace(/^www\./, '')
+    return host.split('.')[0] ?? ''
+  } catch {
+    // Not a URL yet — the user is still typing. Nothing to search for.
+    return ''
+  }
 }
 
 function validateTitle(value: string): string | null {
@@ -91,8 +115,12 @@ export function CreateSuggestionForm({
   onFocusExisting,
   initialMode = 'search',
   onModeChange,
+  seedPlace = null,
 }: CreateSuggestionFormProps) {
-  const [mode, setMode] = useState<CreateMode>(initialMode)
+  // Fixed for the life of the form. The mode is chosen by the entry point — a POI click, a
+  // right-click, the toolbar's "Paste a link" — and there is no longer any in-form control
+  // that changes it, so this is state only in the sense that it was passed in once.
+  const [mode] = useState<CreateMode>(initialMode)
   const [type, setType] = useState<SuggestionType>('accommodation')
   const title = useValidatedField(validateTitle)
   const [notes, setNotes] = useState('')
@@ -125,9 +153,36 @@ export function CreateSuggestionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
+  // Seeded from outside (POI click). Keyed on `placeId` so re-renders don't clobber edits
+  // the user has since made — only a genuinely different place re-seeds the form.
+  const seededPlaceIdRef = useRef<string | null>(null)
+  const seededPlaceNameRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!seedPlace || seededPlaceIdRef.current === seedPlace.placeId) return
+    // Re-seeding an open form (the user clicked a different place on the map) must not throw
+    // away a title they typed themselves. Overwrite only what the form itself filled in: an
+    // empty title, or the previous place's name still sitting there untouched.
+    const previousName = seededPlaceNameRef.current
+    if (!title.value.trim() || title.value === previousName) {
+      title.setValue(seedPlace.name)
+    }
+    seededPlaceIdRef.current = seedPlace.placeId
+    seededPlaceNameRef.current = seedPlace.name
+    setCoords(seedPlace.position)
+    setPlaceId(seedPlace.placeId)
+    setPlaceSnapshot({ name: seedPlace.name, address: seedPlace.address })
+    setType(inferSuggestionType(seedPlace.types))
+    setSearchInput(seedPlace.name)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedPlace])
+
   // --- Search -------------------------------------------------------------------------
   useEffect(() => {
-    if (mode !== 'search' || !searchInput.trim()) {
+    // A resolved place hides the search box, so nothing here should still be searching for
+    // it. Without this guard the seeded name went straight back into autocomplete and the
+    // form showed a list of alternatives underneath the place the user had just chosen —
+    // including, absurdly, the place itself.
+    if (mode !== 'search' || placeId || !searchInput.trim()) {
       setPredictions([])
       return
     }
@@ -140,7 +195,7 @@ export function CreateSuggestionForm({
       void autocompletePlaces(searchInput).then(setPredictions)
     }, 250)
     return () => clearTimeout(timer)
-  }, [mode, searchInput])
+  }, [mode, placeId, searchInput])
 
   async function pickPrediction(prediction: PlacePrediction) {
     try {
@@ -149,6 +204,11 @@ export function CreateSuggestionForm({
       setCoords({ lat: details.lat, lng: details.lng })
       setPlaceId(details.placeId)
       setPlaceSnapshot({ name: details.name, address: details.address })
+      // Preselect, never impose: the dropdown below stays editable, and `region` is left
+      // alone because the draw-region tab owns that type outright.
+      if (mode !== 'draw-region') {
+        setType(inferSuggestionType(details.types.length ? details.types : prediction.types))
+      }
       setPredictions([])
       setSearchInput(details.name)
     } catch {
@@ -203,15 +263,32 @@ export function CreateSuggestionForm({
       setLinkStatus('checking')
       suggestionsApi
         .linkPreview(externalUrl.trim())
-        .then((preview: LinkPreview | undefined) => {
+        .then(async (preview: LinkPreview | undefined) => {
           setLinkStatus('checked')
-          if (!preview) return // 204 — normal, silent
-          if (!title.value.trim() && preview.title) title.setValue(preview.title)
-          const extraNotes = [preview.facts, preview.locality].filter(Boolean).join(' · ')
-          if (extraNotes && !notes) setNotes(extraNotes)
-          if (preview.lat !== undefined && preview.lng !== undefined && !coords) {
-            setCoords({ lat: preview.lat, lng: preview.lng })
+          if (preview) {
+            if (!title.value.trim() && preview.title) title.setValue(preview.title)
+            const extraNotes = [preview.facts, preview.locality].filter(Boolean).join(' · ')
+            if (extraNotes && !notes) setNotes(extraNotes)
+            if (preview.lat !== undefined && preview.lng !== undefined && !coords) {
+              setCoords({ lat: preview.lat, lng: preview.lng })
+              return
+            }
           }
+          // The link named a place but not a location — the ordinary case for a shop's own
+          // website, which has no geo metadata at all. Google cannot look up a URL, but the
+          // page's title ("The Games Shop Aldershot") is exactly what its Places index is
+          // built on, so we search for that. A site with no title falls back to its domain
+          // ("thegamesshopaldershot.co.uk" → "thegamesshopaldershot"), which is a
+          // surprisingly good query for a small business.
+          if (coords || !placesAvailable()) return
+          const query = preview?.title?.trim() || domainAsQuery(externalUrl)
+          const found = query ? await findPlaceFromText([query, preview?.locality].filter(Boolean).join(' ')) : null
+          if (!found) return
+          setCoords({ lat: found.lat, lng: found.lng })
+          if (found.placeId) setPlaceId(found.placeId)
+          setPlaceSnapshot({ name: found.name, address: found.address })
+          if (!title.value.trim()) title.setValue(found.name)
+          setType(inferSuggestionType(found.types))
         })
         .catch(() => setLinkStatus('checked')) // best-effort — a failure is silent, per design.md
     }, 500)
@@ -252,6 +329,14 @@ export function CreateSuggestionForm({
       place_id: placeId ?? undefined,
       place_snapshot: placeSnapshot ?? undefined,
       external_url: externalUrl.trim() || undefined,
+      // A region the user *searched for* rather than drew: ask the server for the real OSM
+      // boundary instead of shipping a point and letting it render as a bare pin. Google's
+      // own boundary polygons are render-only and licensed, so the search result cannot
+      // carry the shape — the place's name is the whole input the lookup needs.
+      boundary_query:
+        type === 'region' && !regionGeometry
+          ? (placeSnapshot?.name || title.value).trim() || undefined
+          : undefined,
     }
 
     setSubmitting(true)
@@ -260,8 +345,15 @@ export function CreateSuggestionForm({
       const created = await suggestionsApi.create(body)
       onCreated(created)
       onClose()
-    } catch {
-      setSubmitError('That could not be saved. Try again.')
+    } catch (cause) {
+      // The one failure worth naming: OpenStreetMap has no boundary for that name. Telling
+      // the user to draw it is actionable; "that could not be saved" sends them round the
+      // same loop.
+      setSubmitError(
+        cause instanceof ApiError && cause.code === 'boundary_not_found'
+          ? cause.message
+          : 'That could not be saved. Try again.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -278,42 +370,50 @@ export function CreateSuggestionForm({
         </button>
       </div>
 
-      <div className="sugg-create__modes" role="tablist" aria-label="How to add this">
-        {(Object.keys(MODE_LABEL) as CreateMode[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            className={`sugg-create__mode${mode === m ? ' is-on' : ''}`}
-            onClick={() => setMode(m)}
-          >
-            {MODE_LABEL[m]}
-          </button>
-        ))}
-      </div>
 
       {mode !== 'draw-region' ? (
         <label className="k-field">
           <span className="k-field__label">What is this?</span>
           <select className="k-field__input" value={type} onChange={(e) => setType(e.target.value as SuggestionType)}>
-            {(['accommodation', 'activity', 'meal'] as SuggestionType[]).map((t) => (
-              <option key={t} value={t}>
-                {TYPE_LABEL[t]}
-              </option>
-            ))}
+            {/* `region` belongs here on the search tab: searching "Yorkshire" is the
+                named-locality case, and the server turns it into a real OSM boundary on save
+                (`design.md` > "Named-locality regions"). Leaving it out was why a searched
+                county could only ever be filed as an activity — and why the type guess had
+                nowhere to put its answer. A dropped pin still cannot be a region: there is no
+                name to look a boundary up by, only a point. */}
+            {((mode === 'search'
+              ? ['accommodation', 'activity', 'meal', 'other', 'region']
+              : ['accommodation', 'activity', 'meal', 'other']) as SuggestionType[]).map(
+              (t) => (
+                <option key={t} value={t}>
+                  {TYPE_LABEL[t]}
+                </option>
+              ),
+            )}
           </select>
+          {mode === 'search' && type === 'region' ? (
+            <p className="sugg-create__hint">
+              The outline comes from OpenStreetMap when you save. If there is none, draw the area instead.
+            </p>
+          ) : null}
         </label>
       ) : null}
 
       {mode === 'search' ? (
         <div className="sugg-create__search">
-          <TextField
-            label="Search for a place"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Hotel, restaurant, attraction…"
-          />
+          {/* Nothing at all once a place is resolved. The name is already in the Title field
+              below — repeating it here as a second, differently-styled copy made the same
+              string look like two competing facts — and the address rides under that field
+              where it reads as the title's subtitle. Before a place is picked, this is the
+              search box. */}
+          {placeId && placeSnapshot ? null : (
+            <TextField
+              label="Search for a place"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Hotel, restaurant, attraction…"
+            />
+          )}
           {searchError ? <Banner tone="info">{searchError}</Banner> : null}
           {predictions.length > 0 ? (
             <ul className="sugg-create__predictions">
@@ -325,9 +425,6 @@ export function CreateSuggestionForm({
                 </li>
               ))}
             </ul>
-          ) : null}
-          {coords ? (
-            <p className="sugg-create__hint">Location set from Google Places — edit the details below.</p>
           ) : null}
         </div>
       ) : null}
@@ -404,11 +501,20 @@ export function CreateSuggestionForm({
       ) : null}
 
       <TextField label="Title" {...title.inputProps} error={title.error} />
+      {/* The address as the title's subtitle: one fact, directly under the name it belongs
+          to, rather than a separate boxed panel restating both. */}
+      {placeSnapshot?.address ? <p className="sugg-create__address">{placeSnapshot.address}</p> : null}
       <label className="k-field">
         <span className="k-field__label">Notes</span>
         <textarea className="k-field__input" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
       </label>
-      {mode !== 'url' ? (
+      {/* Not asked for once the suggestion carries a `place_id`: Google already knows this
+          place's website, the detail card fetches it on open (for free — same Contact tier as
+          the opening hours it already requests), and asking a user to paste a link the app
+          can look up itself is work we are inventing for them. It stays for a dropped pin and
+          for the paste-a-link flow, where there is no place to look anything up by — that is
+          requirement S6 (an Airbnb listing has no Google place at all). */}
+      {mode !== 'url' && !placeId ? (
         <TextField
           label="Listing link (optional)"
           type="url"

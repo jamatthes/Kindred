@@ -39,7 +39,29 @@ NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 #: Nominatim's usage policy (https://operations.osmfoundation.org/policies/nominatim/)
 #: requires a valid identifying User-Agent or Referer. `httpx`'s default agent is explicitly
 #: called out there as grounds for a block.
-USER_AGENT = "KindredBoundaries/1.0 (+self-hosted trip planner; contact: admin@example.org)"
+#:
+#: The identifier has to be *real*. This was a hardcoded string ending in
+#: `contact: admin@example.org`, and Nominatim answered every request with `403 Forbidden` —
+#: a placeholder contact is treated the same as no contact at all. The whole feature failed
+#: silently, because `BoundaryService.lookup` maps any transport error to "nothing found":
+#: searching a county produced "no boundary" rather than an error anyone could act on.
+#: Building the agent from the deployment's own `PUBLIC_BASE_URL` makes it identify a real
+#:, reachable service, which is the entire point of the policy.
+USER_AGENT_TEMPLATE = "Kindred/1.0 (+{base_url})"
+
+
+def user_agent() -> str:
+    """The identifying User-Agent for Nominatim, from this deployment's public URL.
+
+    Read at call time rather than import time so a settings override applies without a
+    module reload, and so tests can point it anywhere.
+    """
+    from app.core.config import settings
+
+    override = settings.nominatim_user_agent.strip()
+    if override:
+        return override
+    return USER_AGENT_TEMPLATE.format(base_url=settings.public_base_url.rstrip("/"))
 
 FETCH_TIMEOUT_SECONDS = 8.0
 
@@ -206,7 +228,7 @@ class HttpxTransport:
         import httpx
 
         async with httpx.AsyncClient(
-            timeout=FETCH_TIMEOUT_SECONDS, headers={"User-Agent": USER_AGENT}
+            timeout=FETCH_TIMEOUT_SECONDS, headers={"User-Agent": user_agent()}
         ) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()

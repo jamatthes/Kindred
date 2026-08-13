@@ -1,0 +1,36 @@
+/* Right-click menu, placed at the cursor inside the map area. */
+
+.map-context-menu {
+  position: absolute;
+  z-index: 25;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.map-context-menu button {
+  text-align: left;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--chip-radius);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  min-height: var(--hit-target);
+}
+
+.map-context-menu button:hover:not(:disabled),
+.map-context-menu button:focus-visible {
+  background: var(--color-surface);
+}
+
+.map-context-menu button:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}

@@ -1,26 +1,34 @@
 /**
- * The map-suggestions screen: `MapCanvas` at ~62%, list/details in the ~38% panel on
- * desktop, a bottom sheet on mobile — `design.md` > "Layout". Map and list are one dataset
- * behind `suggestionStore` (`design.md` S2): selecting anywhere updates both.
+ * The map-suggestions screen — **map-first** (revised 2026-08-12, `design.md` > "Layout").
  *
- * Follows `FamiliesScreen`/`PollsScreen`'s convention of owning its whole two-column layout
- * inside the screen rather than through `Shell`'s `sidePanel` prop — neither existing
- * feature uses that slot, so matching them keeps one convention rather than introducing a
- * second, even though `shell.tsx`'s own comment reads as if a feature eventually would.
+ * The map fills the content area. Search, filters, the list, a suggestion's detail and the
+ * create form are all summoned over it and dismissed again; nothing is permanently docked
+ * beside it. The old 62/38 split spent a third of the window on a filter row and a line of
+ * placeholder text even on a trip with no suggestions at all, while squeezing the one
+ * surface every create gesture starts from.
  *
- * Progressive disclosure (`design.md`): a marker click selects the suggestion, which always
- * opens the full detail (level 3) in the desktop panel — there is no separately positioned
- * floating popover on desktop, because `MapProvider` (`features/map/MapProvider.ts`) has no
- * query for a mounted marker's screen position to anchor one against, and `GoogleMapProvider`
- * only added that primitive in the swap this phase makes, not extended the interface (out of
- * scope: "do not modify the provider layer except where a checklist item genuinely requires
- * it" — an anchored popover is a nice-to-have, not a requirement the interface is missing
- * for). On mobile, where the constraint is real screen space rather than an anchor point, the
- * two levels *are* real: `BottomSheet`'s `peek` snap renders the real `PopoverCard` (level 2)
- * and `full` renders `SuggestionDetailPanel` (level 3, `design.md` S10).
+ * Three ways in, all on the map: the toolbar's search field, right-click → "Drop a pin
+ * here", and clicking a place Google already draws (we suppress Google's own info window and
+ * show `PlacePreviewCard` instead, because that window takes no custom actions). Map and
+ * list remain one dataset behind `suggestionStore`: selecting anywhere updates both.
+ *
+ * Follows `FamiliesScreen`/`PollsScreen`'s convention of owning its whole layout inside the
+ * screen rather than through `Shell`'s `sidePanel` prop — neither existing feature uses that
+ * slot, so matching them keeps one convention rather than introducing a second, even though
+ * `shell.tsx`'s own comment reads as if a feature eventually would.
+ *
+ * Progressive disclosure (`design.md`): a marker click selects the suggestion, which opens
+ * the full detail (level 3) in a card over the map. That card floats at the map's edge
+ * rather than being tethered to its pin, because `MapProvider` (`features/map/MapProvider.ts`)
+ * still has no lat/lng → screen-point query to anchor against; a genuinely anchored popover
+ * remains a known follow-up, and the interface — not this screen — is where it has to be
+ * fixed. On mobile, where the constraint is screen space rather than an anchor point, the two
+ * levels *are* real: `BottomSheet`'s `peek` snap renders the real `PopoverCard` (level 2) and
+ * `full` renders `SuggestionDetailPanel` (level 3, `design.md` S10).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useSession } from '../../app/session'
 import { useStage } from '../../app/useStage'
 import { BottomSheet } from '../../app/BottomSheet'
@@ -31,14 +39,24 @@ import { GoogleMapProvider } from '../map/GoogleMapProvider'
 import { createFakeMapProvider } from '../map/FakeMapProvider'
 import { PopoverCard } from '../map/PopoverCard'
 import type { LatLng } from '../map/types'
-import { hasActiveFilters, suggestionStore, useSuggestionView } from './store'
+import type { MapProvider } from '../map/MapProvider'
+import { suggestionStore, useSuggestionView } from './store'
 import { useSuggestionList } from './useSuggestions'
 import { suggestionMarkers, regionPolygons } from './markers'
-import { FilterBar } from './FilterBar'
+import { FilterMenu } from './FilterMenu'
+import { MapSearchField } from './MapSearchField'
+import { MapContextMenu } from './MapContextMenu'
+import { PlacePreviewCard } from './PlacePreviewCard'
+import { getPlaceDetails, placesAvailable } from './placesClient'
+import type { PlaceDetails } from './placesClient'
+import { PlaceProfilePanel } from './PlaceProfilePanel'
+import { useAnchoredPlacement } from './useAnchoredPlacement'
+import { SIDE_PANEL_SLOT_ID, setSidePanelFilled } from '../../app/sidePanelSlot'
+import { createPortal } from 'react-dom'
 import { SuggestionsList } from './SuggestionsList'
 import { SuggestionDetailPanel } from './SuggestionDetailPanel'
 import { CreateSuggestionForm } from './CreateSuggestionForm'
-import type { CreateMode } from './CreateSuggestionForm'
+import type { CreateMode, PlaceSeed } from './CreateSuggestionForm'
 import { SuggestionVotePanel } from '../voting-comments/SuggestionVotePanel'
 import { usePendingVotes } from '../voting-comments/usePendingVotes'
 import { DistanceChip } from '../distances/DistanceChip'
@@ -50,6 +68,7 @@ const CATEGORY_LABEL: Record<Suggestion['type'], string> = {
   accommodation: 'Accommodation',
   activity: 'Activity',
   meal: 'Meal',
+  other: 'Other',
   region: 'Region',
 }
 
@@ -80,8 +99,25 @@ function useIsNarrow(): boolean {
   return narrow
 }
 
+/** Renders into the shell's right-hand panel, and tells the shell so — otherwise its
+ *  "select something…" placeholder would sit above whatever we portal in. */
+function SidePanelPortal({ children }: { children: React.ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    // The slot is the shell's DOM, mounted before any screen inside it; looked up on mount
+    // rather than held in a ref because this component and the shell are siblings in the
+    // tree, not parent and child.
+    setSlot(document.getElementById(SIDE_PANEL_SLOT_ID))
+  }, [])
+  useEffect(() => {
+    setSidePanelFilled(true)
+    return () => setSidePanelFilled(false)
+  }, [])
+  return slot ? createPortal(children, slot) : null
+}
+
 export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {}) {
-  const { user } = useSession()
+  const { user, resolvedTheme } = useSession()
   const stage = useStage()
   const view = useSuggestionView()
   const narrow = useIsNarrow()
@@ -124,6 +160,27 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
   const [pendingClick, setPendingClick] = useState<LatLng | null>(null)
   const [mobileSnap, setMobileSnap] = useState<'peek' | 'full'>('peek')
   const [mobileListOpen, setMobileListOpen] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
+  const [seedPlace, setSeedPlace] = useState<PlaceSeed | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; position: LatLng } | null>(null)
+  // The Google POI the user clicked, resolving or resolved. Distinct from `seedPlace`: this
+  // one is only being *looked at*; it becomes a seed if they press "Add as suggestion".
+  const [poi, setPoi] = useState<{
+    placeId: string
+    loading: boolean
+    /** The full Places record — the profile panel shows what Google shows. */
+    details: PlaceDetails | null
+    error: string | null
+  } | null>(null)
+  const mapAreaRef = useRef<HTMLDivElement | null>(null)
+  const providerRef = useRef<MapProvider | null>(null)
+  /** Where the POI card is pinned, in container pixels. `null` = not projectable yet, which
+   *  is a real state on the tick the map mounts — the card waits rather than jumping. */
+  const [poiPoint, setPoiPoint] = useState<{ x: number; y: number } | null>(null)
+  /** Where the pointer last was inside the map area, in container pixels — the only thing
+   *  the context menu needs that a `LatLng` cannot give it. */
+  const lastPointerPointRef = useRef({ x: 0, y: 0 })
+  const [flyTo, setFlyTo] = useState<LatLng | null>(null)
 
   const selected = view.selectedId ? sorted.flatMap((s) => [s, ...s.children]).find((s) => s.id === view.selectedId) : null
 
@@ -137,17 +194,93 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
   }, [])
 
   const onMapClick = useCallback(
-    ({ position }: { position: LatLng }) => {
+    ({ position, placeId }: { position: LatLng; placeId?: string }) => {
+      setContextMenu(null)
       if (creating && (createMode === 'drop-pin' || createMode === 'draw-region')) {
         setPendingClick(position)
+        return
       }
+      // A click on one of Google's own labelled places. Its info window has already been
+      // suppressed by the provider, so what we show is the only thing the user sees — showing
+      // nothing here would make those places read as dead.
+      if (!placeId) return
+      if (!placesAvailable()) {
+        setPoi({ placeId, loading: false, details: null, error: 'Place details are unavailable right now.' })
+        return
+      }
+      // Clicking a place dismisses whatever was open first. Only one thing on this map is
+      // ever "the thing you are looking at", and the click just said which — leaving the old
+      // card up meant two anchored surfaces fighting over one position, with the open form
+      // sliding to a place the user had not chosen.
+      setCreating(false)
+      setSeedPlace(null)
+      setPendingClick(null)
+      suggestionStore.select(null)
+      setPoi({ placeId, loading: true, details: null, error: null })
+      void getPlaceDetails(placeId)
+        .then((details) => setPoi({ placeId, loading: false, error: null, details }))
+        .catch(() =>
+          setPoi({ placeId, loading: false, details: null, error: 'That place could not be loaded.' }),
+        )
     },
     [creating, createMode],
   )
 
-  function openCreate(mode: CreateMode) {
+  const onMapContextMenu = useCallback(({ position }: { position: LatLng }) => {
+    // Pixels come from the DOM event captured on the wrapper below, not from the provider —
+    // see `MapContextMenu`'s docblock for why the interface is not grown for this.
+    const point = lastPointerPointRef.current
+    setPoi(null)
+    setContextMenu({ x: point.x, y: point.y, position })
+  }, [])
+
+  function openCreate(mode: CreateMode, seed: PlaceSeed | null = null) {
     setCreateMode(mode)
+    setSeedPlace(seed)
     setCreating(true)
+    setListOpen(false)
+    setPoi(null)
+    setContextMenu(null)
+  }
+
+  /**
+   * Re-pins the POI card over the place it describes. Runs on every `viewChange` (Google
+   * fires `bounds_changed` continuously through a drag, so the card travels with the map
+   * instead of catching up at the end) and whenever the POI itself changes.
+   *
+   * A `null` projection means the SDK cannot answer yet; the card then falls back to its
+   * corner position rather than being placed at a guessed 0,0.
+   */
+  const reprojectPoi = useCallback(() => {
+    const position = poiPositionRef.current
+    if (!position) {
+      setPoiPoint(null)
+      return
+    }
+    setPoiPoint(providerRef.current?.projectToContainerPoint(position) ?? null)
+  }, [])
+
+  // One anchor for everything the map speaks through: the POI being previewed, or — once the
+  // user commits to suggesting it — the point the create form is about. Keeping them on the
+  // same anchor is what makes the form look like the card expanding in place rather than a
+  // second, unrelated surface opening somewhere else.
+  const anchorPosition =
+    (poi?.details ? { lat: poi.details.lat, lng: poi.details.lng } : null) ??
+    seedPlace?.position ??
+    pendingClick ??
+    null
+  const poiPositionRef = useRef<LatLng | null>(null)
+  poiPositionRef.current = anchorPosition
+
+  useEffect(() => {
+    reprojectPoi()
+  }, [anchorPosition?.lat, anchorPosition?.lng, reprojectPoi])
+
+  /** Right-click → "Drop a pin here": open the form already holding that point, so the
+   *  gesture completes in one step instead of asking for a second click on the map. */
+  function createAt(position: LatLng, mode: Extract<CreateMode, 'drop-pin' | 'draw-region'>) {
+    openCreate(mode)
+    setPendingClick(position)
   }
 
   if (!tripId) {
@@ -168,10 +301,12 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
           suggestionStore.select(null)
         }}
         onBack={onBack}
+        // Deselecting reveals the list only if the drawer is open behind this card; from a
+        // pin click it dismisses to the map, and the button says which.
+        backLabel={listOpen ? '← Back to list' : '← Back to the map'}
       />
     ) : (
       <>
-        <FilterBar />
         {loading ? (
           <div aria-busy="true" className="map-suggestions__skeleton">
             <Skeleton height="var(--space-6)" />
@@ -185,18 +320,91 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
             suggestions={sorted}
             tripId={tripId}
             ownFamilyId={user?.family?.id ?? null}
-            onCreate={() => openCreate('drop-pin')}
+            onCreate={() => openCreate('url', null)}
           />
         )}
       </>
     )
 
+  /** What belongs in the shell's panel right now: a selected suggestion's detail, or the
+   *  list when it was asked for. The create form is not here — see its own comment below. */
+  const sidePanelContent = poi && !creating ? (
+    // A clicked Google place, shown the way Google shows it (`PlaceProfilePanel`). It takes
+    // precedence over the list because it is what the user just did.
+    <PlaceProfilePanel
+      place={poi.details}
+      loading={poi.loading}
+      error={poi.error}
+      canAdd={stage.canMutate}
+      onAdd={(seed) => openCreate('search', seed)}
+      onClose={() => setPoi(null)}
+    />
+  ) : selected ? (
+    panelBody(() => suggestionStore.select(null))
+  ) : listOpen ? (
+    <>
+      <div className="map-suggestions__panel-header">
+        <h2 className="map-suggestions__panel-title">Suggestions</h2>
+        <button type="button" onClick={() => setListOpen(false)} aria-label="Close list">
+          ×
+        </button>
+      </div>
+      {panelBody()}
+    </>
+  ) : null
+  /** The projected anchor, but only while the create form is the thing being anchored. */
+  const createAnchorPoint = creating ? poiPoint : null
+  // Both anchored surfaces flip below their point and clamp to the map's box rather than
+  // hanging off an edge — a card you cannot read is not anchored, it is lost.
+  const poiPlacement = useAnchoredPlacement(poi && !creating ? poiPoint : null, mapAreaRef.current)
+  const formPlacement = useAnchoredPlacement(createAnchorPoint, mapAreaRef.current)
+
   return (
     <div className={`map-suggestions${narrow ? ' map-suggestions--narrow' : ''}`}>
-      <div className="map-suggestions__map">
+      <div
+        className="map-suggestions__map"
+        ref={mapAreaRef}
+        onPointerDown={(event) => {
+          const rect = mapAreaRef.current?.getBoundingClientRect()
+          lastPointerPointRef.current = {
+            x: event.clientX - (rect?.left ?? 0),
+            y: event.clientY - (rect?.top ?? 0),
+          }
+        }}
+        onContextMenu={(event) => {
+          // The browser menu is never what the user wants over a map, and Google's own
+          // surface does not suppress it for us on every provider.
+          event.preventDefault()
+        }}
+      >
         <div className="map-suggestions__toolbar">
-          <Button onClick={() => openCreate('search')} disabled={!stage.canMutate}>
-            Suggest a place
+          <MapSearchField
+            onPick={(seed) => {
+              setFlyTo(seed.position)
+              // Picked from the toolbar's search: the place is decided, so the tabs have
+              // nothing left to ask either.
+              openCreate('search', seed)
+            }}
+          />
+          <FilterMenu />
+          <button
+            type="button"
+            className="map-suggestions__list-toggle"
+            aria-pressed={listOpen}
+            onClick={() => {
+              setListOpen((open) => !open)
+              suggestionStore.select(null)
+              setCreating(false)
+            }}
+          >
+            List ({sorted.length})
+          </button>
+          {/* Every other way in now lives on the map itself: search is the field to the left,
+              drop-a-pin and draw-a-region are on right-click. What the map cannot do is take
+              a URL — an Airbnb listing or a shop's website is not a thing you can point at —
+              so that is what this button is for, and it says so. */}
+          <Button onClick={() => openCreate('url', null)} disabled={!stage.canMutate}>
+            Paste a link
           </Button>
           {creating ? (
             <span className="map-suggestions__hint" aria-live="polite">
@@ -209,39 +417,121 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
           ) : null}
         </div>
         <MapCanvas
+          // Remount on a theme change: Google fixes `colorScheme` at construction, so this
+          // key is what makes "the map follows the app's theme" true (`MapMountOptions`).
+          key={resolvedTheme}
           createProvider={createMapProvider}
-          center={selected ? { lat: selected.lat, lng: selected.lng } : DEFAULT_CENTER}
+          colorScheme={resolvedTheme}
+          center={flyTo ?? (selected ? { lat: selected.lat, lng: selected.lng } : DEFAULT_CENTER)}
           zoom={12}
           markers={markers}
           polygons={polygons}
           onMarkerClick={onMarkerClick}
           onPolygonClick={onMarkerClick}
           onMapClick={onMapClick}
+          onMapContextMenu={onMapContextMenu}
+          onProviderReady={(provider) => {
+            providerRef.current = provider
+          }}
+          onViewChange={reprojectPoi}
         />
-        {sorted.length === 0 && !loading && !hasActiveFilters(view.filters) ? (
-          <div className="map-suggestions__empty-overlay">
-            <p>No suggestions yet — drop the first pin.</p>
-            <Button onClick={() => openCreate('drop-pin')} disabled={!stage.canMutate}>
-              Drop a pin
-            </Button>
+
+        {contextMenu ? (
+          <MapContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            disabled={!stage.canMutate}
+            onDropPin={() => createAt(contextMenu.position, 'drop-pin')}
+            onDrawRegion={() => createAt(contextMenu.position, 'draw-region')}
+            onClose={() => setContextMenu(null)}
+          />
+        ) : null}
+
+        {/* Never while the create form is open: a place-click re-seeds that form instead
+            (see `onMapClick`), so there is only ever one anchored card on the map. */}
+        {poi && !creating ? (
+          <div
+            ref={poiPlacement.ref}
+            className={[
+              'map-suggestions__poi',
+              poiPlacement.placement ? 'map-suggestions__poi--anchored' : '',
+              poiPlacement.placement?.below ? 'is-below' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            style={
+              poiPlacement.placement
+                ? ({
+                    left: `${poiPlacement.placement.left}px`,
+                    top: `${poiPlacement.placement.top}px`,
+                    '--tail-x': `${poiPlacement.placement.tailX}px`,
+                  } as CSSProperties)
+                : undefined
+            }
+          >
+            <PlacePreviewCard
+              place={
+                poi.details
+                  ? {
+                      placeId: poi.details.placeId,
+                      name: poi.details.name,
+                      address: poi.details.address,
+                      position: { lat: poi.details.lat, lng: poi.details.lng },
+                      types: poi.details.types,
+                    }
+                  : null
+              }
+              loading={poi.loading}
+              error={poi.error}
+              canAdd={stage.canMutate}
+              anchored={Boolean(poiPoint)}
+              // Desktop reads the place in the side panel; this card only says which pin was
+              // clicked. Mobile has no side panel, so there the card keeps the actions.
+              showActions={narrow}
+              onAdd={(place) => openCreate('search', place)}
+              onClose={() => setPoi(null)}
+            />
           </div>
         ) : null}
-      </div>
 
-      {!narrow ? (
-        <aside className="map-suggestions__panel" aria-label="Suggestions">
-          {creating ? (
+        {/* The create form only. It is about one point on the map, so it opens *at* that
+            point rather than in the shell's panel — the POI card growing into a form. */}
+        {!narrow && creating ? (
+          <aside
+            className={[
+              'map-suggestions__panel',
+              'map-suggestions__panel--form',
+              formPlacement.placement ? 'map-suggestions__panel--anchored' : '',
+              formPlacement.placement?.below ? 'is-below' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            ref={formPlacement.ref}
+            style={
+              formPlacement.placement
+                ? ({
+                    left: `${formPlacement.placement.left}px`,
+                    top: `${formPlacement.placement.top}px`,
+                    '--tail-x': `${formPlacement.placement.tailX}px`,
+                  } as CSSProperties)
+                : undefined
+            }
+            aria-label="Suggest a place"
+          >
             <CreateSuggestionForm
               initialMode={createMode}
               onModeChange={setCreateMode}
+              seedPlace={seedPlace}
               onClose={() => {
                 setCreating(false)
                 setPendingClick(null)
+                setSeedPlace(null)
               }}
               onCreated={(created) => {
                 upsert(created)
                 suggestionStore.select(created.id)
                 setCreating(false)
+                setSeedPlace(null)
               }}
               pendingClick={pendingClick}
               onConsumeClick={() => setPendingClick(null)}
@@ -251,11 +541,16 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
                 suggestionStore.select(id)
               }}
             />
-          ) : (
-            panelBody(selected ? () => suggestionStore.select(null) : undefined)
-          )}
-        </aside>
-      ) : (
+          </aside>
+        ) : null}
+      </div>
+
+      {/* Detail and list live in the shell's own right-hand panel. Floating them over the
+          map put a card on top of the thing it describes while an empty column beside it
+          invited the user to select something — the panel exists, so this screen fills it. */}
+      {!narrow && sidePanelContent ? <SidePanelPortal>{sidePanelContent}</SidePanelPortal> : null}
+
+      {!narrow ? null : (
         <>
           <button
             type="button"
@@ -325,13 +620,19 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
           <CreateSuggestionForm
             initialMode={createMode}
             onModeChange={setCreateMode}
+            // The toolbar's search field and the POI card are on the map at every width, so
+            // the seed has to reach this copy of the form too — without it a mobile user who
+            // picked a place watched the form open empty and had to search for it again.
+            seedPlace={seedPlace}
             onClose={() => {
               setCreating(false)
               setPendingClick(null)
+              setSeedPlace(null)
             }}
             onCreated={(created) => {
               upsert(created)
               suggestionStore.select(created.id)
+              setSeedPlace(null)
             }}
             pendingClick={pendingClick}
             onConsumeClick={() => setPendingClick(null)}

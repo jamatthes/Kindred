@@ -17,6 +17,22 @@
 }
 
 {$KINDRED_SITE_ADDRESS::8080} {
+	# --- One canonical hostname ----------------------------------------------------------
+	# `KINDRED_SITE_ADDRESS` may list several names ("example.org, www.example.org") — Caddy
+	# then serves and certificates all of them. Only one may be *canonical*, though: the
+	# session cookie, `PUBLIC_BASE_URL` and every invite link name a single origin, so a
+	# login on `www` would not carry to the apex. Everything that is not
+	# `KINDRED_CANONICAL_HOST` is redirected to it before any other handler runs.
+	#
+	# Unset (the dev default) this matches nothing and costs nothing: with a single address
+	# there is no other host to arrive on.
+	# Both sides are quoted: the env placeholder is substituted into the CEL source as bare
+	# text, so an unquoted hostname parses as an identifier and fails to compile.
+	@offcanonical {
+		expression "{$KINDRED_CANONICAL_HOST:}" != "" && {host} != "{$KINDRED_CANONICAL_HOST:}"
+	}
+	redir @offcanonical https://{$KINDRED_CANONICAL_HOST:}{uri} permanent
+
 	encode zstd gzip
 
 	header {

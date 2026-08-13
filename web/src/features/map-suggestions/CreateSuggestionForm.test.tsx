@@ -110,12 +110,13 @@ describe('CreateSuggestionForm — drop pin', () => {
   it('places the pin from a consumed map click and requires no Google call', async () => {
     create.mockResolvedValue(suggestion())
     const props = baseProps()
-    const { rerender } = render(<CreateSuggestionForm {...props} />)
+    // The mode comes from the entry point now (right-click → "Drop a pin here"); there is no
+    // in-form tab to click.
+    const { rerender } = render(<CreateSuggestionForm {...props} initialMode="drop-pin" />)
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Drop a pin' }))
     expect(screen.getByText('Click anywhere on the map to drop the pin.')).toBeInTheDocument()
 
-    rerender(<CreateSuggestionForm {...props} pendingClick={{ lat: 51.1, lng: 0.2 }} />)
+    rerender(<CreateSuggestionForm {...props} initialMode="drop-pin" pendingClick={{ lat: 51.1, lng: 0.2 }} />)
     await waitFor(() => expect(props.onConsumeClick).toHaveBeenCalled())
     expect(screen.getByText(/Pin placed at 51.1000, 0.2000/)).toBeInTheDocument()
 
@@ -128,27 +129,26 @@ describe('CreateSuggestionForm — drop pin', () => {
     expect(sentBody.place_id).toBeUndefined()
   })
 
-  it('opens directly on the Drop a pin tab when the caller passes initialMode (M3 integration-pass fix)', () => {
+  it('opens in the mode its entry point chose (M3 integration-pass fix)', () => {
     // Found by the live Playwright smoke: MapSuggestionsScreen tracked which entry point was
-    // clicked (search vs. drop-pin vs. draw-region) but never told this component, so every
-    // entry point silently opened on the search tab regardless of which button was pressed.
+    // used but never told this component, so every one of them silently opened in search mode.
+    // The tabs that once expressed this are gone (2026-08-12 — every entry point now decides
+    // the mode by gesture), so the assertion moved from "which tab is selected" to what the
+    // mode actually produces: the drop-pin instruction, and no search field.
     const props = baseProps()
     render(<CreateSuggestionForm {...props} initialMode="drop-pin" />)
-    expect(screen.getByRole('tab', { name: 'Drop a pin' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: 'Search a place' })).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByText('Click anywhere on the map to drop the pin.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Search for a place')).not.toBeInTheDocument()
   })
 
-  it('tells the parent when the user switches tabs by hand, not just the mode it opened on (M3 integration-pass fix, one layer deeper)', () => {
-    // initialMode fixed the entry-point case, but a user who opens in search mode (the
-    // toolbar's default button) and then clicks the "Drop a pin" tab themselves was still
-    // stuck: MapSuggestionsScreen's onMapClick gates on its own createMode state, which only
-    // ever learned about the mode the form opened on. Found by the same live Playwright
-    // smoke as initialMode, the click still silently did nothing after switching tabs by hand.
+  it('reports its mode to the parent, which gates map clicks on it', () => {
+    // `MapSuggestionsScreen.onMapClick` only forwards a click while its own `createMode` says
+    // drop-pin/draw-region, and it learns that from this callback — so a form that never
+    // reported its mode would make drop-pin impossible even though the mode was correct here.
+    // (This once also covered switching tabs by hand; that path is gone with the tabs, but the
+    // report itself is still load-bearing.)
     const props = baseProps()
-    render(<CreateSuggestionForm {...props} />)
-    expect(props.onModeChange).toHaveBeenCalledWith('search')
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Drop a pin' }))
+    render(<CreateSuggestionForm {...props} initialMode="drop-pin" />)
     expect(props.onModeChange).toHaveBeenCalledWith('drop-pin')
   })
 })
