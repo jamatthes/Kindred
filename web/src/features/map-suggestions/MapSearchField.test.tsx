@@ -34,6 +34,9 @@ const DETAILS = {
   rating: null,
   openingHoursText: null,
     website: null,
+    phone: null,
+    ratingCount: null,
+    openNow: null,
   types: ['lodging'],
 }
 

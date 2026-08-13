@@ -34,6 +34,14 @@ export type PlaceDetails = {
    *  the user for a link once a `place_id` is set: the answer is already available, for free,
    *  every time the card opens. */
   website: string | null
+  /** Google's own one-line description of the place, when it has one. */
+  editorialSummary: string | null
+  phone: string | null
+  /** How many ratings the average is made of — an average with no sample size is a number
+   *  pretending to be evidence. */
+  ratingCount: number | null
+  /** Whether Google currently reports the place as open. `null` when it has no hours. */
+  openNow: boolean | null
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -75,9 +83,12 @@ type GooglePlaceResult = {
   geometry?: { location?: { lat(): number; lng(): number } }
   photos?: { getUrl(opts: { maxWidth: number }): string }[]
   rating?: number
-  opening_hours?: { weekday_text?: string[] }
+  opening_hours?: { weekday_text?: string[]; isOpen?: () => boolean | undefined; open_now?: boolean }
   types?: string[]
   website?: string
+  editorial_summary?: { overview?: string }
+  formatted_phone_number?: string
+  user_ratings_total?: number
 }
 
 function googleGlobal(): GoogleGlobal {
@@ -140,15 +151,23 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
         // `website` is a Contact-tier field, but `opening_hours` on the line above already
         // puts this call in that tier — so asking for it costs nothing extra, and it is what
         // lets the create form stop asking the user for a listing link.
+        // Three tiers are already in play and none of these additions changes that:
+        // `formatted_phone_number` joins `opening_hours`/`website` in Contact,
+        // `user_ratings_total` and `editorial_summary` join `rating` in Atmosphere. The card
+        // this feeds is the whole point of the call, so asking for the fields it renders is
+        // cheaper than a second lookup later.
         fields: [
           'name',
           'formatted_address',
           'geometry',
           'photos',
           'rating',
+          'user_ratings_total',
           'opening_hours',
           'types',
           'website',
+          'editorial_summary',
+          'formatted_phone_number',
         ],
       },
       (result, status) => {
@@ -172,6 +191,12 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     openingHoursText: result.opening_hours?.weekday_text ?? null,
     types: result.types ?? [],
     website: result.website ?? null,
+    editorialSummary: result.editorial_summary?.overview ?? null,
+    phone: result.formatted_phone_number ?? null,
+    ratingCount: result.user_ratings_total ?? null,
+    // `isOpen()` is the current API; `open_now` is its deprecated predecessor and still what
+    // some responses carry. Neither is guaranteed, hence the null.
+    openNow: result.opening_hours?.isOpen?.() ?? result.opening_hours?.open_now ?? null,
   }
 
   detailsCache.set(placeId, { expiresAt: Date.now() + CACHE_TTL_MS, details })

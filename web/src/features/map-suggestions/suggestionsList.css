@@ -93,3 +93,19 @@
 .sugg-status--approved { background: var(--color-success-soft); color: var(--color-success); }
 .sugg-status--rejected { background: var(--color-danger-soft); color: var(--color-danger); text-decoration: line-through; }
 .sugg-status--scheduled { background: var(--color-accent-soft); color: var(--color-accent); }
+
+/* The suggestions table inside the shell's side panel.
+   `DataTable` keeps header cells on one line, which is right for a full-width table and
+   wrong in a ~26rem column: six nowrap headers set a minimum width the panel cannot meet, so
+   the table grew a horizontal scrollbar for the sake of the word "Comments". Letting the
+   headers wrap here costs a line of height and removes the sideways scroll entirely. */
+.side-panel__slot .dt__table th {
+  white-space: normal;
+}
+
+.side-panel__slot .dt {
+  /* Vertical scrolling belongs to the panel, which already scrolls; a second scroll region
+     nested inside it means two bars for one list. */
+  overflow-x: auto;
+  overflow-y: visible;
+}

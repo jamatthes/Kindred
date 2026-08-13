@@ -486,6 +486,27 @@ carries its own voting-mode row like every other category.
 It is also now the **fallback for the type guess** below: asserting `activity` for an
 unrecognised place was a guess dressed as an answer.
 
+### What a clicked place shows (2026-08-12)
+Kindred overlays Google's map; it does not replace it. So clicking a place shows **what
+Google Maps would show** — photos, rating with its sample size, category, editorial summary,
+open/closed, address, phone, website, opening hours — in the shell's right-hand panel
+(`PlaceProfilePanel`), with "Add as suggestion" as the primary action. Sending the user to
+Google for facts we already hold in the response, or making them create a suggestion before
+they can read the opening hours, would be the app hiding its own data.
+
+Field cost: the additions (`user_ratings_total`, `editorial_summary`, `formatted_phone_number`)
+join tiers the call was already paying for — `rating` had put it in Atmosphere and
+`opening_hours`/`website` in Contact — so the profile costs no more than the old two-line card.
+
+The name deliberately appears twice while a place is open: as the map's label on the anchored
+card, and as the profile's title. That is the pairing Google Maps itself uses. The **actions**
+do not: on desktop they belong to the panel alone, and the anchored card carries them only on
+mobile, where there is no side panel and the card is the place's only surface.
+
+**Still never persisted.** The whole profile is live-fetched on open and discarded on close;
+only `place_id` plus what the user typed reaches the server. `PlaceProfilePanel`'s own test
+asserts the seed handed to the create form carries no rating, hours, phone, photo or summary.
+
 ### Type inference from Places (2026-08-12)
 When a suggestion originates from a Places result (search or POI click), its **type is
 guessed** and preselected in the create form's type dropdown, which the user can override —

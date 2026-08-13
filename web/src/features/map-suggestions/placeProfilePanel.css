@@ -1,0 +1,128 @@
+/* The Google-place profile in the shell's side panel. Token-only; both themes follow. */
+
+.place-profile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.place-profile__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.place-profile__head h2 {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-tight);
+}
+
+.place-profile__head button {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  min-height: var(--hit-target);
+  min-width: var(--hit-target);
+}
+
+.place-profile__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-5);
+}
+
+/* A row that scrolls sideways on purpose — the one place in the app where horizontal scroll
+   is the right answer, because a photo strip has no meaningful vertical order. */
+.place-profile__photos {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.place-profile__photos img {
+  height: var(--photo-strip-h);
+  border-radius: var(--radius-2);
+  scroll-snap-align: start;
+}
+
+.place-profile__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.place-profile__rating {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.place-profile__muted {
+  color: var(--color-text-muted);
+}
+
+/* Open/closed carries a word as well as a colour — the design system's rule, and the one
+   piece of state here a colour-blind reader would otherwise lose. */
+.place-profile__open {
+  color: var(--color-success);
+}
+
+.place-profile__shut {
+  color: var(--color-text-muted);
+}
+
+.place-profile__summary {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.place-profile__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.place-profile__link {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+}
+
+.place-profile__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.place-profile__facts dt {
+  color: var(--color-text-muted);
+}
+
+.place-profile__facts dd {
+  margin: 0;
+  color: var(--color-text);
+  /* A long address or URL must wrap inside the column rather than widening the panel. */
+  overflow-wrap: anywhere;
+}
+
+.place-profile__hours {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place-profile__attribution {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}

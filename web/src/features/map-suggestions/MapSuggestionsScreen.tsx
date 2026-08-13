@@ -48,6 +48,8 @@ import { MapSearchField } from './MapSearchField'
 import { MapContextMenu } from './MapContextMenu'
 import { PlacePreviewCard } from './PlacePreviewCard'
 import { getPlaceDetails, placesAvailable } from './placesClient'
+import type { PlaceDetails } from './placesClient'
+import { PlaceProfilePanel } from './PlaceProfilePanel'
 import { useAnchoredPlacement } from './useAnchoredPlacement'
 import { SIDE_PANEL_SLOT_ID, setSidePanelFilled } from '../../app/sidePanelSlot'
 import { createPortal } from 'react-dom'
@@ -163,9 +165,13 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; position: LatLng } | null>(null)
   // The Google POI the user clicked, resolving or resolved. Distinct from `seedPlace`: this
   // one is only being *looked at*; it becomes a seed if they press "Add as suggestion".
-  const [poi, setPoi] = useState<{ placeId: string; loading: boolean; place: PlaceSeed | null; error: string | null } | null>(
-    null,
-  )
+  const [poi, setPoi] = useState<{
+    placeId: string
+    loading: boolean
+    /** The full Places record — the profile panel shows what Google shows. */
+    details: PlaceDetails | null
+    error: string | null
+  } | null>(null)
   const mapAreaRef = useRef<HTMLDivElement | null>(null)
   const providerRef = useRef<MapProvider | null>(null)
   /** Where the POI card is pinned, in container pixels. `null` = not projectable yet, which
@@ -199,7 +205,7 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
       // nothing here would make those places read as dead.
       if (!placeId) return
       if (!placesAvailable()) {
-        setPoi({ placeId, loading: false, place: null, error: 'Place details are unavailable right now.' })
+        setPoi({ placeId, loading: false, details: null, error: 'Place details are unavailable right now.' })
         return
       }
       // Clicking a place dismisses whatever was open first. Only one thing on this map is
@@ -210,24 +216,11 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
       setSeedPlace(null)
       setPendingClick(null)
       suggestionStore.select(null)
-      setPoi({ placeId, loading: true, place: null, error: null })
+      setPoi({ placeId, loading: true, details: null, error: null })
       void getPlaceDetails(placeId)
-        .then((details) =>
-          setPoi({
-            placeId,
-            loading: false,
-            error: null,
-            place: {
-              placeId: details.placeId,
-              name: details.name,
-              address: details.address,
-              position: { lat: details.lat, lng: details.lng },
-              types: details.types,
-            },
-          }),
-        )
+        .then((details) => setPoi({ placeId, loading: false, error: null, details }))
         .catch(() =>
-          setPoi({ placeId, loading: false, place: null, error: 'That place could not be loaded.' }),
+          setPoi({ placeId, loading: false, details: null, error: 'That place could not be loaded.' }),
         )
     },
     [creating, createMode],
@@ -271,7 +264,11 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
   // user commits to suggesting it — the point the create form is about. Keeping them on the
   // same anchor is what makes the form look like the card expanding in place rather than a
   // second, unrelated surface opening somewhere else.
-  const anchorPosition = poi?.place?.position ?? seedPlace?.position ?? pendingClick ?? null
+  const anchorPosition =
+    (poi?.details ? { lat: poi.details.lat, lng: poi.details.lng } : null) ??
+    seedPlace?.position ??
+    pendingClick ??
+    null
   const poiPositionRef = useRef<LatLng | null>(null)
   poiPositionRef.current = anchorPosition
 
@@ -331,7 +328,18 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
 
   /** What belongs in the shell's panel right now: a selected suggestion's detail, or the
    *  list when it was asked for. The create form is not here — see its own comment below. */
-  const sidePanelContent = selected ? (
+  const sidePanelContent = poi && !creating ? (
+    // A clicked Google place, shown the way Google shows it (`PlaceProfilePanel`). It takes
+    // precedence over the list because it is what the user just did.
+    <PlaceProfilePanel
+      place={poi.details}
+      loading={poi.loading}
+      error={poi.error}
+      canAdd={stage.canMutate}
+      onAdd={(seed) => openCreate('search', seed)}
+      onClose={() => setPoi(null)}
+    />
+  ) : selected ? (
     panelBody(() => suggestionStore.select(null))
   ) : listOpen ? (
     <>
@@ -462,11 +470,24 @@ export function MapSuggestionsScreen({ selectedId }: { selectedId?: string } = {
             }
           >
             <PlacePreviewCard
-              place={poi.place}
+              place={
+                poi.details
+                  ? {
+                      placeId: poi.details.placeId,
+                      name: poi.details.name,
+                      address: poi.details.address,
+                      position: { lat: poi.details.lat, lng: poi.details.lng },
+                      types: poi.details.types,
+                    }
+                  : null
+              }
               loading={poi.loading}
               error={poi.error}
               canAdd={stage.canMutate}
               anchored={Boolean(poiPoint)}
+              // Desktop reads the place in the side panel; this card only says which pin was
+              // clicked. Mobile has no side panel, so there the card keeps the actions.
+              showActions={narrow}
               onAdd={(place) => openCreate('search', place)}
               onClose={() => setPoi(null)}
             />

@@ -49,3 +49,39 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- Scrollbars ----------------------------------------------------------------------
+   The platform default is a light-grey trough with a chunky thumb: on a dark surface it
+   reads as a bright bar stapled to the panel, and it is the one piece of chrome the token
+   layer was not reaching. Styled here, once, so every scrolling surface in the app agrees.
+
+   Both syntaxes on purpose — `scrollbar-*` is the standard and covers Firefox, the
+   `::-webkit-*` rules cover Chromium and WebKit, and neither is a superset of the other.
+   Colours are semantic tokens, so light and dark both follow without a second rule. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: var(--space-2);
+  height: var(--space-2);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-faint);
+}
+
+/* A corner left unstyled paints as an opaque light square where the two bars meet. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

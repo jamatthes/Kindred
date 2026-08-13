@@ -21,6 +21,12 @@ export type PlacePreviewCardProps = {
   loading: boolean
   error: string | null
   canAdd: boolean
+  /** Whether this card carries the actions. False on desktop, where the shell's side panel
+   *  shows the full Google profile and owns "Add as suggestion" — the card is then just the
+   *  map's answer to "which place did I click", and a second identical button next to the
+   *  first is not a shortcut, it is a duplicate. True on mobile, where there is no side panel
+   *  and this card is the only surface the place has. */
+  showActions?: boolean
   /** Pinned over its place on the map (the normal case) rather than parked in a corner —
    *  draws the tail that points back down at the location. Off while the map cannot project
    *  a point yet, when a tail would point at nothing in particular. */
@@ -35,6 +41,7 @@ export function PlacePreviewCard({
   error,
   canAdd,
   anchored = false,
+  showActions = true,
   onAdd,
   onClose,
 }: PlacePreviewCardProps) {
@@ -58,6 +65,7 @@ export function PlacePreviewCard({
         <>
           <h3 className="place-preview__title">{place.name}</h3>
           {place.address ? <p className="place-preview__address">{place.address}</p> : null}
+          {showActions ? (
           <div className="place-preview__actions">
             <Button onClick={() => onAdd(place)} disabled={!canAdd}>
               Add as suggestion
@@ -72,6 +80,7 @@ export function PlacePreviewCard({
               Open in Google Maps
             </a>
           </div>
+          ) : null}
         </>
       ) : null}
     </div>

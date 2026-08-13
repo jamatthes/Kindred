@@ -113,6 +113,9 @@ const POI = {
   rating: null,
   openingHoursText: null,
     website: null,
+    phone: null,
+    ratingCount: null,
+    openNow: null,
   types: ['tourist_attraction'],
 }
 
@@ -174,11 +177,17 @@ describe('MapSuggestionsScreen — what sits over the map', () => {
 })
 
 describe('MapSuggestionsScreen — the three ways in', () => {
-  it('a POI click opens our card, and "Add as suggestion" seeds the create form from it', async () => {
+  it('a POI click opens the place profile, and "Add as suggestion" seeds the create form', async () => {
+    // The name appears twice on purpose — as the map's own label on the anchored card, and as
+    // the profile's title in the side panel — the same pairing Google Maps uses, so these
+    // queries say which surface they mean rather than asserting the name is unique.
+    withSidePanelSlot()
     render(<MapSuggestionsScreen />)
     act(() => fireMapClick?.({ position: { lat: 50.04, lng: -5.65 }, placeId: 'place-1' }))
 
-    expect(await screen.findByRole('heading', { name: 'The Minack Theatre' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: 'The Minack Theatre' })).toBeInTheDocument()
+    // Google's own facts, in the panel: the reason this shows a profile and not just a name.
+    expect(screen.getAllByText('Porthcurno').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Add as suggestion' }))
 
     const form = screen.getByTestId('create-form')
@@ -198,10 +207,11 @@ describe('MapSuggestionsScreen — the three ways in', () => {
 
   it('says so when Place Details cannot be reached, rather than leaving the POI looking dead', async () => {
     mockAvailable.mockReturnValue(false)
+    withSidePanelSlot()
     render(<MapSuggestionsScreen />)
     act(() => fireMapClick?.({ position: { lat: 50.04, lng: -5.65 }, placeId: 'place-1' }))
 
-    expect(await screen.findByText(/unavailable right now/)).toBeInTheDocument()
+    expect((await screen.findAllByText(/unavailable right now/)).length).toBeGreaterThan(0)
   })
 
   it('right-click → "Drop a pin here" opens the form already holding that point', () => {
@@ -215,9 +225,10 @@ describe('MapSuggestionsScreen — the three ways in', () => {
   })
 
   it('opening the context menu dismisses a POI card, so the map never carries both', async () => {
+    withSidePanelSlot()
     render(<MapSuggestionsScreen />)
     act(() => fireMapClick?.({ position: { lat: 50.04, lng: -5.65 }, placeId: 'place-1' }))
-    expect(await screen.findByRole('heading', { name: 'The Minack Theatre' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: 'The Minack Theatre' })).toBeInTheDocument()
 
     act(() => fireContextMenu?.({ position: { lat: 50.4, lng: -4.7 } }))
     expect(screen.queryByRole('heading', { name: 'The Minack Theatre' })).not.toBeInTheDocument()
